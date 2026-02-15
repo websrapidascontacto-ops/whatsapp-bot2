@@ -1,0 +1,16 @@
+{
+  "name": "crm-whatsapp-flow",
+  "version": "1.0.0",
+  "description": "CRM WhatsApp con editor de flujos estilo n8n",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.3.1",
+    "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.2.1"
+  }
+}

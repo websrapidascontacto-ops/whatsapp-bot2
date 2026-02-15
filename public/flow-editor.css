@@ -1,0 +1,154 @@
+/* Contenedor principal */
+#flow-editor-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Header */
+.flow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: #007bff;
+  color: white;
+  font-weight: bold;
+}
+
+.flow-header button {
+  margin-left: 4px;
+}
+
+/* Canvas */
+#canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: calc(100% - 40px);
+  overflow: hidden;
+}
+
+#canvas-area {
+  position: absolute;
+  width: 2000px;
+  height: 2000px;
+}
+
+#svg-canvas {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Nodos */
+.nodo {
+  position: absolute;
+  width: 180px;
+  min-height: 60px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  cursor: move;
+  user-select: none;
+  transition: box-shadow 0.2s;
+  z-index: 5;
+}
+
+.nodo:hover {
+  box-shadow: 0 0 20px rgba(30,144,255,0.8);
+}
+
+.nodo-header {
+  padding: 6px 10px;
+  border-bottom: 1px solid #ddd;
+  font-weight: bold;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  color: #fff;
+}
+
+/* Tipos de nodo */
+.nodo-header.trigger { background: #17a2b8; }
+.nodo-header.mensaje { background: #28a745; }
+.nodo-header.media { background: #ffc107; color: #000; }
+.nodo-header.menu { background: #6f42c1; }
+
+/* Nodo body */
+.nodo-body {
+  padding: 6px 10px;
+}
+
+.nodo-body input, .nodo-body textarea, .nodo-body select {
+  width: 100%;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  padding: 4px;
+}
+
+/* Puertos */
+.port {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: absolute;
+  background: #007bff;
+  border: 2px solid white;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.port-in { left: -5px; top: 50%; transform: translateY(-50%); }
+.port-out { right: -5px; top: 50%; transform: translateY(-50%); }
+
+.port:hover {
+  background: #ff5722;
+}
+
+/* Botón eliminar línea */
+.btn-del-line {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: red;
+  color: white;
+  font-weight: bold;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  cursor: pointer;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+}
+
+/* Animación línea */
+@keyframes drawLine {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Opciones de menú */
+.opciones {
+  margin-top: 4px;
+}
+
+.opciones input {
+  margin-bottom: 2px;
+}
+
+/* Scroll canvas */
+#canvas-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#canvas-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}

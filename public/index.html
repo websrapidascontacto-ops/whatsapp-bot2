@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flow Builder Pro</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <button onclick="addNode('start')">Inicio</button>
+  <button onclick="addNode('message')">Mensaje</button>
+  <button onclick="addNode('media')">Multimedia</button>
+  <button onclick="addNode('menu')">Menú</button>
+  <button onclick="saveFlow()">Guardar</button>
+</div>
+
+<div id="workspace">
+  <div id="canvas-wrapper">
+    <div id="grid"></div>
+    <svg id="connections"></svg>
+    <div id="canvas"></div>
+  </div>
+
+  <div id="side-panel">
+    <h3>Configuración</h3>
+    <div id="node-config"></div>
+  </div>
+</div>
+
+<script src="flow.js"></script>
+</body>
+</html>
