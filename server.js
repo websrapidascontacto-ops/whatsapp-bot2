@@ -169,3 +169,23 @@ app.get("/chat/messages/:chatId", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Webs Rápidas Activo`));
+// NUEVA RUTA: Obtener lista de todos los chats (Contactos)
+app.get("/chat/list", async (req, res) => {
+  try {
+    // Agrupa mensajes por chatId y trae el último mensaje de cada uno
+    const list = await Message.aggregate([
+      { $sort: { timestamp: -1 } },
+      { $group: { 
+          _id: "$chatId", 
+          text: { $first: "$text" }, 
+          pushname: { $first: "$pushname" },
+          profilePic: { $first: "$profilePic" },
+          timestamp: { $first: "$timestamp" }
+      }},
+      { $sort: { timestamp: -1 } }
+    ]);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

@@ -217,6 +217,54 @@ document.getElementById("emoji-trigger").onclick = (e) => {
 };
 document.addEventListener('click', (e) => { if(!document.getElementById("emoji-picker-box").contains(e.target)) document.getElementById("emoji-picker-box").style.display = "none"; });
 document.getElementById("message-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+// 1. Al final de tu script, añade este bloque para que cargue al iniciar
+window.onload = async () => {
+    try {
+        const res = await fetch("/chat/list");
+        const chatList = await res.json();
+        
+        chatList.forEach(chat => {
+            // Adaptamos la data que viene de la agregación de Mongo
+            const data = {
+                from: chat._id,
+                pushname: chat.pushname || chat._id,
+                profilePic: chat.profilePic,
+                text: chat.text
+            };
+            createOrUpdateChat(data);
+        });
+    } catch (err) {
+        console.error("Error cargando lista de chats:", err);
+    }
+};
+
+// 2. Asegúrate de que createOrUpdateChat use 'id' consistente
+// (Modifica levemente tu función actual para que no duplique)
+function createOrUpdateChat(data){
+  const from = data.from || data._id; // Acepta ambos formatos
+  const { pushname, profilePic, text } = data;
+  
+  const photoUrl = profilePic || `https://ui-avatars.com/api/?name=${pushname || from}&background=random&color=fff`;
+  
+  let chatItem = document.getElementById("chat-"+from);
+  
+  if(!chats[from]){
+    chats[from] = { name: pushname || from, avatar: photoUrl, unread: 0 };
+    const div = document.createElement("div");
+    div.className = "chat-item"; div.id = "chat-"+from;
+    div.innerHTML = `
+      <div class="pfp-wrapper"><img class="pfp-img" src="${photoUrl}"></div>
+      <div style="flex:1; overflow:hidden">
+        <div style="font-weight:700; font-size:14px;">${chats[from].name}</div>
+        <div class="last-msg" style="font-size:12px; color:#65676b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${text || "📷 Imagen"}</div>
+      </div>
+      <div id="badge-${from}" style="display:none; background:#0084ff; color:white; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">0</div>`;
+    div.onclick = () => openChat(from);
+    chatListEl.appendChild(div); // Usamos appendChild para mantener el orden de la lista
+  } else {
+    document.querySelector("#chat-"+from+" .last-msg").innerText = text || "📷 Imagen";
+  }
+}
 </script>
 </body>
 </html>
