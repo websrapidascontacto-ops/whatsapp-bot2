@@ -19,7 +19,6 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rutas originales
 app.use(express.static("public"));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -41,6 +40,7 @@ function broadcastMessage(data) {
 
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
+  if (!mediaUrl) return res.status(400).send("No URL");
   try {
     const response = await axios.get(mediaUrl, {
       headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
@@ -48,7 +48,7 @@ app.get("/proxy-media", async (req, res) => {
     });
     res.set('Content-Type', response.headers['content-type']);
     res.send(response.data);
-  } catch (e) { res.status(500).send("Error"); }
+  } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
 app.post("/webhook", async (req, res) => {
@@ -70,7 +70,7 @@ app.post("/webhook", async (req, res) => {
                 mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
               } catch (e) {}
             }
-            const messageData = { from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl };
+            const messageData = { from: senderId, text: msg.text?.body || "", messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl };
             await Message.create({ chatId: senderId, ...messageData });
             broadcastMessage({ type: "incoming", data: messageData });
           }
@@ -115,8 +115,13 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
+// Ruta para cargar historial de chats al inicio
 app.get("/chat/list", async (req, res) => {
-  const list = await Message.aggregate([{ $sort: { timestamp: -1 } }, { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } }, { $sort: { timestamp: -1 } }]);
+  const list = await Message.aggregate([
+    { $sort: { timestamp: -1 } },
+    { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } },
+    { $sort: { timestamp: -1 } }
+  ]);
   res.json(list);
 });
 

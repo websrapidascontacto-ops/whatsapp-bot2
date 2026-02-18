@@ -2,30 +2,31 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>CRM Webs Rápidas</title>
+<title>CRM Webs Rápidas - Premium</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
+/* Estilos Montserrat exactos de tu archivo original */
 *{box-sizing:border-box}
-body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;background:#f0f2f5}
+body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;background:#f0f2f5;display:flex}
 .sidebar-redes{width:75px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;align-items:center;padding-top:25px}
 .chat-list-container{width:360px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column}
 .chat-list{flex:1;overflow-y:auto}
-.chat-item{padding:15px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;border-bottom:1px solid #f0f2f5}
+.chat-item{padding:15px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;border-bottom:1px solid #f0f2f5;position:relative}
 .chat-item.active{background:#e7f3ff;border-left:4px solid #0084ff}
 .chat-content{flex:1;display:flex;flex-direction:column;background:#fff}
 .messages-area{flex:1;padding:25px;overflow-y:auto;background:#f9f9fb;display:flex;flex-direction:column;gap:10px}
-.msg-bubble{max-width:65%;padding:10px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
-.msg-sent{background:#0084ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg-bubble{max-width:65%;padding:8px 12px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
 .msg-received{background:#fff;align-self:flex-start;border-bottom-left-radius:4px;border:1px solid #e4e6eb}
-.msg-image{width:100%;max-width:300px;border-radius:8px;cursor:pointer;margin-bottom:5px}
+.msg-sent{background:#0084ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg-image{width:100%;max-width:320px;border-radius:8px;cursor:pointer;margin-bottom:5px}
 .input-area{padding:15px 25px;display:flex;align-items:center;gap:15px;border-top:1px solid #e4e6eb}
-.input-area input[type="text"]{flex:1;background:#f0f2f5;border:none;padding:12px 18px;border-radius:20px;outline:none}
+.input-area input[type="text"]{flex:1;background:#f0f2f5;border:none;padding:12px 18px;border-radius:20px;outline:none;font-family:'Montserrat'}
 .send-btn{background:#0084ff;color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
 </style>
 </head>
 <body>
-<div class="sidebar-redes"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="35"></div>
+<div class="sidebar-redes"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="35" style="margin-bottom:30px"></div>
 <div class="chat-list-container">
     <div style="padding:25px;font-weight:700;font-size:20px">Mensajes</div>
     <div id="chat-list" class="chat-list"></div>
@@ -44,8 +45,8 @@ body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;back
 let currentChat = null; let chats = {};
 const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
-ws.onmessage = (e) => {
-  const msg = JSON.parse(e.data);
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
   if(msg.type === "incoming"){
     createOrUpdateChat(msg.data, true);
     if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
@@ -66,7 +67,7 @@ function createOrUpdateChat(data, isNew){
     document.getElementById("chat-list").prepend(item);
   }
   item.innerHTML = `<img src="https://ui-avatars.com/api/?name=${name}&background=random&color=fff" style="width:45px;border-radius:50%">
-    <div style="flex:1"><b>${name}</b><br><small>${data.text || "📷 Imagen"}</small></div>`;
+    <div style="flex:1"><b>${name}</b><br><small style="color:#65676b">${data.text || "📷 Imagen"}</small></div>`;
   if(isNew) document.getElementById("chat-list").prepend(item);
 }
 
@@ -84,23 +85,24 @@ function appendMessage(type, text, mediaUrl){
   const div = document.createElement("div");
   div.className = "msg-bubble " + (type === "sent" ? "msg-sent" : "msg-received");
   if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
-  if(text && text !== "📷 Imagen") div.innerHTML += `<div>${text}</div>`;
+  if(text && text !== "") div.innerHTML += `<div>${text}</div>`;
   document.getElementById("messages").appendChild(div);
   document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
 }
 
-// ARREGLO PARA PODER ESCRIBIR
+// Lógica de escritura restaurada
 async function sendMessage(){
-  const input = document.getElementById("message-input"); // Usamos el ID correcto
+  const input = document.getElementById("message-input");
   const text = input.value.trim();
   if(!text || !currentChat) return;
-  input.value = ""; // Limpiamos el campo al enviar
+  input.value = "";
   await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text}) });
 }
 
+// Envío múltiple sin dañar nada
 document.getElementById('file-input').onchange = async function() {
     if(!this.files.length || !currentChat) return;
-    const caption = prompt("¿Deseas añadir un comentario?");
+    const caption = prompt("¿Añadir comentario?");
     if(caption) await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text:caption}) });
     for(let file of this.files){
         const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
@@ -114,7 +116,6 @@ window.onload = async () => {
     const list = await res.json();
     list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
 };
-// Escuchar la tecla Enter en el input
 document.getElementById("message-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
 </script>
 </body>
