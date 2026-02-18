@@ -5,7 +5,7 @@ const path = require("path");
 const multer = require("multer"); 
 const axios = require("axios");
 const fs = require("fs");
-const FormData = require("form-data"); // Necesario para enviar archivos a Meta
+const FormData = require("form-data");
 require("dotenv").config();
 
 const Message = require("./models/Message");
@@ -16,12 +16,12 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// RUTAS ORIGINALES MANTENIDAS
+// RUTAS ESTÁTICAS
 app.use(express.static("public"));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// CONEXIÓN MONGO
+// CONEXIÓN A MONGO
 mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ MongoDB conectado"));
 
 const server = require("http").createServer(app);
@@ -37,7 +37,7 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// PROXY PARA VER IMÁGENES (EVITA ERROR 401)
+// PROXY DE IMÁGENES (EVITA EL ERROR 401 DE META)
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   if (!mediaUrl) return res.status(400).send("No URL");
@@ -51,7 +51,7 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
-// WEBHOOK: RECIBIR MENSAJES E IMÁGENES
+// WEBHOOK: RECIBE MENSAJES E IMÁGENES DESDE WHATSAPP
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -64,13 +64,13 @@ app.post("/webhook", async (req, res) => {
             const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
             let profilePic = ""; let mediaUrl = null;
 
-            // Foto de Perfil
+            // Obtener foto de perfil
             try {
               const pfpRes = await axios.get(`https://graph.facebook.com/v18.0/${senderId}?fields=profile_pic&access_token=${process.env.ACCESS_TOKEN}`);
               profilePic = pfpRes.data.profile_pic;
             } catch (e) {}
 
-            // Procesar Imagen Recibida (Usando Proxy)
+            // Si es imagen, usar el proxy para mostrarla
             if (msg.type === "image") {
               try {
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
@@ -100,7 +100,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// ENVIAR TEXTO
+// ENVIAR MENSAJE DE TEXTO
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -114,17 +114,17 @@ app.post("/send-message", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ENVIAR IMAGEN DESDE EL CRM A WHATSAPP (BOTÓN +)
+// ENVIAR IMAGEN DESDE EL CRM A WHATSAPP
 app.post("/send-media", upload.single("file"), async (req, res) => {
   const { to } = req.body;
   const file = req.file;
   if (!file || !to) return res.status(400).send("Faltan datos");
 
   try {
-    // 1. Subir a Meta
+    // 1. Subir a Meta con el tipo de archivo correcto
     const form = new FormData();
     form.append('file', fs.createReadStream(file.path));
-    form.append('type', 'image/jpeg');
+    form.append('type', file.mimetype); 
     form.append('messaging_product', 'whatsapp');
 
     const uploadRes = await axios.post(
@@ -133,7 +133,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
       { headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
-    // 2. Enviar mensaje con el Media ID
+    // 2. Enviar el Media ID al cliente
     await axios.post(
       `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
       {
@@ -145,6 +145,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
       { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
+    // 3. Notificar al frontend y guardar en BD local
     const mediaUrl = `/uploads/${file.filename}`;
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
     await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });

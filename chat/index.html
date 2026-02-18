@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 
 <style>
-/* Reset y Estilos Base Light */
+/* Reset y Estilos Base con Montserrat */
 *{box-sizing:border-box}
 body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; background:#f0f2f5; color: #1c1e21; display: flex;}
 
@@ -24,7 +24,7 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 .chat-list-container { width: 360px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; }
 .list-header { padding: 25px; font-weight: 700; font-size: 20px; color: #050505; border-bottom: 1px solid #f0f2f5; }
 .chat-list { flex: 1; overflow-y: auto; }
-.chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; border-bottom: 1px solid #f0f2f5; transition: 0.2s; }
+.chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; border-bottom: 1px solid #f0f2f5; transition: 0.2s; position: relative; }
 .chat-item:hover { background: #f5f6f7; }
 .chat-item.active { background: #e7f3ff; border-left: 4px solid #0084ff; }
 
@@ -101,7 +101,7 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
     <div class="input-area">
         <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
         <label for="file-input"><i class="fa-solid fa-plus icon-btn"></i></label>
-        <input type="file" id="file-input" style="display:none" onchange="uploadMedia(this)">
+        <input type="file" id="file-input" style="display:none" onchange="uploadMedia(this)" accept="image/*">
         <input type="text" id="message-input" placeholder="Escribe un mensaje...">
         <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
         <div id="emoji-picker-box"></div>
@@ -186,7 +186,26 @@ function appendMessage(type, text, mediaUrl = null){
 async function sendMessage(){
   const input = document.getElementById("message-input"); const text = input.value.trim();
   if(!text || !currentChat) return;
-  input.value = ""; await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
+  input.value = ""; 
+  await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
+}
+
+async function uploadMedia(input) {
+    if(!input.files[0] || !currentChat) return;
+    
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("to", currentChat);
+
+    try {
+        const response = await fetch("/send-media", { method: "POST", body: formData });
+        if(response.ok) {
+            input.value = ""; // Limpiar input tras éxito
+        }
+    } catch (err) {
+        console.error("Error al subir:", err);
+    }
 }
 
 function increaseUnread(id){
@@ -195,16 +214,11 @@ function increaseUnread(id){
   document.getElementById("badge-"+id).style.display = "block";
   document.getElementById("global-badge").style.display = "block";
 }
+
 function resetUnread(id){
   unreadGlobal -= chats[id].unread; chats[id].unread = 0;
   document.getElementById("badge-"+id).style.display = "none";
   if(unreadGlobal <= 0) document.getElementById("global-badge").style.display = "none";
-}
-
-async function uploadMedia(input) {
-    if(!input.files[0] || !currentChat) return;
-    const formData = new FormData(); formData.append("file", input.files[0]); formData.append("to", currentChat);
-    await fetch("/send-media", { method: "POST", body: formData });
 }
 
 document.getElementById("emoji-trigger").onclick = (e) => {
@@ -213,6 +227,7 @@ document.getElementById("emoji-trigger").onclick = (e) => {
     box.style.display = box.style.display === "block" ? "none" : "block";
     if(box.innerHTML === ""){ const p = new EmojiMart.Picker({ onEmojiSelect: (emoji) => document.getElementById("message-input").value += emoji.native }); box.appendChild(p); }
 };
+
 document.addEventListener('click', (e) => { if(!document.getElementById("emoji-picker-box").contains(e.target)) document.getElementById("emoji-picker-box").style.display = "none"; });
 document.getElementById("message-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 </script>
