@@ -10,118 +10,95 @@
     <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 
     <style>
-        /* --- DISEÑO PREMIUM WEBS RÁPIDAS --- */
         :root {
-            --bg-main: #0f1113;
-            --bg-sidebar: #1a1d21;
-            --bg-chat: #15181c;
-            --accent: #0084ff;
-            --text-main: #e4e6eb;
-            --text-dim: #b0b3b8;
-            --border: rgba(255, 255, 255, 0.08);
-            --msg-sent: #0084ff;
-            --msg-received: #242526;
+            --bg-main: #0f1113; --bg-sidebar: #1a1d21; --bg-chat: #15181c;
+            --accent: #0084ff; --text-main: #e4e6eb; --text-dim: #b0b3b8;
+            --border: rgba(255, 255, 255, 0.08); --msg-sent: #0084ff; --msg-received: #242526;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; overflow: hidden; }
 
-        /* Sidebar Redes */
+        /* Sidebar */
         .sidebar-redes { width: 70px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 25px; flex-shrink: 0; gap: 20px; }
         .red-icon { width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.3s; position: relative; }
-        .red-icon:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); }
         .badge-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid var(--bg-sidebar); border-radius: 50%; display: none; }
 
-        /* Lista de Chats - CORREGIDO PARA COLUMNA ÚNICA */
+        /* Lista de Chats con Buscador */
         .chat-list-container { width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
-        .list-header { padding: 25px 20px; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
-        .chat-list { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; } /* Flex column para evitar desorden */
-        .chat-list::-webkit-scrollbar { width: 4px; }
-        .chat-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        .list-header { padding: 20px; font-weight: 700; font-size: 18px; }
+        
+        /* Estilo del Buscador */
+        .search-box { padding: 0 15px 15px 15px; }
+        .search-wrapper { background: #242526; border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid transparent; }
+        .search-wrapper:focus-within { border-color: var(--accent); }
+        .search-wrapper input { background: transparent; border: none; color: #fff; outline: none; font-family: 'Montserrat'; font-size: 13px; width: 100%; }
+        .search-wrapper i { color: var(--text-dim); font-size: 14px; }
 
-        .chat-item { padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 12px; margin-bottom: 4px; transition: 0.2s; position: relative; flex-shrink: 0; }
-        .chat-item:hover { background: rgba(255,255,255,0.03); }
+        .chat-list { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; }
+        .chat-item { padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 12px; margin-bottom: 4px; transition: 0.2s; flex-shrink: 0; }
         .chat-item.active { background: rgba(0, 132, 255, 0.15); }
-        .chat-item.active::after { content: ''; position: absolute; left: 0; height: 20px; width: 3px; background: var(--accent); border-radius: 0 4px 4px 0; }
 
         .pfp { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #3a3b3c; flex-shrink: 0; }
         .chat-info { flex: 1; min-width: 0; }
-        .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
         .last-msg { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Área de Chat Principal */
+        /* Chat Content */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); }
-        .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--bg-chat); flex-shrink: 0; }
+        .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--bg-chat); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-        /* Burbujas */
-        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; position: relative; line-height: 1.5; word-wrap: break-word; }
-        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 4px 12px rgba(0, 132, 255, 0.2); }
+        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
+        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
-        
-        .msg-image { width: 100%; max-width: 280px; height: auto; border-radius: 12px; display: block; margin-bottom: 6px; cursor: pointer; transition: 0.3s; }
-        .msg-image:hover { opacity: 0.9; transform: scale(1.02); }
+        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; }
         .msg-time { font-size: 10px; opacity: 0.5; margin-top: 5px; text-align: right; }
 
         /* Input Area */
-        .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; background: var(--bg-chat); border-top: 1px solid var(--border); flex-shrink: 0; position: relative; }
-        .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; border: 1px solid transparent; transition: 0.3s; }
-        .input-wrapper:focus-within { border-color: var(--accent); background: #1c1d1e; }
-        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; font-family: 'Montserrat'; font-size: 14px; }
+        .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
+        .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
+        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; font-family: 'Montserrat'; }
         
-        #emoji-picker-box { position: absolute; bottom: 85px; left: 25px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-radius: 10px; display: none; }
-        .icon-btn { color: var(--text-dim); font-size: 20px; cursor: pointer; transition: 0.2s; padding: 5px; }
-        .icon-btn:hover { color: var(--accent); }
-
-        .send-btn { background: var(--accent); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 10px rgba(0, 132, 255, 0.3); }
-        .send-btn:hover { transform: scale(1.05); background: #0076e6; }
-
+        #emoji-picker-box { position: absolute; bottom: 85px; left: 25px; z-index: 1000; display: none; }
+        .icon-btn { color: var(--text-dim); font-size: 20px; cursor: pointer; }
+        .send-btn { background: var(--accent); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .price-label { margin-top: auto; padding-bottom: 25px; font-weight: 700; font-size: 12px; color: var(--text-dim); }
     </style>
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon" title="WhatsApp">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="28">
-            <div class="badge-dot" id="global-badge"></div>
-        </div>
-        <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1100,height=700')" title="Instagram / Messenger">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="28">
-        </div>
+        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="28"><div class="badge-dot" id="global-badge"></div></div>
+        <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1100,height=700')"><img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="28"></div>
         <div class="price-label">S/380</div>
     </div>
 
     <div class="chat-list-container">
-        <div class="list-header">
-            Mensajes
-            <i class="fa-solid fa-magnifying-glass" style="font-size: 14px; color: var(--text-dim); cursor: pointer;"></i>
+        <div class="list-header">Mensajes</div>
+        <div class="search-box">
+            <div class="search-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="chat-search" placeholder="Buscar cliente..." onkeyup="filterChats()">
+            </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
     </div>
 
     <div class="chat-content">
-        <div class="top-bar" id="chat-header">
+        <div class="top-bar">
             <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM&background=3a3b3c&color=fff" class="pfp" style="width: 40px; height: 40px;">
             <div style="flex:1">
-                <div id="h-name" style="font-weight: 700; font-size: 15px;">Selecciona un chat</div>
-                <div style="font-size: 11px; color: var(--accent);">En línea</div>
+                <div id="h-name" style="font-weight: 700;">Selecciona un chat</div>
+                <div style="font-size: 11px; color: var(--accent);">WhatsApp Business</div>
             </div>
-            <i class="fa-solid fa-ellipsis-vertical" style="color: var(--text-dim); cursor: pointer;"></i>
         </div>
-
         <div id="messages" class="messages-area"></div>
-        
         <div id="emoji-picker-box"></div>
-
         <div class="input-area">
             <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
             <label for="file-input"><i class="fa-solid fa-paperclip icon-btn"></i></label>
             <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
-            
-            <div class="input-wrapper">
-                <input type="text" id="m-input" placeholder="Escribe un mensaje aquí...">
-            </div>
-            
+            <div class="input-wrapper"><input type="text" id="m-input" placeholder="Escribe un mensaje..."></div>
             <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
         </div>
     </div>
@@ -131,30 +108,30 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
-        // Lógica de Emojis
+        // Lógica de Buscador
+        function filterChats() {
+            const term = document.getElementById("chat-search").value.toLowerCase();
+            const items = document.querySelectorAll(".chat-item");
+            items.forEach(item => {
+                const name = item.querySelector(".chat-name").innerText.toLowerCase();
+                item.style.display = name.includes(term) ? "flex" : "none";
+            });
+        }
+
+        // Emojis
         document.getElementById("emoji-trigger").onclick = (e) => {
             e.stopPropagation();
             const box = document.getElementById("emoji-picker-box");
             box.style.display = box.style.display === "block" ? "none" : "block";
             if(box.innerHTML === ""){ 
-                const p = new EmojiMart.Picker({ 
-                    theme: 'dark',
-                    set: 'apple',
-                    onEmojiSelect: (emoji) => {
-                        document.getElementById("m-input").value += emoji.native;
-                    }
-                }); 
+                const p = new EmojiMart.Picker({ theme: 'dark', set: 'apple', onEmojiSelect: (emoji) => { document.getElementById("m-input").value += emoji.native; } }); 
                 box.appendChild(p); 
             }
         };
+        document.addEventListener('click', (e) => { if(!document.getElementById("emoji-picker-box").contains(e.target)) document.getElementById("emoji-picker-box").style.display = "none"; });
 
-        document.addEventListener('click', (e) => { 
-            if(!document.getElementById("emoji-picker-box").contains(e.target)) 
-                document.getElementById("emoji-picker-box").style.display = "none"; 
-        });
-
+        // WebSocket y Funciones
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
-
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
@@ -169,28 +146,23 @@
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            // Invertimos la lista para que el más reciente aparezca arriba al cargar el historial
             list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
         function createChat(data){
             const id = data.from;
-            let existingChat = document.getElementById("chat-"+id);
-
-            if(!existingChat){
+            let existing = document.getElementById("chat-"+id);
+            if(!existing){
                 chats[id] = { name: data.pushname || id };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
                 div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
-                    <div class="chat-info">
-                        <div class="chat-name">${chats[id].name}</div>
-                        <div class="last-msg" id="last-${id}">${data.text || "📷 Imagen"}</div>
-                    </div>`;
+                    <div class="chat-info"><div class="chat-name">${chats[id].name}</div><div class="last-msg" id="last-${id}">${data.text || "📷 Imagen"}</div></div>`;
                 div.onclick = () => openChat(id);
-                chatListEl.prepend(div); // Coloca el chat nuevo o cargado al inicio
+                chatListEl.prepend(div);
             } else {
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
-                chatListEl.prepend(existingChat); // Mueve el chat existente al principio de la lista
+                chatListEl.prepend(existing);
             }
         }
 
@@ -200,7 +172,6 @@
             document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
-            
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
             msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
@@ -210,17 +181,12 @@
         function appendMessage(type, text, mediaUrl, timestamp){
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
-            
             if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
             if(text && text !== "📷 Imagen") {
-                const textNode = document.createElement("div");
-                textNode.innerText = text;
-                div.appendChild(textNode);
+                const textNode = document.createElement("div"); textNode.innerText = text; div.appendChild(textNode);
             }
-            
             const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Ahora";
             div.innerHTML += `<div class="msg-time">${time}</div>`;
-            
             messagesEl.appendChild(div);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -233,7 +199,6 @@
         }
 
         document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
-
         document.getElementById('file-input').onchange = async function() {
             for (let file of this.files) {
                 const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
