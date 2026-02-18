@@ -7,42 +7,44 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        /* Estilos base protegidos para Montserrat y Layout */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
+        /* Sidebar y Lista */
         .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; gap: 15px; }
         .red-icon { width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.2s; }
-        .red-icon:hover { background: #f0f2f5; }
-
         .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
         .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
         
-        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+        /* Contenedor de Chat */
+        .chat-content { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; } /* Color fondo estilo WA */
         .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; justify-content: space-between; flex-shrink: 0; }
-        .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
-        
-        /* Burbujas de chat */
-        .msg-bubble { max-width: 80%; padding: 8px 12px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; position: relative; }
-        .msg-received { align-self: flex-start; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .msg-time { font-size: 10px; align-self: flex-end; margin-top: 4px; opacity: 0.7; }
+        .messages-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 
-        /* Área de entrada corregida */
-        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; }
-        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; display: flex; align-items: center; }
-        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 8px 0; outline: none; font-family: 'Montserrat'; font-size: 14px; }
+        /* BURBUJAS CORREGIDAS */
+        .msg-bubble { max-width: 70%; padding: 8px 12px; font-size: 14px; border-radius: 12px; line-height: 1.4; position: relative; word-wrap: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .msg-received { align-self: flex-start; background: #ffffff; border-top-left-radius: 0; color: #000; }
+        .msg-sent { align-self: flex-end; background: #dcf8c6; border-top-right-radius: 0; color: #000; }
         
-        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; }
+        .msg-time { font-size: 10px; opacity: 0.5; text-align: right; margin-top: 4px; }
+        .msg-image { max-width: 100%; border-radius: 8px; margin-bottom: 5px; cursor: pointer; }
+
+        /* Input fijo abajo */
+        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; }
+        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; }
+        .input-wrapper input { width: 100%; border: none; background: transparent; padding: 8px 0; outline: none; font-family: 'Montserrat'; }
+
+        /* Items de lista */
+        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
         .chat-item.active { background: #e7f3ff; }
         .pfp { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
     </style>
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon" title="WhatsApp"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="30"></div>
-        <div class="red-icon" onclick="openMeta()" title="Meta Business Suite">
+        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="30"></div>
+        <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1000,height=700')">
             <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="30">
         </div>
     </div>
@@ -52,13 +54,13 @@
         <div id="chat-list" class="chat-list"></div>
     </div>
 
-    <div class="chat-content" id="chat-view">
+    <div class="chat-content">
         <div class="top-bar">
             <div style="display:flex; align-items:center; gap:12px;">
                 <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM" style="width:40px; height:40px; border-radius:50%;">
                 <div id="h-name" style="font-weight:700;">Selecciona un chat</div>
             </div>
-            <i class="fa-solid fa-trash-can" onclick="deleteFullChat()" id="del-icon" style="display:none; color:#ff4d4d; cursor:pointer;"></i>
+            <i class="fa-solid fa-trash-can" onclick="deleteFullChat()" id="del-icon" style="display:none; color:red; cursor:pointer;"></i>
         </div>
         <div id="messages" class="messages-area"></div>
         <div class="input-area">
@@ -72,18 +74,12 @@
     </div>
 
     <script>
-        // Función para abrir Meta sin errores de bloqueo
-        function openMeta() {
-            window.open('https://business.facebook.com/latest/inbox/all', 'MetaInbox', 'width=1000,height=700');
-        }
-
         let currentChat = null; let chats = {};
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
-        // Restauración de lógica de mensajes
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
@@ -91,11 +87,9 @@
                 if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             } else if(msg.type === "sent"){
                 if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
-                updateLast(msg.data.chatId, msg.data.text, msg.data.timestamp);
             }
         };
 
-        // Carga inicial de chats anteriores
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
@@ -109,7 +103,7 @@
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
                 div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}" class="pfp">
-                    <div class="chat-info"><div class="chat-name">${chats[id].name}</div><div id="last-${id}">${data.text || "📷 Imagen"}</div></div>`;
+                    <div class="chat-info"><div class="chat-name">${chats[id].name}</div><div style="font-size:12px; color:#65676b">${data.text || "Imagen"}</div></div>`;
                 div.onclick = () => openChat(id);
                 chatListEl.prepend(div);
             }
@@ -121,16 +115,26 @@
             document.getElementById("del-icon").style.display = "block";
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
+            
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
+            // AQUÍ ESTABA EL ERROR: Ahora pasamos correctamente quién envía cada mensaje
+            msgs.forEach(m => {
+                const type = (m.from === "me") ? "sent" : "received";
+                appendMessage(type, m.text, m.mediaUrl, m.timestamp);
+            });
         }
 
         function appendMessage(type, text, mediaUrl, timestamp){
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
-            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" style="max-width:250px; border-radius:10px; margin-bottom:5px;" onclick="window.open('${mediaUrl}')">`;
+            
+            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
             if(text && text !== "📷 Imagen") div.innerHTML += `<div>${text}</div>`;
+            
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
+            div.innerHTML += `<div class="msg-time">${time}</div>`;
+            
             messagesEl.appendChild(div);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -142,12 +146,9 @@
             await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
         }
 
-        // ENVÍO CON ENTER REHABILITADO
         document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 
-        // ENVÍO MULTIPLE DE IMÁGENES
         document.getElementById('file-input').onchange = async function() {
-            if(!this.files.length || !currentChat) return;
             for (let file of this.files) {
                 const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
                 await fetch("/send-media", { method: "POST", body: fd });
