@@ -207,9 +207,7 @@
             const t = i.value; i.value = "";
             await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text:t}) });
         }
-        document.getElementById("m-input").addEventListener("keypress", (e) => {
-            if(e.key === 'Enter') sendMessage();
-        });
+        document.getElementById("m-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
     </script>
 </body>
 </html>
