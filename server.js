@@ -43,6 +43,20 @@ function broadcastMessage(data) {
   });
 }
 
+// PROXY PARA VISUALIZAR IMÁGENES RECIBIDAS (Evita errores de expiración)
+app.get("/proxy-media", async (req, res) => {
+  const mediaUrl = req.query.url;
+  if (!mediaUrl) return res.status(400).send("No URL");
+  try {
+    const response = await axios.get(mediaUrl, {
+      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
+      responseType: 'arraybuffer'
+    });
+    res.set('Content-Type', response.headers['content-type']);
+    res.send(response.data);
+  } catch (e) { res.status(500).send("Error de proxy"); }
+});
+
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -66,13 +80,6 @@ app.get("/chat/messages/:chatId", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete("/chat/messages/:chatId", async (req, res) => {
-  try {
-    await Message.deleteMany({ chatId: req.params.chatId });
-    res.json({ status: "ok" });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -90,13 +97,9 @@ app.post("/webhook", async (req, res) => {
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
                   headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
                 });
-                const imgRes = await axios.get(metaRes.data.url, { responseType: 'stream' });
-                const fileName = `rec-${Date.now()}.jpg`;
-                const filePath = path.join(uploadDir, fileName);
-                const writer = fs.createWriteStream(filePath);
-                imgRes.data.pipe(writer);
-                mediaUrl = `/uploads/${fileName}`;
-              } catch (e) { console.error("Error imagen Meta"); }
+                // Usamos el proxy para que la imagen sea visible en el CRM
+                mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
+              } catch (e) { console.error("Error media webhook"); }
             }
 
             const messageData = { 
@@ -126,18 +129,23 @@ app.post("/send-message", async (req, res) => {
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).json({ error: "Error envío" }); }
+  } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
+// ENVÍO DE IMÁGENES CORREGIDO PARA META
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
-    if (!file) return res.status(400).send("No file");
+    if (!file || !to) return res.status(400).send("Faltan datos");
 
     const form = new FormData();
-    form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+    form.append('file', fs.createReadStream(file.path), { 
+        filename: file.originalname, 
+        contentType: file.mimetype 
+    });
     form.append('messaging_product', 'whatsapp');
+    form.append('type', file.mimetype);
 
     const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
       headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
@@ -149,12 +157,16 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
       headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
     });
 
-    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl: `/uploads/${file.filename}`, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
+    const mediaUrl = `/uploads/${file.filename}`;
+    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).send("Error media"); }
+  } catch (err) { 
+    console.error("Error Meta:", err.response?.data || err.message);
+    res.status(500).send("Error media"); 
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Online en puerto ${PORT}`));
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Activo en puerto ${PORT}`));

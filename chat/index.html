@@ -20,29 +20,21 @@
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
         .last-msg { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        
-        /* NOTIFICACIÓN MENSAJE NUEVO */
-        .unread-badge { 
-            background: var(--accent); color: white; font-size: 10px; font-weight: 700; 
-            padding: 2px 7px; border-radius: 10px; min-width: 18px; text-align: center;
-            box-shadow: 0 2px 5px rgba(0,132,255,0.4);
-        }
-
+        .unread-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; min-width: 18px; text-align: center; }
         .chat-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); }
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         .msg-row { display: flex; width: 100%; margin-bottom: 4px; }
         .msg-row.sent { justify-content: flex-end; }
         .msg-row.received { justify-content: flex-start; }
-        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; }
+        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; position: relative; }
         .msg-sent { background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
-        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; margin-bottom: 5px; cursor: pointer; }
+        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; margin-bottom: 5px; cursor: pointer; display: block; }
         .msg-time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); }
         .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
         .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; }
-        
         #preview-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         .preview-container { width: 90%; max-width: 500px; background: var(--bg-sidebar); border-radius: 20px; padding: 20px; }
     </style>
@@ -78,7 +70,6 @@
                 <div id="h-name" style="font-weight:700;">Selecciona un chat</div>
                 <div style="font-size:11px; color:var(--accent);">Webs Rápidas Business</div>
             </div>
-            <i class="fa-solid fa-trash-can" id="delete-trigger" style="color:#ff4757; cursor:pointer; visibility:hidden;"></i>
         </div>
         <div id="messages" class="messages-area"></div>
         <div class="input-area">
@@ -102,7 +93,7 @@
                 createChat(msg.data);
                 if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             } else if(msg.type === "sent"){
-                if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                if(currentChat === msg.data.chatId || currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             }
         };
 
@@ -115,11 +106,7 @@
         function createChat(data){
             const id = data.from;
             if(!chats[id]) chats[id] = { name: data.pushname || id, unread: 0 };
-            
-            // Si llega un mensaje y NO estamos en ese chat, sumamos un leído
-            if(data.isNew && currentChat !== id) {
-                chats[id].unread++;
-            }
+            if(data.isNew && currentChat !== id) chats[id].unread++;
 
             let existing = document.getElementById("chat-"+id);
             if(!existing){
@@ -134,21 +121,17 @@
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
                 const b = document.getElementById(`badge-${id}`);
                 if(chats[id].unread > 0){ b.innerText = chats[id].unread; b.style.display = "block"; }
-                chatListEl.prepend(existing); // Sube el chat arriba
+                chatListEl.prepend(existing);
             }
         }
 
         async function openChat(id){
-            currentChat = id; 
-            chats[id].unread = 0; // Al abrir el chat, reseteamos el contador
+            currentChat = id; chats[id].unread = 0;
             const b = document.getElementById(`badge-${id}`); if(b) b.style.display = "none";
-            
-            document.getElementById("delete-trigger").style.visibility = "visible";
             document.getElementById("h-name").innerText = chats[id].name;
             document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
-            
             messagesEl.innerHTML = "";
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
