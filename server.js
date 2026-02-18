@@ -12,7 +12,11 @@ const Message = require("./models/Message");
 
 const app = express();
 const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+// Asegura que la carpeta exista al arrancar
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const upload = multer({ dest: "uploads/" }); 
 
@@ -38,18 +42,25 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-app.get("/proxy-media", async (req, res) => {
-  const mediaUrl = req.query.url;
-  if (!mediaUrl) return res.status(400).send("No URL");
-  try {
-    const response = await axios.get(mediaUrl, {
-      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
-      responseType: 'arraybuffer'
-    });
-    res.set('Content-Type', response.headers['content-type']);
-    res.send(response.data);
-  } catch (e) { res.status(500).send("Error de proxy"); }
-});
+// NUEVA FUNCIÓN: Descarga la imagen de WhatsApp y la guarda localmente
+async function downloadMedia(mediaId) {
+    try {
+        const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
+            headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+        const fileRes = await axios.get(metaRes.data.url, {
+            headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
+            responseType: 'arraybuffer'
+        });
+        const fileName = `recibido_${Date.now()}_${mediaId}.jpg`;
+        const localPath = path.join(uploadDir, fileName);
+        fs.writeFileSync(localPath, fileRes.data);
+        return `/uploads/${fileName}`;
+    } catch (e) {
+        console.error("Error al descargar media:", e);
+        return null;
+    }
+}
 
 app.post("/webhook", async (req, res) => {
   const body = req.body;
@@ -62,16 +73,22 @@ app.post("/webhook", async (req, res) => {
             const senderId = msg.from;
             const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
             let mediaUrl = null;
+
             if (msg.type === "image") {
-              try {
-                const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
-                  headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
-                });
-                mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
-              } catch (e) {}
+                mediaUrl = await downloadMedia(msg.image.id);
             }
-            const messageData = { from: senderId, text: msg.text?.body || "", messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl };
-            await Message.create({ chatId: senderId, ...messageData });
+
+            const messageData = { 
+                chatId: senderId, 
+                from: senderId, 
+                text: msg.text?.body || "", 
+                messageType: msg.type, 
+                source: "whatsapp", 
+                pushname: pushName, 
+                mediaUrl: mediaUrl 
+            };
+            
+            await Message.create(messageData);
             broadcastMessage({ type: "incoming", data: messageData });
           }
         }
@@ -88,8 +105,9 @@ app.post("/send-message", async (req, res) => {
       { messaging_product: "whatsapp", to, text: { body: text } },
       { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
+    const msgData = { chatId: to, from: "me", text, source: "whatsapp" };
+    await Message.create(msgData);
     broadcastMessage({ type: "sent", data: { to, text, source: "whatsapp" } });
-    await Message.create({ chatId: to, from: "me", text, source: "whatsapp" });
     res.json({ status: "ok" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -112,13 +130,12 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     }, { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } });
 
     const mediaUrl = `/uploads/${file.filename}`;
+    const msgData = { chatId: to, from: "me", text: "", mediaUrl, source: "whatsapp" };
+    await Message.create(msgData);
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
-    await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
     
     res.json({ status: "ok" });
-  } catch (err) { 
-    res.status(500).json({ error: "Error enviando media" }); 
-  }
+  } catch (err) { res.status(500).json({ error: "Error enviando imagen" }); }
 });
 
 app.get("/chat/list", async (req, res) => {
