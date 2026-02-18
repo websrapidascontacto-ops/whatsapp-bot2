@@ -45,28 +45,21 @@ function broadcastMessage(data) {
   });
 }
 
-// --- RUTAS DE LA API ---
-
-// PROXY MEDIA: Para visualizar imágenes de WhatsApp que han expirado
+// PROXY MEDIA: (Mantenido por compatibilidad)
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   if (!mediaUrl || mediaUrl === "null") return res.status(400).send("No URL");
   try {
     const response = await axios.get(mediaUrl, {
-      headers: { 
-        'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
-        'User-Agent': 'Mozilla/5.0' 
-      },
+      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
       responseType: 'arraybuffer'
     });
     res.set('Content-Type', response.headers['content-type']);
     res.send(response.data);
-  } catch (e) { 
-    res.status(500).send("Error al obtener imagen del servidor de Meta"); 
-  }
+  } catch (e) { res.status(500).send("Error"); }
 });
 
-// LISTAR CHATS: Obtiene la última interacción de cada contacto
+// LISTAR CHATS (Orden cronológico por DB)
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -83,7 +76,6 @@ app.get("/chat/list", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// OBTENER MENSAJES: Carga el historial de un chat específico
 app.get("/chat/messages/:chatId", async (req, res) => {
   try {
     const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
@@ -91,16 +83,14 @@ app.get("/chat/messages/:chatId", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ELIMINAR CHAT: Borra permanentemente los mensajes de la DB
 app.delete("/chat/messages/:chatId", async (req, res) => {
   try {
-    const { chatId } = req.params;
-    await Message.deleteMany({ chatId });
-    res.json({ status: "ok", message: "Chat eliminado" });
+    await Message.deleteMany({ chatId: req.params.chatId });
+    res.json({ status: "ok" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// WEBHOOK: Recibe mensajes de WhatsApp (Meta)
+// WEBHOOK CON DESCARGA LOCAL DE IMÁGENES
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -118,8 +108,13 @@ app.post("/webhook", async (req, res) => {
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
                   headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
                 });
-                mediaUrl = metaRes.data.url;
-              } catch (e) { console.error("Error obteniendo URL de imagen"); }
+                const imgRes = await axios.get(metaRes.data.url, { responseType: 'stream' });
+                const fileName = `rec-${Date.now()}.jpg`;
+                const filePath = path.join(uploadDir, fileName);
+                const writer = fs.createWriteStream(filePath);
+                imgRes.data.pipe(writer);
+                mediaUrl = `/uploads/${fileName}`; // Imagen guardada localmente
+              } catch (e) { console.error("Error persistencia imagen"); }
             }
 
             const messageData = { 
@@ -128,7 +123,6 @@ app.post("/webhook", async (req, res) => {
               messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl,
               timestamp: new Date()
             };
-
             await Message.create(messageData);
             broadcastMessage({ type: "incoming", data: messageData });
           }
@@ -139,7 +133,6 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// ENVIAR TEXTO
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -151,43 +144,33 @@ app.post("/send-message", async (req, res) => {
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json(err); }
 });
 
-// ENVIAR MEDIA (Imágenes)
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
     const form = new FormData();
-    form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+    form.append('file', fs.createReadStream(file.path), { filename: file.originalname });
     form.append('type', file.mimetype);
     form.append('messaging_product', 'whatsapp');
 
-    // Subir a Meta
     const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form,
       { headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
-    // Enviar mensaje con el ID de la media
     await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
       { messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id } },
       { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
-    const mediaUrl = `/uploads/${file.filename}`;
-    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
+    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl: `/uploads/${file.filename}`, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { 
-    console.error(err);
-    res.status(500).json({ error: "Error enviando media" }); 
-  }
+  } catch (err) { res.status(500).send("Error media"); }
 });
 
-// Puerto y arranque
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 CRM Webs Rápidas Corriendo en puerto ${PORT}`);
-});
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 Puerto ${PORT}`));
