@@ -62,7 +62,6 @@ app.post("/webhook", async (req, res) => {
             const senderId = msg.from;
             const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
             let mediaUrl = null;
-
             if (msg.type === "image") {
               try {
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
@@ -71,12 +70,7 @@ app.post("/webhook", async (req, res) => {
                 mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
               } catch (e) {}
             }
-
-            const messageData = { 
-              from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), 
-              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl 
-            };
-
+            const messageData = { from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl };
             await Message.create({ chatId: senderId, ...messageData });
             broadcastMessage({ type: "incoming", data: messageData });
           }
@@ -108,15 +102,12 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
     form.append('type', file.mimetype);
     form.append('messaging_product', 'whatsapp');
-
     const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
       headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
     });
-
     await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
       messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
     }, { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } });
-
     const mediaUrl = `/uploads/${file.filename}`;
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
     await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
@@ -125,19 +116,8 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 });
 
 app.get("/chat/list", async (req, res) => {
-  try {
-    const list = await Message.aggregate([
-      { $sort: { timestamp: -1 } },
-      { $group: { 
-          _id: "$chatId", 
-          text: { $first: "$text" }, 
-          pushname: { $first: "$pushname" },
-          timestamp: { $first: "$timestamp" }
-      }},
-      { $sort: { timestamp: -1 } }
-    ]);
-    res.json(list);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  const list = await Message.aggregate([{ $sort: { timestamp: -1 } }, { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } }, { $sort: { timestamp: -1 } }]);
+  res.json(list);
 });
 
 app.get("/chat/messages/:chatId", async (req, res) => {

@@ -2,44 +2,36 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>CRM Webs Rápidas - Premium</title>
+<title>CRM Webs Rápidas</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
-/* Estilos Montserrat intactos */
+/* Montserrat y Estilos Base */
 *{box-sizing:border-box}
-body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;background:#f0f2f5;color:#1c1e21;display:flex}
+body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;background:#f0f2f5}
 .sidebar-redes{width:75px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;align-items:center;padding-top:25px}
 .chat-list-container{width:360px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column}
 .chat-list{flex:1;overflow-y:auto}
-.chat-item{padding:15px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;border-bottom:1px solid #f0f2f5;position:relative;transition:0.2s}
-.chat-item:hover{background:#f5f6f7}
+.chat-item{padding:15px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;border-bottom:1px solid #f0f2f5}
 .chat-item.active{background:#e7f3ff;border-left:4px solid #0084ff}
 .chat-content{flex:1;display:flex;flex-direction:column;background:#fff}
 .messages-area{flex:1;padding:25px;overflow-y:auto;background:#f9f9fb;display:flex;flex-direction:column;gap:10px}
-.msg-bubble{max-width:65%;padding:8px 12px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
-.msg-received{background:#fff;align-self:flex-start;border-bottom-left-radius:4px;border:1px solid #e4e6eb}
+.msg-bubble{max-width:65%;padding:10px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
 .msg-sent{background:#0084ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
-.msg-image{width:100%;max-width:320px;border-radius:8px;cursor:pointer;margin-bottom:5px}
+.msg-received{background:#fff;align-self:flex-start;border-bottom-left-radius:4px;border:1px solid #e4e6eb}
+.msg-image{width:100%;max-width:300px;border-radius:8px;cursor:pointer}
 .input-area{padding:15px 25px;display:flex;align-items:center;gap:15px;border-top:1px solid #e4e6eb}
 .input-area input[type="text"]{flex:1;background:#f0f2f5;border:none;padding:12px 18px;border-radius:20px;outline:none}
 .send-btn{background:#0084ff;color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.unread-badge{background:#0084ff;color:white;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;position:absolute;right:20px}
 </style>
 </head>
 <body>
-<div class="sidebar-redes">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="35" style="margin-bottom:30px">
-    <div style="margin-top:auto;padding-bottom:25px;font-weight:700;font-size:11px;color:#8a8d91">S/380</div>
-</div>
+<div class="sidebar-redes"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="35"></div>
 <div class="chat-list-container">
     <div style="padding:25px;font-weight:700;font-size:20px">Mensajes</div>
     <div id="chat-list" class="chat-list"></div>
 </div>
 <div class="chat-content">
-    <div class="top-bar" style="padding:15px 25px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:15px">
-        <div id="header-name" style="font-weight:700;font-size:18px">Selecciona un chat</div>
-    </div>
     <div id="messages" class="messages-area"></div>
     <div class="input-area">
         <label for="file-input"><i class="fa-solid fa-plus" style="cursor:pointer;font-size:22px;color:#65676b"></i></label>
@@ -65,44 +57,22 @@ ws.onmessage = (event) => {
 
 function createOrUpdateChat(data, isNew){
   const id = data.from || data.chatId;
-  const lastMsg = data.text || "📷 Imagen";
   const name = data.pushname || chats[id]?.name || id;
-
-  if(!chats[id]) chats[id] = { name: name, unread: 0 };
-  if(isNew && currentChat !== id) chats[id].unread++;
-
+  if(!chats[id]) chats[id] = { name: name };
   let item = document.getElementById("chat-"+id);
   if(!item){
     item = document.createElement("div");
-    item.className = "chat-item";
-    item.id = "chat-"+id;
+    item.className = "chat-item"; item.id = "chat-"+id;
     item.onclick = () => openChat(id);
     document.getElementById("chat-list").prepend(item);
   }
-  
-  item.innerHTML = `
-    <img src="https://ui-avatars.com/api/?name=${name}&background=random&color=fff" style="width:45px;height:45px;border-radius:50%">
-    <div style="flex:1;overflow:hidden">
-        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
-        <div style="font-size:12px;color:#65676b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lastMsg}</div>
-    </div>
-    ${chats[id].unread > 0 ? `<div class="unread-badge" id="badge-${id}">${chats[id].unread}</div>` : ''}
-  `;
-  document.getElementById("chat-list").prepend(item);
+  item.innerHTML = `<img src="https://ui-avatars.com/api/?name=${name}&background=random&color=fff" style="width:45px;border-radius:50%">
+    <div style="flex:1"><b>${name}</b><br><small>${data.text || "📷 Imagen"}</small></div>`;
 }
 
 async function openChat(id){
-  currentChat = id; 
-  chats[id].unread = 0;
-  document.getElementById("header-name").innerText = chats[id].name;
-  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-  const item = document.getElementById("chat-"+id);
-  if(item) {
-      item.classList.add('active');
-      const badge = item.querySelector('.unread-badge');
-      if(badge) badge.remove();
-  }
-  
+  currentChat = id; document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+  document.getElementById("chat-"+id).classList.add('active');
   const res = await fetch(`/chat/messages/${id}`);
   const msgs = await res.json();
   document.getElementById("messages").innerHTML = "";
@@ -123,28 +93,4 @@ async function sendMessage(){
   const text = input.value.trim();
   if(!text || !currentChat) return;
   input.value = "";
-  await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text}) });
-}
-
-document.getElementById('file-input').addEventListener('change', async function() {
-    if(!this.files.length || !currentChat) return;
-    const files = Array.from(this.files);
-    const caption = prompt("¿Deseas añadir un comentario?");
-    if(caption) await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text:caption}) });
-    for(let file of files){
-        const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
-        await fetch("/send-media", { method:"POST", body:fd });
-    }
-    this.value = "";
-});
-
-window.onload = async () => {
-    const res = await fetch("/chat/list");
-    const list = await res.json();
-    // Cargamos los chats históricos del más viejo al más nuevo para que el prepend los ordene bien
-    list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
-};
-document.getElementById("message-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
-</script>
-</body>
-</html>
+  await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:
