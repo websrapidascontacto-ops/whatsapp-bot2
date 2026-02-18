@@ -115,7 +115,6 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
-// Ruta para cargar historial de chats al inicio
 app.get("/chat/list", async (req, res) => {
   const list = await Message.aggregate([
     { $sort: { timestamp: -1 } },

@@ -7,7 +7,6 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 
 <style>
 /* Estilos Base con Montserrat */
@@ -28,10 +27,6 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 .chat-item:hover { background: #f5f6f7; }
 .chat-item.active { background: #e7f3ff; border-left: 4px solid #0084ff; }
 
-/* Fotos */
-.pfp-wrapper { position: relative; width: 55px; height: 55px; }
-.pfp-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-
 /* Área Chat */
 .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
 .top-bar { padding: 12px 25px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #e4e6eb; background: #fff; }
@@ -42,7 +37,7 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 .msg-bubble { max-width: 65%; padding: 6px; font-size: 14px; line-height: 1.5; border-radius: 12px; box-shadow: 0 1px 1px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
 .msg-received { background: #ffffff; color: #050505; align-self: flex-start; border-bottom-left-radius: 4px; }
 .msg-sent { background: #0084ff; color: #ffffff; align-self: flex-end; border-bottom-right-radius: 4px; }
-.msg-image { width: 100%; min-width: 200px; max-width: 320px; min-height: 100px; border-radius: 8px; display: block; cursor: pointer; background: #f0f2f5; margin-bottom: 4px; }
+.msg-image { width: 100%; min-width: 200px; max-width: 320px; border-radius: 8px; display: block; cursor: pointer; background: #f0f2f5; margin-bottom: 4px; }
 
 /* Input Área */
 .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 15px; border-top: 1px solid #e4e6eb; background: #fff; position: relative; }
@@ -51,7 +46,11 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 .icon-btn:hover { color: #0084ff; }
 .send-btn { background: #0084ff; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-#emoji-picker-box { position: absolute; bottom: 80px; left: 25px; display: none; z-index: 100; }
+/* Modal Vista Previa WhatsApp Style */
+#media-preview-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 999; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.preview-box { background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+.preview-images-container { display: flex; gap: 10px; overflow-x: auto; margin-bottom: 20px; padding: 10px 0; }
+.img-preview-thumb { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid #0084ff; }
 </style>
 </head>
 <body>
@@ -80,23 +79,33 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
     </div>
     <div class="messages-area" id="messages"></div>
     <div class="input-area">
-        <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
         <label for="file-input" style="margin: 0; cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-plus icon-btn"></i>
         </label>
-        <input type="file" id="file-input" style="display:none" accept="image/*">
+        <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
         
         <input type="text" id="message-input" placeholder="Escribe un mensaje...">
         <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
-        <div id="emoji-picker-box"></div>
+    </div>
+</div>
+
+<div id="media-preview-modal">
+    <div class="preview-box">
+        <h3 style="margin-top:0">Enviar Imágenes</h3>
+        <div class="preview-images-container" id="preview-container"></div>
+        <input type="text" id="preview-caption" style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; font-family:'Montserrat'" placeholder="Añadir comentario...">
+        <div style="display:flex; justify-content: flex-end; gap:10px; margin-top:20px;">
+            <button onclick="closePreview()" style="background:#eee; border:none; padding:10px 20px; border-radius:8px; cursor:pointer">Cancelar</button>
+            <button onclick="submitMedia()" style="background:#0084ff; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer">Enviar Todo</button>
+        </div>
     </div>
 </div>
 
 <script>
 let currentChat = null; 
 let chats = {};
+let filesToUpload = [];
 
-// Conexión WebSocket
 const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
 ws.onmessage = (event) => {
@@ -129,6 +138,7 @@ function createOrUpdateChat(data, isNew){
 
 async function openChat(id){
   currentChat = id; 
+  document.getElementById("header-name").innerText = chats[id].name;
   document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
   document.getElementById("chat-"+id).classList.add('active');
   
@@ -147,16 +157,11 @@ function appendMessage(type, text, mediaUrl){
   document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
 }
 
-// --- ESTA ES LA FUNCIÓN QUE CORRIGE LA ESCRITURA ---
 async function sendMessage(){
   const input = document.getElementById("message-input");
   const text = input.value.trim();
-  
-  // Validamos que haya texto y un chat seleccionado
   if(!text || !currentChat) return;
-  
-  input.value = ""; // Limpia el input inmediatamente
-  
+  input.value = "";
   await fetch("/send-message", { 
     method: "POST", 
     headers: { "Content-Type": "application/json" }, 
@@ -164,38 +169,66 @@ async function sendMessage(){
   });
 }
 
-// Envío de imágenes
-document.getElementById('file-input').onchange = async function() {
+// NUEVA LÓGICA DE MEDIA
+document.getElementById('file-input').onchange = function() {
     if(!this.files.length || !currentChat) return;
-    const caption = prompt("¿Añadir comentario?");
+    filesToUpload = Array.from(this.files);
+    const container = document.getElementById('preview-container');
+    container.innerHTML = '';
+    
+    filesToUpload.forEach(file => {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.className = 'img-preview-thumb';
+        container.appendChild(img);
+    });
+    
+    document.getElementById('media-preview-modal').style.display = 'flex';
+    document.getElementById('preview-caption').focus();
+};
+
+function closePreview() {
+    document.getElementById('media-preview-modal').style.display = 'none';
+    document.getElementById('file-input').value = '';
+    filesToUpload = [];
+}
+
+async function submitMedia() {
+    const caption = document.getElementById('preview-caption').value.trim();
+    const chatTarget = currentChat;
+    closePreview();
+
+    // 1. Enviar comentario si existe
     if(caption) {
         await fetch("/send-message", { 
             method: "POST", 
             headers: { "Content-Type": "application/json" }, 
-            body: JSON.stringify({ to: currentChat, text: caption }) 
+            body: JSON.stringify({ to: chatTarget, text: caption }) 
         });
     }
-    for(let file of this.files){
+
+    // 2. Enviar archivos uno por uno
+    for(let file of filesToUpload) {
         const fd = new FormData(); 
         fd.append("file", file); 
-        fd.append("to", currentChat);
+        fd.append("to", chatTarget);
         await fetch("/send-media", { method: "POST", body: fd });
     }
-    this.value = "";
-};
+    document.getElementById('preview-caption').value = '';
+}
 
-// Carga inicial de chats
 window.onload = async () => {
     const res = await fetch("/chat/list");
     const list = await res.json();
     list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
 };
 
-// Detectar tecla Enter
 document.getElementById("message-input").addEventListener("keypress", (e) => {
-    if(e.key === 'Enter') {
-        sendMessage();
-    }
+    if(e.key === 'Enter') sendMessage();
+});
+
+document.getElementById("preview-caption").addEventListener("keypress", (e) => {
+    if(e.key === 'Enter') submitMedia();
 });
 </script>
 </body>
