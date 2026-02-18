@@ -10,7 +10,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
-        /* Sidebar Redes (Oculta en móviles pequeños para ganar espacio) */
+        /* Sidebar Redes */
         .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
         @media (max-width: 768px) { .sidebar-redes { display: none; } }
 
@@ -35,9 +35,9 @@
         /* Mensajes */
         .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
         .msg-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; }
-        .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; }
-        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; }
-        .msg-image { width: 100%; max-width: 250px; border-radius: 10px; margin-bottom: 5px; }
+        .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-image { width: 100%; max-width: 250px; border-radius: 10px; margin-bottom: 5px; cursor: pointer; }
 
         /* Input */
         .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; }
@@ -132,7 +132,6 @@
             document.getElementById("h-name").innerText = chats[id].name;
             document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             
-            // Animación móvil
             if(window.innerWidth <= 768) chatView.classList.add("open");
 
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
@@ -140,7 +139,10 @@
             
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
+            msgs.forEach(m => {
+                const type = (m.from === "me") ? "sent" : "received";
+                appendMessage(type, m.text, m.mediaUrl);
+            });
         }
 
         function closeChat() { chatView.classList.remove("open"); currentChat = null; }
