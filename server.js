@@ -96,7 +96,7 @@ app.post("/webhook", async (req, res) => {
                 const writer = fs.createWriteStream(filePath);
                 imgRes.data.pipe(writer);
                 mediaUrl = `/uploads/${fileName}`;
-              } catch (e) { console.error("Error imagen"); }
+              } catch (e) { console.error("Error imagen Meta"); }
             }
 
             const messageData = { 
@@ -126,48 +126,34 @@ app.post("/send-message", async (req, res) => {
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).json({ error: "Error" }); }
+  } catch (err) { res.status(500).json({ error: "Error envío" }); }
 });
 
-// FUNCIÓN CORREGIDA DE ENVÍO DE MEDIA
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
+    if (!file) return res.status(400).send("No file");
 
     const form = new FormData();
-    form.append('file', fs.createReadStream(file.path), {
-        filename: file.originalname,
-        contentType: file.mimetype,
-    });
+    form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
     form.append('messaging_product', 'whatsapp');
-    form.append('type', file.mimetype);
 
     const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-        headers: {
-            ...form.getHeaders(),
-            'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`
-        }
+      headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
     });
 
     await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: to,
-        type: "image",
-        image: { id: uploadRes.data.id }
+      messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
     }, {
-        headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
+      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
     });
 
     const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl: `/uploads/${file.filename}`, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { 
-    console.error("Error en send-media:", err.response ? err.response.data : err.message);
-    res.status(500).send("Error media"); 
-  }
+  } catch (err) { res.status(500).send("Error media"); }
 });
 
 const PORT = process.env.PORT || 3000;
