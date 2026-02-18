@@ -31,16 +31,7 @@ body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;backgro
 .input-area input[type="text"]{flex:1;background:#fff;border:none;padding:12px 18px;border-radius:8px;font-family:'Montserrat';outline:none}
 .icon-btn{color:#54656f;font-size:24px;cursor:pointer}
 .send-btn{color:#54656f;font-size:22px;cursor:pointer}
-
-/* Contenedor Emoji Picker */
-#emoji-picker-container {
-    position: absolute;
-    bottom: 70px;
-    left: 20px;
-    display: none;
-    z-index: 1001;
-}
-
+#emoji-picker-container {position: absolute;bottom: 70px;left: 20px;display: none;z-index: 1001;}
 #media-preview-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:#e9edef;z-index:1000;display:none;flex-direction:column}
 .preview-body{flex:1;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;padding:20px;overflow-y:auto;gap:15px}
 .img-preview-thumb{height:200px;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
@@ -64,14 +55,11 @@ body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;backgro
         <div id="header-name" style="font-weight:700">Selecciona un chat</div>
     </div>
     <div class="messages-area" id="messages"></div>
-    
     <div class="input-area">
         <div id="emoji-picker-container"></div>
         <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
-        
         <label for="file-input"><i class="fa-solid fa-paperclip icon-btn"></i></label>
         <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
-        
         <input type="text" id="message-input" placeholder="Escribe un mensaje" autocomplete="off">
         <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
     </div>
@@ -92,27 +80,18 @@ body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;backgro
 let currentChat=null; let chats={}; let filesToUpload=[];
 const ws=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}`);
 
-// Inicializar Emoji Picker
-const pickerOptions = { 
-    onEmojiSelect: (emoji) => {
-        document.getElementById('message-input').value += emoji.native;
-    },
-    locale: 'es',
-    theme: 'light'
-}
+const pickerOptions = { onEmojiSelect: (emoji) => { document.getElementById('message-input').value += emoji.native; }, locale: 'es', theme: 'light' }
 const picker = new EmojiMart.Picker(pickerOptions);
 document.getElementById('emoji-picker-container').appendChild(picker);
 
 const emojiTrigger = document.getElementById('emoji-trigger');
 const emojiContainer = document.getElementById('emoji-picker-container');
 
-// Abrir/Cerrar carita
 emojiTrigger.onclick = (e) => {
     e.stopPropagation();
     emojiContainer.style.display = emojiContainer.style.display === 'block' ? 'none' : 'block';
 };
 
-// Cerrar al hacer clic fuera
 document.addEventListener('click', (e) => {
     if (!emojiContainer.contains(e.target) && e.target !== emojiTrigger) {
         emojiContainer.style.display = 'none';
@@ -125,6 +104,7 @@ ws.onmessage=(event)=>{
     createOrUpdateChat(msg.data,true);
     if(currentChat===msg.data.from) appendMessage("received",msg.data.text,msg.data.mediaUrl);
   } else if(msg.type==="sent"){
+    // Se asegura de mostrarlo si el destinatario es el chat actual
     if(currentChat===msg.data.to) appendMessage("sent",msg.data.text,msg.data.mediaUrl);
   }
 };
