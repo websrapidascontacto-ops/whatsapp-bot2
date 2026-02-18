@@ -191,108 +191,115 @@ body{
 </div>
 
 <script>
-let currentChat=null; 
-let chats={}; 
-let filesToUpload=[];
+let currentChat = null;
+let chats = {};
 
-const ws=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}`);
+// ===============================
+// ABRIR CHAT
+// ===============================
+async function openChat(id) {
 
-ws.onmessage=(event)=>{
-  const msg=JSON.parse(event.data);
-  if(msg.type==="incoming"){
-    createOrUpdateChat(msg.data,true);
-    if(currentChat===msg.data.from)
-      appendMessage("received",msg.data.text,msg.data.mediaUrl);
-  } 
-  else if(msg.type==="sent"){
-    if(currentChat===msg.data.to)
-      appendMessage("sent",msg.data.text,msg.data.mediaUrl);
-  }
-};
+    currentChat = id;
 
-function createOrUpdateChat(data,isNew){
-  const id=data.from || data.chatId;
-  const name=data.pushname || chats[id]?.name || id;
-  chats[id]={name};
-  let item=document.getElementById("chat-"+id);
-  if(!item){
-    item=document.createElement("div");
-    item.className="chat-item";
-    item.id="chat-"+id;
-    item.onclick=()=>openChat(id);
-    document.getElementById("chat-list").prepend(item);
-  }
-  item.innerHTML=`<img src="https://ui-avatars.com/api/?name=${name}" style="width:45px;border-radius:50%">
-    <div style="flex:1"><b>${name}</b><br><small>${data.text || "📷 Imagen"}</small></div>`;
-  if(isNew) document.getElementById("chat-list").prepend(item);
+    document.getElementById("header-name").innerText = chats[id]?.name || id;
+
+    document.querySelectorAll('.chat-item')
+        .forEach(el => el.classList.remove('active'));
+
+    const chatElement = document.getElementById("chat-" + id);
+    if (chatElement) chatElement.classList.add('active');
+
+    const res = await fetch(`/chat/messages/${id}`);
+    const msgs = await res.json();
+
+    const container = document.getElementById("messages");
+    container.innerHTML = "";
+
+    msgs.forEach(m => {
+
+        // 🔥 SOLUCIÓN DEFINITIVA
+        // Si el mensaje viene del mismo número del chat → es cliente
+        // Si no → es mensaje enviado por nosotros
+        const isReceived = normalizeNumber(m.from) === normalizeNumber(id);
+
+        appendMessage(
+            isReceived ? "received" : "sent",
+            m.text,
+            m.mediaUrl
+        );
+    });
+
+    scrollToBottom();
 }
 
-/* ✅ CORRECCIÓN AQUÍ */
-async function openChat(id){
-  currentChat=id;
-  document.getElementById("header-name").innerText=chats[id].name;
-
-  document.querySelectorAll('.chat-item')
-    .forEach(el=>el.classList.remove('active'));
-
-  document.getElementById("chat-"+id)
-    .classList.add('active');
-
-  const res=await fetch(`/chat/messages/${id}`);
-  const msgs=await res.json();
-
-  const container=document.getElementById("messages");
-  container.innerHTML="";
-
-  msgs.forEach(m=>{
-    const isSent = m.from === "me";
-    appendMessage(isSent ? "sent" : "received", m.text, m.mediaUrl);
-  });
+// ===============================
+// NORMALIZAR NÚMEROS
+// ===============================
+function normalizeNumber(num) {
+    if (!num) return "";
+    return num.replace("whatsapp:", "").replace("+", "").trim();
 }
 
-function appendMessage(type,text,mediaUrl){
-  const div=document.createElement("div");
-  div.className="msg-bubble "+(type==="sent"?"msg-sent":"msg-received");
+// ===============================
+// AGREGAR MENSAJE AL CHAT
+// ===============================
+function appendMessage(type, text, mediaUrl = null) {
 
-  if(mediaUrl)
-    div.innerHTML+=`<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
+    const container = document.getElementById("messages");
 
-  if(text)
-    div.innerHTML+=`<div>${text}</div>`;
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message", type);
 
-  document.getElementById("messages").appendChild(div);
-  document.getElementById("messages").scrollTop=
-  document.getElementById("messages").scrollHeight;
+    if (text) {
+        const textNode = document.createElement("div");
+        textNode.innerText = text;
+        messageDiv.appendChild(textNode);
+    }
+
+    if (mediaUrl) {
+        const img = document.createElement("img");
+        img.src = mediaUrl;
+        img.style.maxWidth = "200px";
+        img.style.borderRadius = "8px";
+        img.style.marginTop = "5px";
+        messageDiv.appendChild(img);
+    }
+
+    container.appendChild(messageDiv);
+    scrollToBottom();
 }
 
-async function sendMessage(){
-  const input=document.getElementById("message-input");
-  const text=input.value.trim();
-  if(!text || !currentChat) return;
-  input.value="";
-  await fetch("/send-message",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({to:currentChat,text})
-  });
+// ===============================
+// SCROLL AUTOMÁTICO
+// ===============================
+function scrollToBottom() {
+    const container = document.getElementById("messages");
+    container.scrollTop = container.scrollHeight;
 }
 
-window.onload=async()=>{
-  const res=await fetch("/chat/list");
-  const list=await res.json();
-  list.reverse()
-    .forEach(c=>createOrUpdateChat({
-      chatId:c._id,
-      pushname:c.pushname,
-      text:c.text
-    },false));
-};
+// ===============================
+// ENVIAR MENSAJE
+// ===============================
+async function sendMessage() {
 
-document.getElementById("message-input")
-  .addEventListener("keypress",
-    (e)=>{if(e.key==='Enter')sendMessage()}
-);
+    const input = document.getElementById("message-input");
+    const text = input.value.trim();
+
+    if (!text || !currentChat) return;
+
+    await fetch("/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            to: currentChat,
+            text: text
+        })
+    });
+
+    input.value = "";
+}
 </script>
+
 
 </body>
 </html>
