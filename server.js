@@ -12,7 +12,7 @@ const Message = require("./models/Message");
 
 const app = express();
 
-// --- SEGURIDAD: Crear carpeta uploads si no existe ---
+// --- SEGURIDAD: Crear carpeta de subidas si no existe en el servidor ---
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
@@ -23,10 +23,12 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// RUTAS ESTÁTICAS
 app.use(express.static("public"));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// CONEXIÓN MONGO
 mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ MongoDB conectado"));
 
 const server = require("http").createServer(app);
@@ -42,7 +44,7 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// PROXY DE IMÁGENES
+// PROXY DE IMÁGENES (EVITA ERROR 401 AL RECIBIR)
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   if (!mediaUrl) return res.status(400).send("No URL");
@@ -56,7 +58,7 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
-// WEBHOOK
+// WEBHOOK: RECIBE MENSAJES E IMÁGENES
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -112,19 +114,20 @@ app.post("/send-message", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ENVIAR MEDIA CORREGIDO (RESISTENTE A ERRORES 500)
+// ENVIAR IMAGEN (CORRECCIÓN CLAVE PARA META)
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
 
-    if (!file || !to) {
-        return res.status(400).json({ error: "No se recibio archivo o destinatario" });
-    }
+    if (!file || !to) return res.status(400).json({ error: "Faltan datos" });
 
-    // 1. Subir a Meta
+    // 1. Subir a Meta con METADATOS explícitos (Evita error #100)
     const form = new FormData();
-    form.append('file', fs.createReadStream(file.path));
+    form.append('file', fs.createReadStream(file.path), {
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
     form.append('type', file.mimetype);
     form.append('messaging_product', 'whatsapp');
 
@@ -134,7 +137,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
       { headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
-    // 2. Enviar mensaje
+    // 2. Enviar a WhatsApp usando el media ID
     await axios.post(
       `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
       {
@@ -146,7 +149,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
       { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
 
-    // 3. Notificar CRM
+    // 3. Respuesta local
     const mediaUrl = `/uploads/${file.filename}`;
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
     await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
@@ -154,8 +157,8 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     res.json({ status: "ok" });
 
   } catch (err) {
-    console.error("DETALLE DEL ERROR:", err.response?.data || err.message);
-    res.status(500).json({ error: "Error interno del servidor", detalle: err.message });
+    console.error("DETALLE ERROR META:", err.response?.data || err.message);
+    res.status(500).json({ error: "Error enviando media" });
   }
 });
 
@@ -165,4 +168,4 @@ app.get("/chat/messages/:chatId", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Webs Rápidas Activo` ));
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Webs Rápidas Activo`));
