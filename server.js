@@ -1,230 +1,162 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CRM Webs Rápidas - Premium</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
+const express = require("express");
+const WebSocket = require("ws");
+const mongoose = require("mongoose");
+const path = require("path");
+const multer = require("multer"); 
+const axios = require("axios");
+const fs = require("fs");
+const FormData = require("form-data");
+require("dotenv").config();
 
-        .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
-        @media (max-width: 768px) { .sidebar-redes { display: none; } }
+const Message = require("./models/Message");
 
-        .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
-        .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
-        .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; transition: 0.2s; }
-        .chat-item.active { background: #e7f3ff; }
-        .pfp { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .chat-info { flex: 1; overflow: hidden; }
-        .chat-name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
-        .last-msg { font-size: 12px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .unread-badge { background: #0084ff; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: none; }
+const app = express();
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; transition: all 0.3s ease; }
-        .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; justify-content: space-between; }
-        .top-bar-left { display: flex; align-items: center; gap: 12px; }
-        .back-btn { display: none; font-size: 20px; color: #0084ff; cursor: pointer; padding-right: 10px; }
-        .delete-btn { color: #ff4d4d; cursor: pointer; font-size: 18px; padding: 5px; transition: 0.2s; }
-        .delete-btn:hover { color: #cc0000; transform: scale(1.1); }
-        .top-bar img { width: 40px; height: 40px; border-radius: 50%; }
-        .top-name { font-weight: 700; font-size: 15px; }
+const upload = multer({ dest: "uploads/" }); 
 
-        .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
-        .msg-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; }
-        .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .msg-image { width: 100%; max-width: 250px; border-radius: 10px; margin-bottom: 5px; cursor: pointer; }
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; }
-        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; display: flex; align-items: center; }
-        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 8px 0; outline: none; font-family: 'Montserrat'; font-size: 14px; }
-        .send-btn { background: #0084ff; color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+app.use(express.static("public"));
+app.use("/chat", express.static(path.join(__dirname, "chat")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-        @media (max-width: 768px) {
-            .chat-list-container { width: 100%; }
-            .chat-content { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; }
-            .chat-content.open { right: 0; }
-            .back-btn { display: block; }
-        }
-    </style>
-</head>
-<body>
-    <div class="sidebar-redes">
-        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
-    </div>
+mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ MongoDB conectado"));
 
-    <div class="chat-list-container">
-        <div class="list-header">Mensajes</div>
-        <div id="chat-list" class="chat-list"></div>
-    </div>
+const server = require("http").createServer(app);
+const wss = new WebSocket.Server({ server });
+const wsClients = new Set();
 
-    <div class="chat-content" id="chat-view">
-        <div class="top-bar">
-            <div class="top-bar-left">
-                <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
-                <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
-                <div id="h-name" class="top-name">Selecciona un chat</div>
-            </div>
-            <i class="fa-solid fa-trash-can delete-btn" onclick="deleteFullChat()" id="del-icon" style="display:none"></i>
-        </div>
-        <div id="messages" class="messages-area"></div>
-        <div class="input-area">
-            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
-            <input type="file" id="file-input" style="display:none" accept="image/*">
-            <div class="input-wrapper">
-                <input type="text" id="m-input" placeholder="Mensaje...">
-            </div>
-            <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
-        </div>
-    </div>
+wss.on("connection", ws => {
+  wsClients.add(ws);
+  ws.on("close", () => wsClients.delete(ws));
+});
 
-    <script>
-        let currentChat = null; let chats = {};
-        const messagesEl = document.getElementById("messages");
-        const chatListEl = document.getElementById("chat-list");
-        const chatView = document.getElementById("chat-view");
+function broadcastMessage(data) {
+  wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
+}
 
-        const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
+app.get("/proxy-media", async (req, res) => {
+  const mediaUrl = req.query.url;
+  if (!mediaUrl) return res.status(400).send("No URL");
+  try {
+    const response = await axios.get(mediaUrl, {
+      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
+      responseType: 'arraybuffer'
+    });
+    res.set('Content-Type', response.headers['content-type']);
+    res.send(response.data);
+  } catch (e) { res.status(500).send("Error de proxy"); }
+});
 
-        ws.onmessage = (e) => {
-            const msg = JSON.parse(e.data);
-            if(msg.type === "incoming"){
-                createChat(msg.data);
-                if(currentChat === msg.data.from) {
-                    appendMessage("received", msg.data.text, msg.data.mediaUrl);
-                } else {
-                    notifyNew(msg.data.from);
-                }
-            } else if(msg.type === "sent"){
-                if(currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
-                updateLast(msg.data.to, msg.data.text || "📷 Imagen");
+app.get("/chat/list", async (req, res) => {
+  try {
+    const list = await Message.aggregate([
+      { $sort: { timestamp: -1 } },
+      { $group: { 
+          _id: "$chatId", 
+          text: { $first: "$text" }, 
+          pushname: { $first: "$pushname" },
+          timestamp: { $first: "$timestamp" }
+      }},
+      { $sort: { timestamp: -1 } }
+    ]);
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/chat/messages/:chatId", async (req, res) => {
+  try {
+    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
+    res.json(messages);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/chat/messages/:chatId", async (req, res) => {
+  try {
+    await Message.deleteMany({ chatId: req.params.chatId });
+    res.json({ status: "ok" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/webhook", async (req, res) => {
+  const body = req.body;
+  if (body.object === "whatsapp_business_account") {
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        const value = change.value;
+        if (value.messages) {
+          for (const msg of value.messages) {
+            const senderId = msg.from;
+            const pushName = value.contacts?.[0]?.profile?.name || senderId;
+            let mediaUrl = null;
+
+            if (msg.type === "image") {
+              try {
+                const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
+                  headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
+                });
+                mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
+              } catch (e) {}
             }
-        };
 
-        window.onload = async () => {
-            const res = await fetch("/chat/list");
-            const list = await res.json();
-            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text}));
-        };
+            const messageData = { 
+              chatId: senderId, from: senderId, text: msg.text?.body || "", 
+              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl,
+              timestamp: new Date()
+            };
 
-        function createChat(data){
-            const id = data.from;
-            if(!chats[id]){
-                chats[id] = { name: data.pushname || id, unread: 0 };
-                const div = document.createElement("div");
-                div.className = "chat-item"; div.id = "chat-"+id;
-                div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
-                    <div class="chat-info">
-                        <div class="chat-name">${chats[id].name}</div>
-                        <div class="last">${data.text || "📷 Imagen"}</div>
-                    </div>
-                    <div id="badge-${id}" class="unread-badge">0</div>`;
-                div.onclick = () => openChat(id);
-                chatListEl.prepend(div);
-            } else { 
-                updateLast(id, data.text);
-            }
+            await Message.create(messageData);
+            broadcastMessage({ type: "incoming", data: messageData });
+          }
         }
+      }
+    }
+  }
+  res.sendStatus(200);
+});
 
-        function updateLast(id, t){ 
-            const el = document.querySelector(`#chat-${id} .last`); 
-            if(el) el.innerText = t || "📷 Imagen";
-            const chatItem = document.getElementById("chat-"+id);
-            if(chatItem) chatListEl.prepend(chatItem); 
-        }
+app.post("/send-message", async (req, res) => {
+  const { to, text } = req.body;
+  try {
+    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, 
+      { messaging_product: "whatsapp", to, text: { body: text } },
+      { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
+    );
+    const messageData = { chatId: to, from: "me", text, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
+    await Message.create(messageData);
+    broadcastMessage({ type: "sent", data: messageData });
+    res.json({ status: "ok" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-        function notifyNew(id){
-            if(!chats[id]) return;
-            chats[id].unread++;
-            const badge = document.getElementById(`badge-${id}`);
-            if(badge){
-                badge.innerText = chats[id].unread;
-                badge.style.display = "block";
-            }
-        }
+app.post("/send-media", upload.single("file"), async (req, res) => {
+  try {
+    const { to } = req.body;
+    const file = req.file;
+    const form = new FormData();
+    form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+    form.append('type', file.mimetype);
+    form.append('messaging_product', 'whatsapp');
 
-        async function openChat(id){
-            currentChat = id; messagesEl.innerHTML = "";
-            document.getElementById("h-name").innerText = chats[id].name;
-            document.getElementById("del-icon").style.display = "block";
-            
-            chats[id].unread = 0;
-            const badge = document.getElementById(`badge-${id}`);
-            if(badge) badge.style.display = "none";
+    const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form,
+      { headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
+    );
 
-            if(window.innerWidth <= 768) chatView.classList.add("open");
-            document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-            document.getElementById("chat-"+id).classList.add('active');
-            
-            const res = await fetch(`/chat/messages/${id}`);
-            const msgs = await res.json();
-            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
-        }
+    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      { messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id } },
+      { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
+    );
 
-        // FUNCIÓN MEJORADA: Borra de la DB y de la lista lateral
-        async function deleteFullChat(){
-            if(!currentChat) return;
-            const confirmDel = confirm(`¿Borrar permanentemente la conversación con ${chats[currentChat].name}?`);
-            if(!confirmDel) return;
+    const mediaUrl = `/uploads/${file.filename}`;
+    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
+    await Message.create(messageData);
+    broadcastMessage({ type: "sent", data: messageData });
+    res.json({ status: "ok" });
+  } catch (err) { res.status(500).json({ error: "Error enviando media" }); }
+});
 
-            try {
-                const res = await fetch(`/chat/messages/${currentChat}`, { method: 'DELETE' });
-                if(res.ok) {
-                    const idToDelete = currentChat;
-                    // Limpiar pantalla
-                    messagesEl.innerHTML = "";
-                    document.getElementById("h-name").innerText = "Selecciona un chat";
-                    document.getElementById("del-icon").style.display = "none";
-                    
-                    // Quitar de la lista lateral
-                    const item = document.getElementById("chat-"+idToDelete);
-                    if(item) item.remove();
-                    
-                    delete chats[idToDelete];
-                    currentChat = null;
-
-                    if(window.innerWidth <= 768) closeChat();
-                    alert("Conversación eliminada permanentemente. 🗑️");
-                }
-            } catch (err) {
-                alert("Error al borrar: " + err.message);
-            }
-        }
-
-        function closeChat() { chatView.classList.remove("open"); currentChat = null; }
-
-        function appendMessage(type, text, mediaUrl){
-            const div = document.createElement("div");
-            div.className = `msg-bubble msg-${type}`;
-            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
-            if(text && text !== "📷 Imagen") {
-                const textDiv = document.createElement("div");
-                textDiv.innerText = text;
-                div.appendChild(textDiv);
-            }
-            messagesEl.appendChild(div);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-
-        async function sendMessage(){
-            const input = document.getElementById("m-input");
-            if(!input.value.trim() || !currentChat) return;
-            const text = input.value; input.value = "";
-            await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
-        }
-
-        document.getElementById('file-input').onchange = async function() {
-            if(!this.files[0] || !currentChat) return;
-            const fd = new FormData(); fd.append("file", this.files[0]); fd.append("to", currentChat);
-            await fetch("/send-media", { method: "POST", body: fd });
-            this.value = "";
-        };
-        
-        document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
-    </script>
-</body>
-</html>
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Webs Rápidas Activo`));
