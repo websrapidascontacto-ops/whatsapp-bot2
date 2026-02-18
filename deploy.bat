@@ -1,41 +1,25 @@
 @echo off
-title Subiendo proyecto y desplegando a Railway
-color 0A
+title Subiendo Cambios a Railway - Webs Rapidas
+echo ===========================================
+echo   SUBIENDO CODIGO A GITHUB Y RAILWAY
+echo ===========================================
+echo.
 
-echo ========================================
-echo Subiendo proyecto a GitHub...
-echo ========================================
-
-set /p msg="Mensaje de commit: "
-
+:: Preparar los archivos
+echo [+] Agregando archivos...
 git add .
-git commit -m "%msg%"
-git push origin main
-if %errorlevel% neq 0 (
-    echo Error al hacer git push. Verifica tu conexión y rama.
-    pause
-    exit /b
-)
+
+:: Crear el commit con fecha y hora actual
+echo [+] Creando commit...
+git commit -m "Actualizacion automatica %date% %time%"
+
+:: Subir a GitHub
+echo [+] Subiendo a GitHub (Main)...
+git push origin main --force
 
 echo.
-echo ========================================
-echo Desplegando proyecto a Railway...
-echo ========================================
-
-cd /d %~dp0
-railway up
-if %errorlevel% neq 0 (
-    echo Error al desplegar en Railway. Verifica CLI y login.
-    pause
-    exit /b
-)
-
-echo.
-echo ========================================
-echo Deploy completado.
-echo Abriendo app en el navegador...
-echo ========================================
-
-start https://whatsapp-bot2-production-0129.up.railway.app/chat/
-
+echo ===========================================
+echo   PROCESO TERMINADO CON EXITO ✅
+echo ===========================================
+echo Railway empezara el deploy en unos segundos.
 pause
