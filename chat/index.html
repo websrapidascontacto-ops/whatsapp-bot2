@@ -286,67 +286,184 @@ font-size:14px;
 </div>
 
 <script>
-/* ===== TU SCRIPT ORIGINAL COMPLETO AQUÍ ===== */
-/* NO TOCO NADA DE TU LÓGICA EXISTENTE */
 
-/* ===== SOLO AGREGO ESTO AL FINAL ===== */
+let currentChat = null;
+const chatList = document.getElementById("chat-list");
+const messagesContainer = document.getElementById("messages");
+
+/* =========================
+   WEBSOCKET (Railway Ready)
+========================= */
+
+const ws = new WebSocket(
+  location.protocol === "https:"
+    ? "wss://" + location.host
+    : "ws://" + location.host
+);
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === "new_message") {
+    if (data.message.chatId === currentChat) {
+      renderMessage(data.message);
+    }
+    loadChats();
+  }
+};
+
+/* =========================
+   CARGAR LISTA DE CHATS
+========================= */
+
+async function loadChats() {
+  const res = await fetch("/chats");
+  const chats = await res.json();
+
+  chatList.innerHTML = "";
+
+  chats.forEach(chat => {
+    const div = document.createElement("div");
+    div.className = "chat-item";
+    div.innerHTML = `
+      <div>${chat._id}</div>
+      <small>${chat.lastMessage || ""}</small>
+    `;
+    div.onclick = () => openChat(chat._id);
+    chatList.appendChild(div);
+  });
+}
+
+/* =========================
+   ABRIR CHAT
+========================= */
+
+async function openChat(chatId) {
+  currentChat = chatId;
+
+  document.getElementById("header-name").innerText = chatId;
+  messagesContainer.innerHTML = "";
+
+  const res = await fetch("/messages/" + chatId);
+  const msgs = await res.json();
+
+  msgs.forEach(renderMessage);
+}
+
+/* =========================
+   RENDER MENSAJE
+========================= */
+
+function renderMessage(msg) {
+  const div = document.createElement("div");
+  div.className = "msg-bubble " + (msg.from === "me" ? "msg-sent" : "msg-received");
+
+  if (msg.media) {
+    const img = document.createElement("img");
+    img.src = msg.media;
+    img.className = "msg-image";
+    div.appendChild(img);
+  }
+
+  if (msg.text) {
+    const text = document.createElement("div");
+    text.innerText = msg.text;
+    div.appendChild(text);
+  }
+
+  messagesContainer.appendChild(div);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/* =========================
+   ENVIAR TEXTO
+========================= */
+
+async function sendMessage() {
+  if (!currentChat) return;
+
+  const input = document.getElementById("message-input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  await fetch("/send-message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ to: currentChat, text })
+  });
+
+  input.value = "";
+}
+
+/* =========================
+   MULTI IMAGEN (TU CÓDIGO)
+========================= */
+
 let selectedFiles = [];
 
 document.getElementById("file-input").addEventListener("change", (e) => {
-if (!currentChat) {
-alert("Selecciona un chat primero");
-return;
-}
+  if (!currentChat) {
+    alert("Selecciona un chat primero");
+    return;
+  }
 
-selectedFiles = [...e.target.files];
-if (selectedFiles.length === 0) return;
+  selectedFiles = [...e.target.files];
+  if (selectedFiles.length === 0) return;
 
-const container = document.getElementById("preview-container");
-container.innerHTML = "";
+  const container = document.getElementById("preview-container");
+  container.innerHTML = "";
 
-selectedFiles.forEach(file => {
-const img = document.createElement("img");
-img.src = URL.createObjectURL(file);
-container.appendChild(img);
-});
+  selectedFiles.forEach(file => {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    container.appendChild(img);
+  });
 
-document.getElementById("image-modal").style.display = "flex";
+  document.getElementById("image-modal").style.display = "flex";
 });
 
 function closeModal(){
-document.getElementById("image-modal").style.display="none";
-document.getElementById("image-comment").value="";
-selectedFiles=[];
-document.getElementById("file-input").value="";
+  document.getElementById("image-modal").style.display="none";
+  document.getElementById("image-comment").value="";
+  selectedFiles=[];
+  document.getElementById("file-input").value="";
 }
 
 async function confirmSendImages(){
-if (!currentChat) return;
+  if (!currentChat) return;
 
-const comment = document.getElementById("image-comment").value;
+  const comment = document.getElementById("image-comment").value;
 
-for(const file of selectedFiles){
-const formData = new FormData();
-formData.append("file", file);
-formData.append("to", currentChat);
+  for(const file of selectedFiles){
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("to", currentChat);
 
-await fetch("/send-media",{
-method:"POST",
-body:formData
-});
+    await fetch("/send-media",{
+      method:"POST",
+      body:formData
+    });
+  }
+
+  if(comment.trim()!==""){
+    await fetch("/send-message",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({to:currentChat,text:comment})
+    });
+  }
+
+  closeModal();
 }
 
-if(comment.trim()!==""){
-await fetch("/send-message",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat,text:comment})
-});
-}
+/* =========================
+   INICIO
+========================= */
 
-closeModal();
-}
+loadChats();
+
 </script>
+
 
 </body>
 </html>
