@@ -18,8 +18,16 @@ const upload = multer({ dest: "uploads/" });
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static("public"));
+
+// --- CONFIGURACIÓN DE RUTAS ESTÁTICAS ---
 app.use("/uploads", express.static(uploadDir));
+// Esta línea sirve los archivos dentro de la carpeta /chat
+app.use("/chat", express.static(path.join(__dirname, "chat")));
+
+// Redirección opcional: Si entras a la raíz, te lleva al chat
+app.get("/", (req, res) => {
+  res.redirect("/chat/index.html");
+});
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB conectado"))
@@ -40,7 +48,6 @@ function broadcastMessage(data) {
   });
 }
 
-// Rutas de API
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -94,7 +101,7 @@ app.post("/webhook", async (req, res) => {
                 const writer = fs.createWriteStream(filePath);
                 imgRes.data.pipe(writer);
                 mediaUrl = `/uploads/${fileName}`;
-              } catch (e) { console.error("Error persistencia imagen"); }
+              } catch (e) { console.error("Error imagen"); }
             }
 
             const messageData = { 
@@ -124,7 +131,7 @@ app.post("/send-message", async (req, res) => {
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).json({ error: "Error de envío" }); }
+  } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
@@ -153,4 +160,4 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => console.log(`🚀 Puerto ${PORT}`));
+server.listen(PORT, "0.0.0.0", () => console.log(`🚀 CRM Online en puerto ${PORT}`));
