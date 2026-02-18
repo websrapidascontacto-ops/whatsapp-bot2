@@ -6,7 +6,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
-/* Montserrat y Estilos Base */
 *{box-sizing:border-box}
 body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;background:#f0f2f5}
 .sidebar-redes{width:75px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;align-items:center;padding-top:25px}
@@ -19,7 +18,7 @@ body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;back
 .msg-bubble{max-width:65%;padding:10px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
 .msg-sent{background:#0084ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
 .msg-received{background:#fff;align-self:flex-start;border-bottom-left-radius:4px;border:1px solid #e4e6eb}
-.msg-image{width:100%;max-width:300px;border-radius:8px;cursor:pointer}
+.msg-image{width:100%;max-width:300px;border-radius:8px;cursor:pointer;margin-bottom:5px}
 .input-area{padding:15px 25px;display:flex;align-items:center;gap:15px;border-top:1px solid #e4e6eb}
 .input-area input[type="text"]{flex:1;background:#f0f2f5;border:none;padding:12px 18px;border-radius:20px;outline:none}
 .send-btn{background:#0084ff;color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -45,8 +44,8 @@ body{margin:0;height:100vh;font-family:'Montserrat',sans-serif;display:flex;back
 let currentChat = null; let chats = {};
 const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
   if(msg.type === "incoming"){
     createOrUpdateChat(msg.data, true);
     if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
@@ -68,10 +67,12 @@ function createOrUpdateChat(data, isNew){
   }
   item.innerHTML = `<img src="https://ui-avatars.com/api/?name=${name}&background=random&color=fff" style="width:45px;border-radius:50%">
     <div style="flex:1"><b>${name}</b><br><small>${data.text || "📷 Imagen"}</small></div>`;
+  if(isNew) document.getElementById("chat-list").prepend(item);
 }
 
 async function openChat(id){
-  currentChat = id; document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+  currentChat = id; 
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
   document.getElementById("chat-"+id).classList.add('active');
   const res = await fetch(`/chat/messages/${id}`);
   const msgs = await res.json();
@@ -93,4 +94,26 @@ async function sendMessage(){
   const text = input.value.trim();
   if(!text || !currentChat) return;
   input.value = "";
-  await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:
+  await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text}) });
+}
+
+document.getElementById('file-input').onchange = async function() {
+    if(!this.files.length || !currentChat) return;
+    const caption = prompt("¿Deseas añadir un comentario?");
+    if(caption) await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text:caption}) });
+    for(let file of this.files){
+        const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
+        await fetch("/send-media", { method:"POST", body:fd });
+    }
+    this.value = "";
+};
+
+window.onload = async () => {
+    const res = await fetch("/chat/list");
+    const list = await res.json();
+    list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
+};
+document.getElementById("message-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
+</script>
+</body>
+</html>
