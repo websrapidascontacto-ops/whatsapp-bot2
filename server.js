@@ -43,7 +43,6 @@ function broadcastMessage(data) {
 
 async function downloadMedia(mediaId) {
     try {
-        // CORRECCIÓN: Se agregaron backticks `` a las URLs
         const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
             headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
         });
@@ -97,7 +96,6 @@ app.post("/webhook", async (req, res) => {
 app.post("/send-message", async (req, res) => {
     const { to, text } = req.body;
     try {
-        // CORRECCIÓN: Se agregaron backticks `` a la URL
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
             messaging_product: "whatsapp",
             to,
@@ -124,7 +122,6 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
         form.append('type', file.mimetype);
         form.append('messaging_product', 'whatsapp');
 
-        // CORRECCIÓN: Se agregaron backticks `` a la URL
         const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
             headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
         });
