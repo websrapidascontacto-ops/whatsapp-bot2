@@ -17,24 +17,23 @@ const wss = new WebSocket.Server({ server });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔥 Servir archivos estáticos desde /chats
-const chatsPath = path.join(__dirname, "chats");
-app.use(express.static(chatsPath));
+// 🔥 SERVIR CARPETA "chat" (SIN S)
+const chatPath = path.join(__dirname, "chat");
+app.use("/chat", express.static(chatPath));
 
-// uploads
-const uploadsPath = path.join(chatsPath, "uploads");
+// uploads dentro de chat
+const uploadsPath = path.join(chatPath, "uploads");
 if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 app.use("/uploads", express.static(uploadsPath));
 
 /* =========================
-   RUTA PRINCIPAL (IMPORTANTE)
+   RUTA PRINCIPAL OPCIONAL
 ========================= */
 
-// Cuando entren a / o /chat o /chat/*
-app.get(["/", "/chat", "/chat/*"], (req, res) => {
-  res.sendFile(path.join(chatsPath, "index.html"));
+app.get("/", (req, res) => {
+  res.redirect("/chat/index.html");
 });
 
 /* =========================
@@ -42,7 +41,7 @@ app.get(["/", "/chat", "/chat/*"], (req, res) => {
 ========================= */
 
 if (!process.env.MONGO_URI) {
-  console.log("❌ ERROR: MONGO_URI no configurado");
+  console.log("❌ ERROR: MONGO_URI no configurado en Railway");
   process.exit(1);
 }
 
@@ -98,12 +97,14 @@ app.get("/chats", async (req, res) => {
     },
     { $sort: { lastTime: -1 } }
   ]);
+
   res.json(chats);
 });
 
 app.get("/messages/:chatId", async (req, res) => {
   const messages = await Message.find({ chatId: req.params.chatId })
     .sort({ timestamp: 1 });
+
   res.json(messages);
 });
 
@@ -125,6 +126,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsPath),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
+
 const upload = multer({ storage });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
@@ -146,6 +148,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 ========================= */
 
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
   console.log("🚀 Server corriendo en puerto", PORT);
 });
