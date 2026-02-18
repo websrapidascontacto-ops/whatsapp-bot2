@@ -11,15 +11,17 @@ require("dotenv").config();
 const Message = require("./models/Message");
 
 const app = express();
+
 const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir);
+}
 
 const upload = multer({ dest: "uploads/" }); 
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rutas estáticas para que el CRM cargue bien
 app.use(express.static("public"));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -39,7 +41,6 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// PROXY DE IMÁGENES: Fundamental para que las imágenes recibidas no salgan "Expiradas"
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   if (!mediaUrl) return res.status(400).send("No URL");
@@ -53,7 +54,6 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
-// WEBHOOK: Recibe mensajes e imágenes de WhatsApp
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -77,7 +77,7 @@ app.post("/webhook", async (req, res) => {
 
             const messageData = { 
               from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), 
-              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl, timestamp: new Date()
+              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl 
             };
 
             await Message.create({ chatId: senderId, ...messageData });
@@ -90,7 +90,6 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// ENVIAR MENSAJE DE TEXTO
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -98,20 +97,16 @@ app.post("/send-message", async (req, res) => {
       { messaging_product: "whatsapp", to, text: { body: text } },
       { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
-    const messageData = { chatId: to, from: "me", text, source: "whatsapp", timestamp: new Date() };
-    await Message.create(messageData);
     broadcastMessage({ type: "sent", data: { to, text, source: "whatsapp" } });
+    await Message.create({ chatId: to, from: "me", text, source: "whatsapp" });
     res.json({ status: "ok" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ENVIAR IMAGEN
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
-    if (!file || !to) return res.status(400).json({ error: "Faltan datos" });
-
     const form = new FormData();
     form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
     form.append('type', file.mimetype);
@@ -126,8 +121,8 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     }, { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } });
 
     const mediaUrl = `/uploads/${file.filename}`;
-    await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
+    await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
     res.json({ status: "ok" });
   } catch (err) { res.status(500).json({ error: "Error enviando media" }); }
 });
