@@ -121,7 +121,7 @@
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            // Cargar de abajo hacia arriba para que prepend los deje en orden correcto
+            // Cargar de abajo hacia arriba para que prepend los deje en orden correcto 
             [...list].reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
