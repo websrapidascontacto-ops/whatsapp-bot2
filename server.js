@@ -6,6 +6,7 @@ const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
 const axios = require("axios");
+const FormData = require("form-data");
 require("dotenv").config();
 
 const app = express();
@@ -76,7 +77,6 @@ function broadcast(data) {
    🔥 WEBHOOK WHATSAPP
 ========================= */
 
-// VERIFICACION META
 app.get("/webhook", (req, res) => {
   const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
@@ -94,7 +94,6 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// RECIBIR MENSAJES
 app.post("/webhook", async (req, res) => {
   const body = req.body;
 
@@ -157,7 +156,7 @@ app.get("/messages/:chatId", async (req, res) => {
 });
 
 /* =========================
-   ENVIAR MENSAJE REAL A META
+   ENVIAR MENSAJE TEXTO
 ========================= */
 
 app.post("/send-message", async (req, res) => {
@@ -191,6 +190,75 @@ app.post("/send-message", async (req, res) => {
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: "Error enviando mensaje" });
+  }
+});
+
+/* =========================
+   🔥 ENVIAR MEDIA REAL A META
+========================= */
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsPath),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+});
+
+const upload = multer({ storage });
+
+app.post("/send-media", upload.single("file"), async (req, res) => {
+  try {
+    const { to } = req.body;
+    const file = req.file;
+
+    if (!file || !to) {
+      return res.status(400).json({ error: "Faltan datos" });
+    }
+
+    // 1️⃣ Subir media a Meta
+    const form = new FormData();
+    form.append("file", fs.createReadStream(file.path));
+    form.append("messaging_product", "whatsapp");
+
+    const uploadRes = await axios.post(
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    // 2️⃣ Enviar mensaje con media ID
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { id: uploadRes.data.id }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    // 3️⃣ Guardar en Mongo
+    const saved = await Message.create({
+      chatId: to,
+      from: "me",
+      media: "/uploads/" + file.filename
+    });
+
+    broadcast({ type: "new_message", message: saved });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("ERROR META:", err.response?.data || err.message);
+    res.status(500).json({ error: "Error enviando media" });
   }
 });
 
