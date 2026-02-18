@@ -17,23 +17,41 @@ const wss = new WebSocket.Server({ server });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔥 SERVIR CARPETA CHATS
-app.use(express.static(path.join(__dirname, "chats")));
+// 🔥 Servir archivos estáticos desde /chats
+const chatsPath = path.join(__dirname, "chats");
+app.use(express.static(chatsPath));
 
-// carpeta uploads dentro de chats
-const uploadsPath = path.join(__dirname, "chats", "uploads");
+// uploads
+const uploadsPath = path.join(chatsPath, "uploads");
 if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 app.use("/uploads", express.static(uploadsPath));
 
 /* =========================
+   RUTA PRINCIPAL (IMPORTANTE)
+========================= */
+
+// Cuando entren a / o /chat o /chat/*
+app.get(["/", "/chat", "/chat/*"], (req, res) => {
+  res.sendFile(path.join(chatsPath, "index.html"));
+});
+
+/* =========================
    MONGODB
 ========================= */
 
-mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm")
+if (!process.env.MONGO_URI) {
+  console.log("❌ ERROR: MONGO_URI no configurado");
+  process.exit(1);
+}
+
+mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("✅ Mongo conectado"))
-.catch(err => console.log("❌ Mongo error:", err));
+.catch(err => {
+  console.log("❌ Mongo error:", err);
+  process.exit(1);
+});
 
 const messageSchema = new mongoose.Schema({
   chatId: String,
@@ -53,10 +71,7 @@ let clients = new Set();
 
 wss.on("connection", (ws) => {
   clients.add(ws);
-
-  ws.on("close", () => {
-    clients.delete(ws);
-  });
+  ws.on("close", () => clients.delete(ws));
 });
 
 function broadcast(data) {
@@ -68,116 +83,69 @@ function broadcast(data) {
 }
 
 /* =========================
-   OBTENER LISTA DE CHATS
+   API
 ========================= */
 
 app.get("/chats", async (req, res) => {
-  try {
-    const chats = await Message.aggregate([
-      { $sort: { timestamp: 1 } },
-      {
-        $group: {
-          _id: "$chatId",
-          lastMessage: { $last: "$text" },
-          lastTime: { $last: "$timestamp" }
-        }
-      },
-      { $sort: { lastTime: -1 } }
-    ]);
-
-    res.json(chats);
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Error obteniendo chats" });
-  }
+  const chats = await Message.aggregate([
+    { $sort: { timestamp: 1 } },
+    {
+      $group: {
+        _id: "$chatId",
+        lastMessage: { $last: "$text" },
+        lastTime: { $last: "$timestamp" }
+      }
+    },
+    { $sort: { lastTime: -1 } }
+  ]);
+  res.json(chats);
 });
-
-/* =========================
-   OBTENER MENSAJES
-========================= */
 
 app.get("/messages/:chatId", async (req, res) => {
-  try {
-    const messages = await Message.find({ chatId: req.params.chatId })
-      .sort({ timestamp: 1 });
-
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ error: "Error obteniendo mensajes" });
-  }
+  const messages = await Message.find({ chatId: req.params.chatId })
+    .sort({ timestamp: 1 });
+  res.json(messages);
 });
-
-/* =========================
-   ENVIAR TEXTO
-========================= */
 
 app.post("/send-message", async (req, res) => {
-  try {
-    const { to, text } = req.body;
+  const { to, text } = req.body;
 
-    const msg = await Message.create({
-      chatId: to,
-      from: "me",
-      text
-    });
+  const msg = await Message.create({
+    chatId: to,
+    from: "me",
+    text
+  });
 
-    broadcast({
-      type: "new_message",
-      message: msg
-    });
+  broadcast({ type: "new_message", message: msg });
 
-    res.json({ success: true });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Error enviando mensaje" });
-  }
+  res.json({ success: true });
 });
-
-/* =========================
-   ENVIAR IMAGEN
-========================= */
 
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsPath);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
+  destination: (req, file, cb) => cb(null, uploadsPath),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
-
 const upload = multer({ storage });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
-  try {
-    const { to } = req.body;
+  const { to } = req.body;
 
-    const msg = await Message.create({
-      chatId: to,
-      from: "me",
-      media: "/uploads/" + req.file.filename
-    });
+  const msg = await Message.create({
+    chatId: to,
+    from: "me",
+    media: "/uploads/" + req.file.filename
+  });
 
-    broadcast({
-      type: "new_message",
-      message: msg
-    });
+  broadcast({ type: "new_message", message: msg });
 
-    res.json({ success: true });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Error enviando imagen" });
-  }
+  res.json({ success: true });
 });
 
 /* =========================
-   PUERTO
+   PORT
 ========================= */
 
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, () => {
   console.log("🚀 Server corriendo en puerto", PORT);
 });
