@@ -44,12 +44,11 @@
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-        /* --- BURBUJAS CORREGIDAS --- */
         .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; position: relative; }
-        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; text-align: left; }
-        .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; text-align: left; }
+        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
+        .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
         
-        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; }
+        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; display: block; background: #2a2a2a; min-height: 100px; }
         .msg-time { font-size: 10px; opacity: 0.5; margin-top: 5px; text-align: right; }
 
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
@@ -103,13 +102,11 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
-        // BUSCADOR GLOBAL (Estilo WhatsApp: busca en cualquier parte)
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
                 const name = item.querySelector(".chat-name").innerText.toLowerCase();
                 const lastMsg = item.querySelector(".last-msg").innerText.toLowerCase();
-                // Si la palabra está en el nombre o en el último mensaje conocido
                 item.style.display = (name.includes(term) || lastMsg.includes(term)) ? "flex" : "none";
             });
         }
@@ -142,7 +139,6 @@
         function createChat(data){
             const id = data.from;
             if(!chats[id]) chats[id] = { name: data.pushname || id };
-            
             let existing = document.getElementById("chat-"+id);
             if(!existing){
                 const div = document.createElement("div");
@@ -178,18 +174,22 @@
             
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => {
-                // CORRECCIÓN DE COLUMNAS: "me" siempre derecha (sent)
-                const type = (m.from === "me") ? "sent" : "received";
-                appendMessage(type, m.text, m.mediaUrl, m.timestamp);
-            });
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
         function appendMessage(type, text, mediaUrl, timestamp){
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
-            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
+            
+            if(mediaUrl) {
+                // CORRECCIÓN: Si la URL es externa (recibida), usar el proxy del servidor
+                const finalUrl = (mediaUrl.startsWith('http') && type === "received") 
+                    ? `/proxy-media?url=${encodeURIComponent(mediaUrl)}` 
+                    : mediaUrl;
+                div.innerHTML += `<img src="${finalUrl}" class="msg-image" onclick="window.open('${finalUrl}')" onerror="this.src='https://placehold.co/200x150?text=Error+Imagen'">`;
+            }
+            
             if(text && text !== "📷 Imagen") {
                 const tNode = document.createElement("div"); tNode.innerText = text; div.appendChild(tNode);
             }
