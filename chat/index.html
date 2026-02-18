@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>CRM WhatsApp</title>
 
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body {
     margin: 0;
@@ -57,6 +59,7 @@ body {
     padding: 10px;
     border-radius: 10px;
     margin-bottom: 10px;
+    word-wrap: break-word;
 }
 
 .sent {
@@ -95,7 +98,7 @@ body {
     <div class="messages" id="messages"></div>
 
     <div class="input-area">
-        <input type="text" id="message-input" placeholder="Escribe un mensaje">
+        <input type="text" id="message-input" placeholder="Escribe un mensaje 😊">
         <button onclick="sendMessage()">Enviar</button>
     </div>
 </div>
@@ -104,16 +107,16 @@ body {
 let currentChat = null;
 
 // ===============================
-// CARGAR LISTA DE CHATS
+// CARGAR CHATS
 // ===============================
 async function loadChats() {
     const res = await fetch("/chat/list");
-    const chats = await res.json();
+    const data = await res.json();
 
     const chatList = document.getElementById("chat-list");
     chatList.innerHTML = "";
 
-    chats.forEach(chat => {
+    data.forEach(chat => {
         const div = document.createElement("div");
         div.className = "chat-item";
         div.id = "chat-" + chat._id;
@@ -159,15 +162,11 @@ async function openChat(id) {
 }
 
 // ===============================
-// NORMALIZAR NÚMERO
-// ===============================
 function normalizeNumber(num) {
     if (!num) return "";
     return num.replace("whatsapp:", "").replace("+", "").trim();
 }
 
-// ===============================
-// AGREGAR MENSAJE
 // ===============================
 function appendMessage(type, text, mediaUrl = null) {
 
@@ -177,9 +176,7 @@ function appendMessage(type, text, mediaUrl = null) {
     div.classList.add("message", type);
 
     if (text) {
-        const textNode = document.createElement("div");
-        textNode.innerText = text;
-        div.appendChild(textNode);
+        div.innerText = text;
     }
 
     if (mediaUrl) {
@@ -188,14 +185,13 @@ function appendMessage(type, text, mediaUrl = null) {
         img.style.maxWidth = "200px";
         img.style.marginTop = "5px";
         img.style.borderRadius = "8px";
+        div.appendChild(document.createElement("br"));
         div.appendChild(img);
     }
 
     container.appendChild(div);
 }
 
-// ===============================
-// ENVIAR MENSAJE
 // ===============================
 async function sendMessage() {
 
@@ -217,11 +213,10 @@ async function sendMessage() {
 }
 
 // ===============================
-// WEBSOCKET EN TIEMPO REAL
-// ===============================
 const socket = new WebSocket(`ws://${location.host}`);
 
 socket.onmessage = function(event) {
+
     const msg = JSON.parse(event.data);
 
     if (!currentChat) return;
@@ -243,7 +238,6 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
-// ===============================
 loadChats();
 </script>
 
