@@ -3,49 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CRM Webs Rápidas - Móvil</title>
+    <title>CRM Webs Rápidas - Premium</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
-        /* Sidebar Redes */
         .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
         @media (max-width: 768px) { .sidebar-redes { display: none; } }
 
-        /* Contenedor de Lista de Chats */
-        .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; transition: all 0.3s ease; }
+        .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
-        .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
+        .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; }
         .chat-item.active { background: #e7f3ff; }
         .pfp { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .chat-info { flex: 1; overflow: hidden; }
         .chat-name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
         .last-msg { font-size: 12px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .unread-badge { background: #0084ff; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: none; }
 
-        /* Área de Chat */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; transition: all 0.3s ease; }
-        .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; }
+        .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; justify-content: space-between; }
+        .top-bar-left { display: flex; align-items: center; gap: 12px; }
         .back-btn { display: none; font-size: 20px; color: #0084ff; cursor: pointer; padding-right: 10px; }
+        .delete-btn { color: #ff4d4d; cursor: pointer; font-size: 18px; padding: 5px; transition: 0.2s; }
+        .delete-btn:hover { transform: scale(1.1); }
         .top-bar img { width: 40px; height: 40px; border-radius: 50%; }
         .top-name { font-weight: 700; font-size: 15px; }
 
-        /* Mensajes */
         .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
         .msg-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; }
         .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .msg-image { width: 100%; max-width: 250px; border-radius: 10px; margin-bottom: 5px; cursor: pointer; }
 
-        /* Input */
         .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; }
         .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; display: flex; align-items: center; }
         .input-wrapper input { flex: 1; background: transparent; border: none; padding: 8px 0; outline: none; font-family: 'Montserrat'; font-size: 14px; }
         .send-btn { background: #0084ff; color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
 
-        /* MOBILE RESPONSIVE LOGIC */
         @media (max-width: 768px) {
             .chat-list-container { width: 100%; }
             .chat-content { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; }
@@ -59,16 +57,19 @@
         <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
     </div>
 
-    <div class="chat-list-container" id="list-container">
+    <div class="chat-list-container">
         <div class="list-header">Mensajes</div>
         <div id="chat-list" class="chat-list"></div>
     </div>
 
     <div class="chat-content" id="chat-view">
         <div class="top-bar">
-            <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
-            <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
-            <div id="h-name" class="top-name">Selecciona un chat</div>
+            <div class="top-bar-left">
+                <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
+                <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
+                <div id="h-name" class="top-name">Selecciona un chat</div>
+            </div>
+            <i class="fa-solid fa-trash-can delete-btn" onclick="confirmDelete()" id="del-icon" style="display:none"></i>
         </div>
         <div id="messages" class="messages-area"></div>
         <div class="input-area">
@@ -93,7 +94,11 @@
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
                 createChat(msg.data);
-                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
+                if(currentChat === msg.data.from) {
+                    appendMessage("received", msg.data.text, msg.data.mediaUrl);
+                } else {
+                    notifyNew(msg.data.from);
+                }
             } else if(msg.type === "sent"){
                 if(currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
                 updateLast(msg.data.to, msg.data.text || "📷 Imagen");
@@ -103,46 +108,71 @@
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text}));
+            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text}));
         };
 
         function createChat(data){
             const id = data.from;
             if(!chats[id]){
-                chats[id] = { name: data.pushname || id };
+                chats[id] = { name: data.pushname || id, unread: 0 };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
                 div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
                     <div class="chat-info">
                         <div class="chat-name">${chats[id].name}</div>
                         <div class="last">${data.text || "📷 Imagen"}</div>
-                    </div>`;
+                    </div>
+                    <div id="badge-${id}" class="unread-badge">0</div>`;
                 div.onclick = () => openChat(id);
-                chatListEl.prepend(div);
-            } else { updateLast(id, data.text); }
+                chatListEl.prepend(div); // Nuevo siempre arriba
+            } else { 
+                updateLast(id, data.text);
+            }
         }
 
         function updateLast(id, t){ 
             const el = document.querySelector(`#chat-${id} .last`); 
-            if(el) el.innerText = t || "📷 Imagen"; 
+            if(el) el.innerText = t || "📷 Imagen";
+            const chatItem = document.getElementById("chat-"+id);
+            if(chatItem) chatListEl.prepend(chatItem); // Sube al primer lugar
+        }
+
+        function notifyNew(id){
+            if(!chats[id]) return;
+            chats[id].unread++;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge){
+                badge.innerText = chats[id].unread;
+                badge.style.display = "block";
+            }
         }
 
         async function openChat(id){
             currentChat = id; messagesEl.innerHTML = "";
             document.getElementById("h-name").innerText = chats[id].name;
-            document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
+            document.getElementById("del-icon").style.display = "block";
             
-            if(window.innerWidth <= 768) chatView.classList.add("open");
+            // Limpiar notificaciones
+            chats[id].unread = 0;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge) badge.style.display = "none";
 
+            if(window.innerWidth <= 768) chatView.classList.add("open");
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
             
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => {
-                const type = (m.from === "me") ? "sent" : "received";
-                appendMessage(type, m.text, m.mediaUrl);
-            });
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
+        }
+
+        function confirmDelete(){
+            if(!currentChat) return;
+            if(confirm("¿Seguro que quieres borrar toda la conversación con " + chats[currentChat].name + "?")){
+                // Por ahora limpiamos vista, puedes crear una ruta en server.js para borrar en DB si lo requieres
+                messagesEl.innerHTML = "";
+                alert("Conversación limpiada en pantalla. ✅");
+            }
         }
 
         function closeChat() { chatView.classList.remove("open"); currentChat = null; }
