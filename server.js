@@ -1,162 +1,183 @@
 const express = require("express");
-const WebSocket = require("ws");
+const http = require("http");
 const mongoose = require("mongoose");
+const WebSocket = require("ws");
 const path = require("path");
 const multer = require("multer");
-const axios = require("axios");
 const fs = require("fs");
-const FormData = require("form-data");
-require("dotenv").config();
 
-const Message = require("./models/Message");
 const app = express();
-const uploadDir = path.join(__dirname, "uploads");
-
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const upload = multer({ dest: "uploads/" });
-
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static("public"));
-app.use("/chat", express.static(path.join(__dirname, "chat")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ MongoDB conectado"));
-
-const server = require("http").createServer(app);
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-const wsClients = new Set();
 
-wss.on("connection", ws => {
-    wsClients.add(ws);
-    ws.on("close", () => wsClients.delete(ws));
+/* =========================
+   CONFIG
+========================= */
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 🔥 SERVIR CARPETA CHATS
+app.use(express.static(path.join(__dirname, "chats")));
+
+// carpeta uploads dentro de chats
+const uploadsPath = path.join(__dirname, "chats", "uploads");
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
+app.use("/uploads", express.static(uploadsPath));
+
+/* =========================
+   MONGODB
+========================= */
+
+mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm")
+.then(() => console.log("✅ Mongo conectado"))
+.catch(err => console.log("❌ Mongo error:", err));
+
+const messageSchema = new mongoose.Schema({
+  chatId: String,
+  from: String,
+  text: String,
+  media: String,
+  timestamp: { type: Date, default: Date.now }
 });
 
-function broadcastMessage(data) {
-    wsClients.forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
-    });
-}
+const Message = mongoose.model("Message", messageSchema);
 
-async function downloadMedia(mediaId) {
-    try {
-        const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-            headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        const fileRes = await axios.get(metaRes.data.url, {
-            headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
-            responseType: 'arraybuffer'
-        });
-        const fileName = `recibido_${Date.now()}_${mediaId}.jpg`;
-        const localPath = path.join(uploadDir, fileName);
-        fs.writeFileSync(localPath, fileRes.data);
-        return `/uploads/${fileName}`;
-    } catch (e) {
-        console.error("Error al descargar media:", e);
-        return null;
+/* =========================
+   WEBSOCKET
+========================= */
+
+let clients = new Set();
+
+wss.on("connection", (ws) => {
+  clients.add(ws);
+
+  ws.on("close", () => {
+    clients.delete(ws);
+  });
+});
+
+function broadcast(data) {
+  clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
     }
+  });
 }
 
-app.post("/webhook", async (req, res) => {
-    const body = req.body;
-    if (body.object === "whatsapp_business_account") {
-        for (const entry of body.entry || []) {
-            for (const change of entry.changes || []) {
-                const value = change.value;
-                if (value.messages) {
-                    for (const msg of value.messages) {
-                        const senderId = msg.from;
-                        const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
-                        let mediaUrl = null;
-                        if (msg.type === "image") {
-                            mediaUrl = await downloadMedia(msg.image.id);
-                        }
-                        const messageData = {
-                            chatId: senderId,
-                            from: senderId,
-                            text: msg.text?.body || "",
-                            messageType: msg.type,
-                            source: "whatsapp",
-                            pushname: pushName,
-                            mediaUrl: mediaUrl
-                        };
-                        await Message.create(messageData);
-                        broadcastMessage({ type: "incoming", data: messageData });
-                    }
-                }
-            }
+/* =========================
+   OBTENER LISTA DE CHATS
+========================= */
+
+app.get("/chats", async (req, res) => {
+  try {
+    const chats = await Message.aggregate([
+      { $sort: { timestamp: 1 } },
+      {
+        $group: {
+          _id: "$chatId",
+          lastMessage: { $last: "$text" },
+          lastTime: { $last: "$timestamp" }
         }
-    }
-    res.sendStatus(200);
+      },
+      { $sort: { lastTime: -1 } }
+    ]);
+
+    res.json(chats);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Error obteniendo chats" });
+  }
 });
+
+/* =========================
+   OBTENER MENSAJES
+========================= */
+
+app.get("/messages/:chatId", async (req, res) => {
+  try {
+    const messages = await Message.find({ chatId: req.params.chatId })
+      .sort({ timestamp: 1 });
+
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: "Error obteniendo mensajes" });
+  }
+});
+
+/* =========================
+   ENVIAR TEXTO
+========================= */
 
 app.post("/send-message", async (req, res) => {
+  try {
     const { to, text } = req.body;
-    try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp",
-            to,
-            text: { body: text }
-        }, {
-            headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        const msgData = { chatId: to, from: "me", text: text, source: "whatsapp", timestamp: new Date() };
-        const savedMsg = await Message.create(msgData);
-        broadcastMessage({ type: "sent", data: { to, text, source: "whatsapp" } });
-        res.json({ status: "ok", data: savedMsg });
-    } catch (err) {
-        console.error("Error enviando:", err.response?.data || err.message);
-        res.status(500).json({ error: err.message });
-    }
+
+    const msg = await Message.create({
+      chatId: to,
+      from: "me",
+      text
+    });
+
+    broadcast({
+      type: "new_message",
+      message: msg
+    });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Error enviando mensaje" });
+  }
 });
+
+/* =========================
+   ENVIAR IMAGEN
+========================= */
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsPath);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
-    try {
-        const { to } = req.body;
-        const file = req.file;
-        const form = new FormData();
-        form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
-        form.append('type', file.mimetype);
-        form.append('messaging_product', 'whatsapp');
+  try {
+    const { to } = req.body;
 
-        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-            headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
+    const msg = await Message.create({
+      chatId: to,
+      from: "me",
+      media: "/uploads/" + req.file.filename
+    });
 
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp",
-            to,
-            type: "image",
-            image: { id: uploadRes.data.id }
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
+    broadcast({
+      type: "new_message",
+      message: msg
+    });
 
-        const mediaUrl = `/uploads/${file.filename}`;
-        const msgData = { chatId: to, from: "me", text: "", mediaUrl: mediaUrl, source: "whatsapp", timestamp: new Date() };
-        await Message.create(msgData);
-        broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
-        res.json({ status: "ok" });
-    } catch (err) {
-        res.status(500).json({ error: "Error enviando imagen" });
-    }
+    res.json({ success: true });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Error enviando imagen" });
+  }
 });
 
-app.get("/chat/list", async (req, res) => {
-    const list = await Message.aggregate([
-        { $sort: { timestamp: -1 } },
-        { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } },
-        { $sort: { timestamp: -1 } }
-    ]);
-    res.json(list);
-});
+/* =========================
+   PUERTO
+========================= */
 
-app.get("/chat/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
-});
+const PORT = process.env.PORT || 3000;
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 CRM Activo"));
+server.listen(PORT, () => {
+  console.log("🚀 Server corriendo en puerto", PORT);
+});
