@@ -4,68 +4,71 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CRM Webs Rápidas | Premium</title>
+    
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+
     <style>
         :root {
             --bg-main: #0f1113; --bg-sidebar: #1a1d21; --bg-chat: #15181c;
             --accent: #0084ff; --text-main: #e4e6eb; --text-dim: #b0b3b8;
             --border: rgba(255, 255, 255, 0.08); --msg-sent: #0084ff; --msg-received: #242526;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; overflow: hidden; }
-        
+
         /* Sidebar Redes */
         .sidebar-redes { width: 70px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 25px; flex-shrink: 0; gap: 20px; }
         .red-icon { width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.3s; position: relative; }
-        .red-icon:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); }
-        .badge-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid var(--bg-sidebar); border-radius: 50%; display: none; }
+        .badge-global { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid var(--bg-sidebar); border-radius: 50%; display: none; }
 
         /* Lista de Chats */
         .chat-list-container { width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 18px; }
+        
         .search-box { padding: 0 15px 15px 15px; }
         .search-wrapper { background: #242526; border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; }
         .search-wrapper input { background: transparent; border: none; color: #fff; outline: none; font-family: 'Montserrat'; font-size: 13px; width: 100%; }
-        
+
         .chat-list { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; }
-        .chat-item { padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 12px; margin-bottom: 4px; transition: 0.2s; flex-shrink: 0; }
-        .chat-item:hover { background: rgba(255,255,255,0.03); }
+        .chat-item { padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 12px; margin-bottom: 4px; transition: 0.2s; position: relative; }
         .chat-item.active { background: rgba(0, 132, 255, 0.15); border-left: 3px solid var(--accent); }
 
-        .pfp { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #3a3b3c; flex-shrink: 0; }
+        .pfp { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #3a3b3c; }
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
         .last-msg { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Notificación de Chat Individual */
+        .unread-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; margin-top: 5px; display: none; }
 
         /* Chat Content */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); }
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-        /* Burbujas Modernas */
-        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; position: relative; }
+        /* Burbujas */
+        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
         .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
         .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; }
         .msg-time { font-size: 10px; opacity: 0.5; margin-top: 5px; text-align: right; }
 
-        /* Input corregido */
+        /* Input */
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
         .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
         .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; font-family: 'Montserrat'; }
         
         #emoji-picker-box { position: absolute; bottom: 85px; left: 25px; z-index: 1000; display: none; }
-        .icon-btn { color: var(--text-dim); font-size: 20px; cursor: pointer; transition: 0.2s; }
-        .icon-btn:hover { color: var(--accent); }
         .send-btn { background: var(--accent); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .price-label { margin-top: auto; padding-bottom: 25px; font-weight: 700; font-size: 12px; color: var(--text-dim); }
     </style>
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="28"><div class="badge-dot" id="global-badge"></div></div>
+        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="28"><div class="badge-global" id="global-badge"></div></div>
         <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1100,height=700')"><img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="28"></div>
         <div class="price-label">S/380</div>
     </div>
@@ -75,7 +78,7 @@
         <div class="search-box">
             <div class="search-wrapper">
                 <i class="fa-solid fa-magnifying-glass" style="color:var(--text-dim)"></i>
-                <input type="text" id="chat-search" placeholder="Buscar cliente..." onkeyup="filterChats()">
+                <input type="text" id="chat-search" placeholder="Buscar contacto o palabra..." onkeyup="filterChats()">
             </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
@@ -86,14 +89,14 @@
             <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM&background=3a3b3c&color=fff" class="pfp" style="width: 40px; height: 40px;">
             <div style="flex:1">
                 <div id="h-name" style="font-weight: 700;">Selecciona un chat</div>
-                <div style="font-size: 11px; color: var(--accent);">WhatsApp Business</div>
+                <div style="font-size: 11px; color: var(--accent);">Webs Rápidas Business</div>
             </div>
         </div>
         <div id="messages" class="messages-area"></div>
         <div id="emoji-picker-box"></div>
         <div class="input-area">
-            <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
-            <label for="file-input"><i class="fa-solid fa-paperclip icon-btn"></i></label>
+            <i class="fa-regular fa-face-smile" id="emoji-trigger" style="color:var(--text-dim); cursor:pointer; font-size:20px;"></i>
+            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:var(--text-dim); cursor:pointer; font-size:20px;"></i></label>
             <input type="file" id="file-input" style="display:none" accept="image/*">
             <div class="input-wrapper"><input type="text" id="m-input" placeholder="Escribe un mensaje..."></div>
             <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
@@ -101,66 +104,103 @@
     </div>
 
     <script>
-        let currentChat = null; let chats = {};
+        let currentChat = null; 
+        let chats = {}; 
+        let unreadCounts = {};
+
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
+        // BUSCADOR MEJORADO: Contactos y Palabras
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
                 const name = item.querySelector(".chat-name").innerText.toLowerCase();
-                item.style.display = name.includes(term) ? "flex" : "none";
+                const lastMsg = item.querySelector(".last-msg").innerText.toLowerCase();
+                item.style.display = (name.includes(term) || lastMsg.includes(term)) ? "flex" : "none";
             });
         }
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
+        
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
                 createChat(msg.data);
-                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
-                document.getElementById("global-badge").style.display = "block";
+                if(currentChat === msg.data.from) {
+                    appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                } else {
+                    notifyUnread(msg.data.from);
+                }
             } else if(msg.type === "sent"){
                 if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             }
         };
 
+        function notifyUnread(id) {
+            unreadCounts[id] = (unreadCounts[id] || 0) + 1;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge) {
+                badge.innerText = unreadCounts[id];
+                badge.style.display = "block";
+            }
+            document.getElementById("global-badge").style.display = "block";
+        }
+
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
+            // Invertimos para que el prepend los deje en orden cronológico correcto
+            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
         function createChat(data){
             const id = data.from;
             let existing = document.getElementById("chat-"+id);
+
             if(!existing){
                 chats[id] = { name: data.pushname || id };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
-                div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
-                    <div class="chat-info"><div class="chat-name">${chats[id].name}</div><div class="last-msg" id="last-${id}">${data.text || "📷 Imagen"}</div></div>`;
+                div.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
+                    <div class="chat-info">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div class="chat-name">${chats[id].name}</div>
+                            <div class="unread-badge" id="badge-${id}">0</div>
+                        </div>
+                        <div class="last-msg" id="last-${id}">${data.text || "📷 Imagen"}</div>
+                    </div>`;
                 div.onclick = () => openChat(id);
                 chatListEl.prepend(div);
             } else {
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
-                chatListEl.prepend(existing);
+                chatListEl.prepend(existing); // Mover arriba si hay mensaje nuevo
             }
         }
 
         async function openChat(id){
-            currentChat = id; messagesEl.innerHTML = "";
+            currentChat = id; 
+            messagesEl.innerHTML = "";
+            
+            // Limpiar notificaciones
+            unreadCounts[id] = 0;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge) badge.style.display = "none";
+            
+            // Verificar si quedan otros no leídos para el badge global
+            const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+            if(totalUnread === 0) document.getElementById("global-badge").style.display = "none";
+
             document.getElementById("h-name").innerText = chats[id].name;
+            document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
             
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => {
-                const type = (m.from === "me") ? "sent" : "received";
-                appendMessage(type, m.text, m.mediaUrl, m.timestamp);
-            });
-            document.getElementById("global-badge").style.display = "none";
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
+            messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
         function appendMessage(type, text, mediaUrl, timestamp){
@@ -183,6 +223,8 @@
             await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
         }
 
+        document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+        
         document.getElementById("emoji-trigger").onclick = (e) => {
             e.stopPropagation();
             const box = document.getElementById("emoji-picker-box");
@@ -193,9 +235,8 @@
             }
         };
 
-        document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
         document.getElementById('file-input').onchange = async function() {
-            if(!this.files[0] || !currentChat) return;
+            if(!this.files[0]) return;
             const fd = new FormData(); fd.append("file", this.files[0]); fd.append("to", currentChat);
             await fetch("/send-media", { method: "POST", body: fd });
             this.value = "";
