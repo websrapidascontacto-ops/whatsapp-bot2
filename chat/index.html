@@ -71,7 +71,7 @@
         <div class="search-box">
             <div class="search-wrapper">
                 <i class="fa-solid fa-magnifying-glass" style="color:var(--text-dim)"></i>
-                <input type="text" id="chat-search" placeholder="Buscar contacto o mensaje..." onkeyup="filterChats()">
+                <input type="text" id="chat-search" placeholder="Buscar contacto o palabra..." onkeyup="filterChats()">
             </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
@@ -101,12 +101,18 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
+        // BUSCADOR MEJORADO: Busca en Nombre y en el Texto del último mensaje
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
                 const name = item.querySelector(".chat-name").innerText.toLowerCase();
                 const lastMsg = item.querySelector(".last-msg").innerText.toLowerCase();
-                item.style.display = (name.includes(term) || lastMsg.includes(term)) ? "flex" : "none";
+                // Mostrar si el término está en el nombre O en la palabra del mensaje
+                if(name.includes(term) || lastMsg.includes(term)){
+                    item.style.display = "flex";
+                } else {
+                    item.style.display = "none";
+                }
             });
         }
 
@@ -118,7 +124,6 @@
                 if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
                 else notifyUnread(msg.data.from);
             } else if(msg.type === "sent"){
-                // CORRECCIÓN: Si el mensaje enviado es del chat actual, se pinta a la derecha
                 if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             }
         };
@@ -175,7 +180,6 @@
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
             msgs.forEach(m => {
-                // CORRECCIÓN CLAVE: Si m.from es "me", va a la derecha (sent)
                 const type = (m.from === "me") ? "sent" : "received";
                 appendMessage(type, m.text, m.mediaUrl, m.timestamp);
             });
