@@ -19,12 +19,10 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; overflow: hidden; }
 
-        /* Sidebar Redes */
         .sidebar-redes { width: 70px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 25px; flex-shrink: 0; gap: 20px; }
         .red-icon { width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.3s; position: relative; }
         .badge-global { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid var(--bg-sidebar); border-radius: 50%; display: none; }
 
-        /* Lista de Chats */
         .chat-list-container { width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 18px; }
         
@@ -40,23 +38,18 @@
         .chat-info { flex: 1; min-width: 0; }
         .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
         .last-msg { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* Notificación de Chat Individual */
         .unread-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; margin-top: 5px; display: none; }
 
-        /* Chat Content */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); }
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-        /* Burbujas */
         .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
         .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
         .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; }
         .msg-time { font-size: 10px; opacity: 0.5; margin-top: 5px; text-align: right; }
 
-        /* Input */
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
         .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
         .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; font-family: 'Montserrat'; }
@@ -78,7 +71,7 @@
         <div class="search-box">
             <div class="search-wrapper">
                 <i class="fa-solid fa-magnifying-glass" style="color:var(--text-dim)"></i>
-                <input type="text" id="chat-search" placeholder="Buscar contacto o palabra..." onkeyup="filterChats()">
+                <input type="text" id="chat-search" placeholder="Buscar contacto o mensaje..." onkeyup="filterChats()">
             </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
@@ -97,21 +90,17 @@
         <div class="input-area">
             <i class="fa-regular fa-face-smile" id="emoji-trigger" style="color:var(--text-dim); cursor:pointer; font-size:20px;"></i>
             <label for="file-input"><i class="fa-solid fa-paperclip" style="color:var(--text-dim); cursor:pointer; font-size:20px;"></i></label>
-            <input type="file" id="file-input" style="display:none" accept="image/*">
+            <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
             <div class="input-wrapper"><input type="text" id="m-input" placeholder="Escribe un mensaje..."></div>
             <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
         </div>
     </div>
 
     <script>
-        let currentChat = null; 
-        let chats = {}; 
-        let unreadCounts = {};
-
+        let currentChat = null; let chats = {}; let unreadCounts = {};
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
-        // BUSCADOR MEJORADO: Contactos y Palabras
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
@@ -122,17 +111,14 @@
         }
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
-        
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
                 createChat(msg.data);
-                if(currentChat === msg.data.from) {
-                    appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
-                } else {
-                    notifyUnread(msg.data.from);
-                }
+                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                else notifyUnread(msg.data.from);
             } else if(msg.type === "sent"){
+                // CORRECCIÓN: Si el mensaje enviado es del chat actual, se pinta a la derecha
                 if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
             }
         };
@@ -140,30 +126,24 @@
         function notifyUnread(id) {
             unreadCounts[id] = (unreadCounts[id] || 0) + 1;
             const badge = document.getElementById(`badge-${id}`);
-            if(badge) {
-                badge.innerText = unreadCounts[id];
-                badge.style.display = "block";
-            }
+            if(badge) { badge.innerText = unreadCounts[id]; badge.style.display = "block"; }
             document.getElementById("global-badge").style.display = "block";
         }
 
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            // Invertimos para que el prepend los deje en orden cronológico correcto
             list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
         function createChat(data){
             const id = data.from;
             let existing = document.getElementById("chat-"+id);
-
             if(!existing){
                 chats[id] = { name: data.pushname || id };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
-                div.innerHTML = `
-                    <img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
+                div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
                     <div class="chat-info">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div class="chat-name">${chats[id].name}</div>
@@ -175,20 +155,15 @@
                 chatListEl.prepend(div);
             } else {
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
-                chatListEl.prepend(existing); // Mover arriba si hay mensaje nuevo
+                chatListEl.prepend(existing);
             }
         }
 
         async function openChat(id){
-            currentChat = id; 
-            messagesEl.innerHTML = "";
-            
-            // Limpiar notificaciones
+            currentChat = id; messagesEl.innerHTML = "";
             unreadCounts[id] = 0;
             const badge = document.getElementById(`badge-${id}`);
             if(badge) badge.style.display = "none";
-            
-            // Verificar si quedan otros no leídos para el badge global
             const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
             if(totalUnread === 0) document.getElementById("global-badge").style.display = "none";
 
@@ -199,7 +174,11 @@
             
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
+            msgs.forEach(m => {
+                // CORRECCIÓN CLAVE: Si m.from es "me", va a la derecha (sent)
+                const type = (m.from === "me") ? "sent" : "received";
+                appendMessage(type, m.text, m.mediaUrl, m.timestamp);
+            });
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
@@ -225,6 +204,15 @@
 
         document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
         
+        document.getElementById('file-input').onchange = async function() {
+            if(!currentChat) return;
+            for (let file of this.files) {
+                const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
+                await fetch("/send-media", { method: "POST", body: fd });
+            }
+            this.value = "";
+        };
+
         document.getElementById("emoji-trigger").onclick = (e) => {
             e.stopPropagation();
             const box = document.getElementById("emoji-picker-box");
@@ -233,13 +221,6 @@
                 const p = new EmojiMart.Picker({ theme: 'dark', set: 'apple', onEmojiSelect: (emoji) => { document.getElementById("m-input").value += emoji.native; } }); 
                 box.appendChild(p); 
             }
-        };
-
-        document.getElementById('file-input').onchange = async function() {
-            if(!this.files[0]) return;
-            const fd = new FormData(); fd.append("file", this.files[0]); fd.append("to", currentChat);
-            await fetch("/send-media", { method: "POST", body: fd });
-            this.value = "";
         };
     </script>
 </body>
