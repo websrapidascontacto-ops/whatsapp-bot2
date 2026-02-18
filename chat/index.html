@@ -7,41 +7,34 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        /* Se mantiene tu CSS original para no dañar nada */
+        /* Mantenemos tu estilo original intacto para recuperar la visualización */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
         .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; gap: 15px; }
         .red-icon { width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.2s; }
-        .red-icon.active { background: #e7f3ff; border: 1px solid #0084ff; }
-        .red-icon img { width: 28px; height: 28px; }
+        .red-icon:hover { background: #f0f2f5; }
+        .red-icon img { width: 28px; }
 
         .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
         .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; transition: 0.2s; position: relative; }
+        .chat-item.active { background: #e7f3ff; }
+        .pfp { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         
-        .main-content { flex: 1; display: flex; flex-direction: column; background: #fff; position: relative; }
-        .chat-content { display: flex; flex-direction: column; height: 100%; width: 100%; }
-        
-        /* Fix para el scroll y la barra de escritura */
+        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
         .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; justify-content: space-between; flex-shrink: 0; }
         .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
         .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; }
         
-        /* Vista de Instagram */
-        #instagram-placeholder { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 20px; }
-        .btn-ig-secure { background: #E1306C; color: white; padding: 12px 25px; border-radius: 25px; text-decoration: none; font-weight: 600; margin-top: 15px; transition: 0.3s; }
-
-        /* Tus estilos de burbujas originales */
-        .msg-bubble { max-width: 80%; padding: 8px 12px; font-size: 14px; border-radius: 15px; position: relative; }
-        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; }
-        .msg-received { align-self: flex-start; background: #fff; }
-        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
-        .chat-item.active { background: #e7f3ff; }
-        .pfp { width: 50px; height: 50px; border-radius: 50%; }
+        /* Estilo para las burbujas */
+        .msg-bubble { max-width: 80%; padding: 8px 12px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; position: relative; }
+        .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-time { font-size: 10px; align-self: flex-end; margin-top: 4px; opacity: 0.7; }
 
         @media (max-width: 768px) {
-            .sidebar-redes { display: none; }
             .chat-list-container { width: 100%; }
             .chat-content { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; transition: 0.3s; }
             .chat-content.open { right: 0; }
@@ -50,86 +43,146 @@
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon active" id="tab-ws" onclick="showTab('ws')">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg">
-        </div>
-        <div class="red-icon" id="tab-ig" onclick="showTab('ig')">
+        <div class="red-icon" title="WhatsApp"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
+        <div class="red-icon" onclick="openInstagram()" title="Instagram Direct">
             <img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg">
         </div>
     </div>
 
-    <div class="chat-list-container" id="side-bar">
+    <div class="chat-list-container">
         <div class="list-header">Mensajes</div>
         <div id="chat-list" class="chat-list"></div>
     </div>
 
-    <div class="main-content">
-        <div id="chat-view" class="chat-content">
-            <div class="top-bar">
-                <div class="top-bar-left">
-                    <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
-                    <div id="h-name" class="top-name">Selecciona un chat</div>
-                </div>
-                <i class="fa-solid fa-trash-can delete-btn" onclick="deleteFullChat()" id="del-icon" style="display:none"></i>
+    <div class="chat-content" id="chat-view">
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
+                <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
+                <div id="h-name" class="top-name">Selecciona un chat</div>
             </div>
-            <div id="messages" class="messages-area"></div>
-            <div class="input-area">
-                <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
-                <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
-                <div class="input-wrapper" style="flex:1; background:#f0f2f5; border-radius:20px; padding:5px 15px;">
-                    <input type="text" id="m-input" placeholder="Mensaje..." style="width:100%; border:none; background:transparent; outline:none; font-family:'Montserrat';">
-                </div>
-                <div class="send-btn" onclick="sendMessage()" style="background:#0084ff; color:#fff; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i></div>
-            </div>
+            <i class="fa-solid fa-trash-can delete-btn" onclick="deleteFullChat()" id="del-icon" style="display:none"></i>
         </div>
-
-        <div id="instagram-placeholder">
-            <i class="fa-brands fa-instagram" style="font-size: 80px; color: #E1306C;"></i>
-            <h2 style="margin-top:20px;">Instagram Direct</h2>
-            <p style="color:#65676b; max-width:300px; margin: 10px 0;">Debido a las políticas de Meta, abre la gestión de chats en una ventana segura.</p>
-            <a href="https://www.instagram.com/direct/inbox/" target="_blank" class="btn-ig-secure">Gestionar Instagram</a>
+        <div id="messages" class="messages-area"></div>
+        <div class="input-area">
+            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
+            <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
+            <div class="input-wrapper" style="flex:1; background:#f0f2f5; border-radius:20px; padding:5px 15px;">
+                <input type="text" id="m-input" placeholder="Mensaje..." style="width:100%; border:none; background:transparent; outline:none; font-family:'Montserrat';">
+            </div>
+            <div class="send-btn" onclick="sendMessage()" style="background:#0084ff; color:#fff; width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i></div>
         </div>
     </div>
 
     <script>
-        function showTab(type) {
-            const wsView = document.getElementById('chat-view');
-            const igView = document.getElementById('instagram-placeholder');
-            const sideBar = document.getElementById('side-bar');
-            
-            document.getElementById('tab-ws').classList.toggle('active', type === 'ws');
-            document.getElementById('tab-ig').classList.toggle('active', type === 'ig');
-
-            if(type === 'ws') {
-                wsView.style.display = 'flex';
-                igView.style.display = 'none';
-                sideBar.style.display = 'flex';
-            } else {
-                wsView.style.display = 'none';
-                igView.style.display = 'flex';
-                sideBar.style.display = 'none';
-            }
+        // Función para abrir Instagram sin salir del CRM
+        function openInstagram() {
+            const width = 450;
+            const height = 700;
+            const left = (window.screen.width / 2) - (width / 2);
+            const top = (window.screen.height / 2) - (height / 2);
+            window.open('https://www.instagram.com/direct/inbox/', 'Instagram', 
+                `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no`
+            );
         }
 
-        // Lógica de WhatsApp original restaurada
+        // --- RESTAURACIÓN DE TU LÓGICA ORIGINAL DE WHATSAPP ---
         let currentChat = null; let chats = {};
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
+        const chatView = document.getElementById("chat-view");
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
-        
+
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
                 createChat(msg.data);
                 if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                else notifyNew(msg.data.from);
             } else if(msg.type === "sent"){
                 if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                updateLast(msg.data.chatId, msg.data.text, msg.data.timestamp);
             }
         };
 
-        // ... Resto de funciones (createChat, openChat, appendMessage) se mantienen iguales a tu original ...
-        // [Se omiten por brevedad para no saturar, pero úsalas de tu archivo original]
+        window.onload = async () => {
+            const res = await fetch("/chat/list");
+            const list = await res.json();
+            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
+        };
+
+        function formatTime(dateStr) {
+            if(!dateStr) return "";
+            const d = new Date(dateStr);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+
+        function createChat(data){
+            const id = data.from;
+            if(!chats[id]){
+                chats[id] = { name: data.pushname || id, unread: 0 };
+                const div = document.createElement("div");
+                div.className = "chat-item"; div.id = "chat-"+id;
+                div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
+                    <div class="chat-info">
+                        <div class="chat-name-row">
+                            <span class="chat-name">${chats[id].name}</span>
+                            <span class="chat-time" id="time-${id}">${formatTime(data.timestamp)}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <div class="last" id="last-${id}">${data.text || "📷 Imagen"}</div>
+                            <div id="badge-${id}" class="unread-badge">0</div>
+                        </div>
+                    </div>`;
+                div.onclick = () => openChat(id);
+                chatListEl.prepend(div);
+            } else { updateLast(id, data.text, data.timestamp); }
+        }
+
+        function updateLast(id, t, time){ 
+            const el = document.getElementById(`last-${id}`); 
+            const timeEl = document.getElementById(`time-${id}`);
+            if(el) el.innerText = t || "📷 Imagen";
+            if(timeEl) timeEl.innerText = formatTime(time);
+            const chatItem = document.getElementById("chat-"+id);
+            if(chatItem) chatListEl.prepend(chatItem); 
+        }
+
+        async function openChat(id){
+            currentChat = id; messagesEl.innerHTML = "";
+            document.getElementById("h-name").innerText = chats[id].name;
+            document.getElementById("del-icon").style.display = "block";
+            chats[id].unread = 0;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge) badge.style.display = "none";
+            if(window.innerWidth <= 768) chatView.classList.add("open");
+            document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+            document.getElementById("chat-"+id).classList.add('active');
+            const res = await fetch(`/chat/messages/${id}`);
+            const msgs = await res.json();
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
+        }
+
+        function appendMessage(type, text, mediaUrl, timestamp){
+            const div = document.createElement("div");
+            div.className = `msg-bubble msg-${type}`;
+            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" style="max-width:250px; border-radius:10px; margin-bottom:5px;" onclick="window.open('${mediaUrl}')">`;
+            if(text && text !== "📷 Imagen") div.innerHTML += `<div>${text}</div>`;
+            const timeDiv = document.createElement("div");
+            timeDiv.className = "msg-time";
+            timeDiv.innerText = formatTime(timestamp || new Date());
+            div.appendChild(timeDiv);
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function sendMessage(){
+            const input = document.getElementById("m-input");
+            if(!input.value.trim() || !currentChat) return;
+            const text = input.value; input.value = "";
+            await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
+        }
 
         // MEJORA: ENVÍO MÚLTIPLE DE IMÁGENES
         document.getElementById('file-input').onchange = async function() {
@@ -143,15 +196,14 @@
             this.value = "";
         };
 
-        // Mantener scroll al final
-        function appendMessage(type, text, mediaUrl, timestamp){
-            const div = document.createElement("div");
-            div.className = `msg-bubble msg-${type}`;
-            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" style="max-width:250px; border-radius:10px;" onclick="window.open('${mediaUrl}')">`;
-            if(text && text !== "📷 Imagen") div.innerHTML += `<div>${text}</div>`;
-            messagesEl.appendChild(div);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
+        document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+        function notifyNew(id){
+            if(!chats[id]) return;
+            chats[id].unread++;
+            const badge = document.getElementById(`badge-${id}`);
+            if(badge){ badge.innerText = chats[id].unread; badge.style.display = "block"; }
         }
+        function closeChat() { chatView.classList.remove("open"); currentChat = null; }
     </script>
 </body>
 </html>
