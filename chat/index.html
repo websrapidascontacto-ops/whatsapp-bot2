@@ -19,12 +19,10 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; overflow: hidden; }
 
-        /* Sidebar Redes */
         .sidebar-redes { width: 70px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 25px; flex-shrink: 0; gap: 20px; }
         .red-icon { width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; transition: 0.3s; position: relative; }
         .badge-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid var(--bg-sidebar); border-radius: 50%; display: none; }
 
-        /* Lista de Chats */
         .chat-list-container { width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 18px; }
         .search-box { padding: 0 15px 15px 15px; }
@@ -39,37 +37,56 @@
         .chat-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
         .last-msg { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Área de Chat Principal */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); }
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-        
-        /* Contenedor de mensajes corregido para 2 columnas */
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 
-        /* Burbujas y Alineación */
         .msg-row { display: flex; width: 100%; margin-bottom: 4px; }
         .msg-row.sent { justify-content: flex-end; }
         .msg-row.received { justify-content: flex-start; }
-
         .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; position: relative; }
         .msg-sent { background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
-        
         .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; display: block; background: #2a2a2a; }
         .msg-time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
 
-        /* Entrada de texto */
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
         .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
         .input-wrapper input { flex: 1; background: transparent; border: none; padding: 10px 0; outline: none; color: #fff; font-family: 'Montserrat'; }
         
+        #preview-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .preview-container { width: 100%; max-width: 500px; background: var(--bg-sidebar); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        #preview-gallery { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; }
+        .preview-thumb { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; cursor: pointer; }
+        #main-preview { width: 100%; max-height: 300px; object-fit: contain; border-radius: 10px; }
+        .preview-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .btn { padding: 10px 20px; border-radius: 10px; cursor: pointer; border: none; font-family: 'Montserrat'; font-weight: 600; }
+        .btn-cancel { background: #3a3b3c; color: white; }
+        .btn-send { background: var(--accent); color: white; }
+
         #emoji-picker-box { position: absolute; bottom: 85px; left: 25px; z-index: 1000; display: none; }
-        .send-btn { background: var(--accent); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .send-btn:hover { transform: scale(1.05); }
+        .send-btn { background: var(--accent); color: #fff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .delete-btn { color: #ff4757; cursor: pointer; font-size: 18px; padding: 10px; transition: 0.2s; visibility: hidden; }
+        .delete-btn:hover { transform: scale(1.1); }
         .price-label { margin-top: auto; padding-bottom: 25px; font-weight: 700; font-size: 12px; color: var(--text-dim); }
     </style>
 </head>
 <body>
+    <div id="preview-modal">
+        <div class="preview-container">
+            <h3 style="margin-bottom:10px">Enviar imágenes</h3>
+            <img id="main-preview" src="">
+            <div id="preview-gallery"></div>
+            <div class="input-wrapper" style="margin-top:10px">
+                <input type="text" id="preview-caption" placeholder="Añade un mensaje...">
+            </div>
+            <div class="preview-actions">
+                <button class="btn btn-cancel" onclick="closePreview()">Cancelar</button>
+                <button class="btn btn-send" onclick="sendMediaWithCaption()">Enviar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="sidebar-redes">
         <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="28"><div class="badge-dot" id="global-badge"></div></div>
         <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1100,height=700')"><img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="28"></div>
@@ -81,7 +98,7 @@
         <div class="search-box">
             <div class="search-wrapper">
                 <i class="fa-solid fa-magnifying-glass" style="color:var(--text-dim)"></i>
-                <input type="text" id="chat-search" placeholder="Buscar contacto o palabra..." onkeyup="filterChats()">
+                <input type="text" id="chat-search" placeholder="Buscar en todas las conversaciones..." onkeyup="filterChats()">
             </div>
         </div>
         <div id="chat-list" class="chat-list"></div>
@@ -94,6 +111,7 @@
                 <div id="h-name" style="font-weight: 700;">Selecciona un chat</div>
                 <div style="font-size: 11px; color: var(--accent);">Webs Rápidas Business</div>
             </div>
+            <i class="fa-solid fa-trash-can delete-btn" id="delete-trigger" title="Eliminar Chat Permanentemente"></i>
         </div>
         <div id="messages" class="messages-area"></div>
         <div id="emoji-picker-box"></div>
@@ -107,15 +125,18 @@
     </div>
 
     <script>
-        let currentChat = null; let chats = {};
+        let currentChat = null; let chats = {}; let selectedFiles = [];
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
+        const deleteBtn = document.getElementById("delete-trigger");
 
+        // BUSCADOR GLOBAL: Filtra en todos los chats por nombre o último mensaje
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
                 const name = item.querySelector(".chat-name").innerText.toLowerCase();
                 const lastMsg = item.querySelector(".last-msg").innerText.toLowerCase();
+                // Si el término está en el nombre o en el último mensaje de cualquier chat
                 item.style.display = (name.includes(term) || lastMsg.includes(term)) ? "flex" : "none";
             });
         }
@@ -135,6 +156,7 @@
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
+            // Cargar con el más reciente arriba
             list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
@@ -154,17 +176,17 @@
                 chatListEl.prepend(div);
             } else {
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
-                chatListEl.prepend(existing);
+                chatListEl.prepend(existing); // Orden cronológico: Mueve al principio al recibir/enviar
             }
         }
 
         async function openChat(id){
             currentChat = id; messagesEl.innerHTML = "";
+            deleteBtn.style.visibility = "visible";
             document.getElementById("h-name").innerText = chats[id].name;
             document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
-            
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
             msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
@@ -172,30 +194,82 @@
         }
 
         function appendMessage(type, text, mediaUrl, timestamp){
-            // Contenedor de fila para alinear a izquierda o derecha
             const row = document.createElement("div");
             row.className = `msg-row ${type}`;
-            
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
-            
             if(mediaUrl && mediaUrl !== "null") {
                 const isMeta = mediaUrl.includes('http') || mediaUrl.includes('fbcdn') || mediaUrl.includes('fbsbx');
                 const finalUrl = isMeta ? `/proxy-media?url=${encodeURIComponent(mediaUrl)}` : mediaUrl;
-                    
                 div.innerHTML += `<img src="${finalUrl}" class="msg-image" onclick="window.open('${finalUrl}')" onerror="this.src='https://placehold.co/300x200?text=Imagen+Expirada'">`;
             }
-            
             if(text && text !== "📷 Imagen") {
                 const tNode = document.createElement("div"); tNode.innerText = text; div.appendChild(tNode);
             }
-
             const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "Ahora";
             div.innerHTML += `<div class="msg-time">${time}</div>`;
-            
             row.appendChild(div);
             messagesEl.appendChild(row);
             messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // ELIMINACIÓN PERMANENTE DEL SERVIDOR
+        deleteBtn.onclick = async () => {
+            if(confirm(`¿Deseas eliminar permanentemente toda la conversación con ${chats[currentChat].name}? Esta acción no se puede deshacer.`)) {
+                try {
+                    const res = await fetch(`/chat/messages/${currentChat}`, { method: "DELETE" });
+                    if(res.ok) {
+                        document.getElementById("chat-"+currentChat).remove();
+                        messagesEl.innerHTML = "";
+                        document.getElementById("h-name").innerText = "Selecciona un chat";
+                        deleteBtn.style.visibility = "hidden";
+                        delete chats[currentChat];
+                        currentChat = null;
+                    }
+                } catch (err) { alert("Error al eliminar"); }
+            }
+        };
+
+        // PREVISUALIZACIÓN TIPO WHATSAPP
+        document.getElementById('file-input').onchange = function() {
+            if(!currentChat) return;
+            selectedFiles = Array.from(this.files);
+            if(selectedFiles.length === 0) return;
+            const modal = document.getElementById('preview-modal');
+            const gallery = document.getElementById('preview-gallery');
+            const mainImg = document.getElementById('main-preview');
+            gallery.innerHTML = "";
+            modal.style.display = "flex";
+            selectedFiles.forEach((file, index) => {
+                const url = URL.createObjectURL(file);
+                if(index === 0) mainImg.src = url;
+                const thumb = document.createElement('img');
+                thumb.src = url; thumb.className = "preview-thumb";
+                thumb.onclick = () => mainImg.src = url;
+                gallery.appendChild(thumb);
+            });
+        };
+
+        function closePreview() {
+            document.getElementById('preview-modal').style.display = "none";
+            document.getElementById('file-input').value = "";
+            document.getElementById('preview-caption').value = "";
+            selectedFiles = [];
+        }
+
+        async function sendMediaWithCaption() {
+            const caption = document.getElementById('preview-caption').value;
+            const to = currentChat;
+            closePreview();
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const fd = new FormData();
+                fd.append("file", selectedFiles[i]);
+                fd.append("to", to);
+                if(i === 0 && caption.trim() !== "") {
+                    await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to, text: caption}) });
+                }
+                await fetch("/send-media", { method: "POST", body: fd });
+            }
         }
 
         async function sendMessage(){
@@ -206,15 +280,7 @@
         }
 
         document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
-        
-        document.getElementById('file-input').onchange = async function() {
-            if(!currentChat) return;
-            for (let file of this.files) {
-                const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
-                await fetch("/send-media", { method: "POST", body: fd });
-            }
-            this.value = "";
-        };
+        document.getElementById("preview-caption").onkeypress = (e) => { if(e.key === 'Enter') sendMediaWithCaption(); };
 
         document.getElementById("emoji-trigger").onclick = (e) => {
             e.stopPropagation();
