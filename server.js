@@ -38,23 +38,22 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// --- PROXY DE MEDIA CORREGIDO ---
+// PROXY CORREGIDO: Para ver imágenes anteriores y nuevas sin errores
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
-  if (!mediaUrl) return res.status(400).send("No URL");
+  if (!mediaUrl || mediaUrl === "null") return res.status(400).send("No URL");
   try {
     const response = await axios.get(mediaUrl, {
       headers: { 
         'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
-        'User-Agent': 'axios/1.6.0' // Algunos servidores de FB requieren User-Agent
+        'User-Agent': 'Mozilla/5.0' 
       },
       responseType: 'arraybuffer'
     });
     res.set('Content-Type', response.headers['content-type']);
     res.send(response.data);
   } catch (e) { 
-    console.error("Error en proxy:", e.message);
-    res.status(500).send("Error de proxy"); 
+    res.status(500).send("Error de imagen"); 
   }
 });
 
@@ -95,23 +94,17 @@ app.post("/webhook", async (req, res) => {
 
             if (msg.type === "image") {
               try {
-                // Obtener URL real de la imagen desde Meta
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
                   headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
                 });
-                // Guardamos la URL de Meta para que el index.html la pida vía /proxy-media
-                mediaUrl = metaRes.data.url; 
-              } catch (e) { console.error("Error obteniendo URL de Meta:", e.message); }
+                mediaUrl = metaRes.data.url;
+              } catch (e) {}
             }
 
             const messageData = { 
-              chatId: senderId, 
-              from: senderId, 
+              chatId: senderId, from: senderId, 
               text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), 
-              messageType: msg.type, 
-              source: "whatsapp", 
-              pushname: pushName, 
-              mediaUrl,
+              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl,
               timestamp: new Date()
             };
 
