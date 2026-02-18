@@ -34,7 +34,7 @@
         .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; position: relative; }
         .msg-sent { background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
         .msg-received { background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
-        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; margin-bottom: 5px; cursor: pointer; }
+        .msg-image { width: 100%; max-width: 280px; border-radius: 12px; margin-bottom: 5px; cursor: pointer; display: block; }
         .msg-time { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
         .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); position: relative; }
         .input-wrapper { flex: 1; background: #242526; border-radius: 24px; padding: 4px 18px; display: flex; align-items: center; }
@@ -48,12 +48,12 @@
     <div id="preview-modal">
         <div class="preview-container">
             <h3>Enviar imágenes</h3>
-            <img id="main-preview" style="width:100%; max-height:300px; object-fit:contain;">
-            <div id="preview-gallery" style="display:flex; gap:10px; overflow-x:auto;"></div>
+            <img id="main-preview" style="width:100%; max-height:300px; object-fit:contain; border-radius:10px;">
+            <div id="preview-gallery" style="display:flex; gap:10px; overflow-x:auto; padding:10px 0;"></div>
             <div class="input-wrapper"><input type="text" id="preview-caption" placeholder="Añade un mensaje..."></div>
             <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button onclick="closePreview()" style="padding:10px; border-radius:10px; border:none; background:#3a3b3c; color:white; cursor:pointer;">Cancelar</button>
-                <button onclick="sendMediaWithCaption()" style="padding:10px 20px; border-radius:10px; border:none; background:var(--accent); color:white; cursor:pointer;">Enviar</button>
+                <button onclick="closePreview()" style="padding:10px; border-radius:10px; border:none; background:#3a3b3c; color:white; cursor:pointer; font-family:'Montserrat';">Cancelar</button>
+                <button onclick="sendMediaWithCaption()" style="padding:10px 20px; border-radius:10px; border:none; background:var(--accent); color:white; cursor:pointer; font-family:'Montserrat';">Enviar</button>
             </div>
         </div>
     </div>
@@ -84,10 +84,9 @@
             <i class="fa-solid fa-trash-can delete-btn" id="delete-trigger"></i>
         </div>
         <div id="messages" class="messages-area"></div>
-        <div id="emoji-picker-box" style="position:absolute; bottom:80px; left:20px; display:none; z-index:1000;"></div>
         <div class="input-area">
-            <i class="fa-regular fa-face-smile" id="emoji-trigger" style="cursor:pointer; font-size:20px;"></i>
-            <label for="file-input"><i class="fa-solid fa-paperclip" style="cursor:pointer; font-size:20px;"></i></label>
+            <i class="fa-regular fa-face-smile" id="emoji-trigger" style="cursor:pointer; font-size:20px; color:var(--text-dim);"></i>
+            <label for="file-input"><i class="fa-solid fa-paperclip" style="cursor:pointer; font-size:20px; color:var(--text-dim);"></i></label>
             <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
             <div class="input-wrapper"><input type="text" id="m-input" placeholder="Escribe un mensaje..."></div>
             <div onclick="sendMessage()" style="background:var(--accent); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i></div>
@@ -122,7 +121,8 @@
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
+            // Cargar de abajo hacia arriba para que prepend los deje en orden correcto
+            [...list].reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
         };
 
         function createChat(data){
@@ -143,7 +143,7 @@
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
                 const b = document.getElementById(`badge-${id}`);
                 if(chats[id].unread > 0){ b.innerText = chats[id].unread; b.style.display = "block"; }
-                chatListEl.prepend(existing); // Sube al tope
+                chatListEl.prepend(existing); 
             }
         }
 
@@ -190,19 +190,28 @@
             selectedFiles.forEach((f, i) => {
                 const url = URL.createObjectURL(f); if(i===0) main.src = url;
                 const img = document.createElement('img'); img.src = url;
-                img.style = "width:60px; height:60px; border-radius:5px; cursor:pointer; object-fit:cover;";
-                img.onclick = () => main.src = url; gallery.appendChild(img);
+                img.style = "width:60px; height:60px; border-radius:8px; cursor:pointer; object-fit:cover; border:2px solid transparent;";
+                img.onclick = () => { main.src = url; };
+                gallery.appendChild(img);
             });
         };
 
-        function closePreview(){ document.getElementById('preview-modal').style.display = "none"; selectedFiles = []; }
+        function closePreview(){ document.getElementById('preview-modal').style.display = "none"; selectedFiles = []; document.getElementById('file-input').value = ""; }
+        
         async function sendMediaWithCaption(){
-            const cap = document.getElementById('preview-caption').value; const to = currentChat; closePreview();
+            const cap = document.getElementById('preview-caption').value; 
+            const to = currentChat; 
+            closePreview();
             for(let i=0; i<selectedFiles.length; i++){
-                const fd = new FormData(); fd.append("file", selectedFiles[i]); fd.append("to", to);
-                if(i===0 && cap.trim()) await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to, text:cap}) });
+                const fd = new FormData();
+                fd.append("file", selectedFiles[i]);
+                fd.append("to", to);
+                if(i === 0 && cap.trim()) {
+                    await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to, text:cap}) });
+                }
                 await fetch("/send-media", { method:"POST", body:fd });
             }
+            document.getElementById('preview-caption').value = "";
         }
 
         async function sendMessage(){

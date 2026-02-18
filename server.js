@@ -8,7 +8,6 @@ const fs = require("fs");
 const FormData = require("form-data");
 require("dotenv").config();
 
-// Modelo de Mensaje
 const Message = require("./models/Message");
 
 const app = express();
@@ -19,13 +18,9 @@ const upload = multer({ dest: "uploads/" });
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
-
-// Archivos estáticos
 app.use(express.static("public"));
 app.use("/uploads", express.static(uploadDir));
-app.use("/chat", express.static(path.join(__dirname, "chat")));
 
-// Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB conectado"))
   .catch(err => console.error("❌ Error MongoDB:", err));
@@ -45,21 +40,7 @@ function broadcastMessage(data) {
   });
 }
 
-// PROXY MEDIA: (Mantenido por compatibilidad)
-app.get("/proxy-media", async (req, res) => {
-  const mediaUrl = req.query.url;
-  if (!mediaUrl || mediaUrl === "null") return res.status(400).send("No URL");
-  try {
-    const response = await axios.get(mediaUrl, {
-      headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` },
-      responseType: 'arraybuffer'
-    });
-    res.set('Content-Type', response.headers['content-type']);
-    res.send(response.data);
-  } catch (e) { res.status(500).send("Error"); }
-});
-
-// LISTAR CHATS (Orden cronológico por DB)
+// Rutas de API
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -90,7 +71,6 @@ app.delete("/chat/messages/:chatId", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// WEBHOOK CON DESCARGA LOCAL DE IMÁGENES
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -113,7 +93,7 @@ app.post("/webhook", async (req, res) => {
                 const filePath = path.join(uploadDir, fileName);
                 const writer = fs.createWriteStream(filePath);
                 imgRes.data.pipe(writer);
-                mediaUrl = `/uploads/${fileName}`; // Imagen guardada localmente
+                mediaUrl = `/uploads/${fileName}`;
               } catch (e) { console.error("Error persistencia imagen"); }
             }
 
@@ -144,7 +124,7 @@ app.post("/send-message", async (req, res) => {
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
     res.json({ status: "ok" });
-  } catch (err) { res.status(500).json(err); }
+  } catch (err) { res.status(500).json({ error: "Error de envío" }); }
 });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
@@ -152,7 +132,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     const { to } = req.body;
     const file = req.file;
     const form = new FormData();
-    form.append('file', fs.createReadStream(file.path), { filename: file.originalname });
+    form.append('file', fs.createReadStream(file.path));
     form.append('type', file.mimetype);
     form.append('messaging_product', 'whatsapp');
 
