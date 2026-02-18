@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 
 <style>
-/* Reset y Estilos Base con Montserrat */
+/* Estilos Base con Montserrat */
 *{box-sizing:border-box}
 body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; background:#f0f2f5; color: #1c1e21; display: flex;}
 
@@ -28,46 +28,27 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 .chat-item:hover { background: #f5f6f7; }
 .chat-item.active { background: #e7f3ff; border-left: 4px solid #0084ff; }
 
-/* Foto de Perfil */
+/* Fotos */
 .pfp-wrapper { position: relative; width: 55px; height: 55px; }
 .pfp-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
 
-/* Área de Conversación */
+/* Área Chat */
 .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
 .top-bar { padding: 12px 25px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #e4e6eb; background: #fff; }
 .top-pfp { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; }
-
 .messages-area { flex: 1; padding: 25px; overflow-y: auto; background: #f9f9fb; display: flex; flex-direction: column; gap: 10px; }
 
-/* Burbujas Modernas */
-.msg-bubble { 
-    max-width: 65%; 
-    padding: 6px; 
-    font-size: 14px; 
-    line-height: 1.5; 
-    border-radius: 12px; 
-    box-shadow: 0 1px 1px rgba(0,0,0,0.05); 
-    display: flex;
-    flex-direction: column;
-}
+/* Burbujas */
+.msg-bubble { max-width: 65%; padding: 6px; font-size: 14px; line-height: 1.5; border-radius: 12px; box-shadow: 0 1px 1px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
 .msg-received { background: #ffffff; color: #050505; align-self: flex-start; border-bottom-left-radius: 4px; }
 .msg-sent { background: #0084ff; color: #ffffff; align-self: flex-end; border-bottom-right-radius: 4px; }
-
-.msg-image { 
-    width: 100%; 
-    min-width: 200px; 
-    max-width: 320px; 
-    min-height: 100px;
-    border-radius: 8px; 
-    display: block; 
-    cursor: pointer;
-    background: #f0f2f5;
-}
+.msg-image { width: 100%; min-width: 200px; max-width: 320px; min-height: 100px; border-radius: 8px; display: block; cursor: pointer; background: #f0f2f5; margin-bottom: 4px; }
 
 /* Input Área */
 .input-area { padding: 15px 25px; display: flex; align-items: center; gap: 15px; border-top: 1px solid #e4e6eb; background: #fff; position: relative; }
 .input-area input[type="text"] { flex: 1; background: #f0f2f5; border: none; padding: 12px 18px; border-radius: 20px; font-family: 'Montserrat'; outline: none; }
-.icon-btn { color: #65676b; font-size: 22px; cursor: pointer; }
+.icon-btn { color: #65676b; font-size: 22px; cursor: pointer; transition: color 0.2s; }
+.icon-btn:hover { color: #0084ff; }
 .send-btn { background: #0084ff; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
 #emoji-picker-box { position: absolute; bottom: 80px; left: 25px; display: none; z-index: 100; }
@@ -100,8 +81,11 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
     <div class="messages-area" id="messages"></div>
     <div class="input-area">
         <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
-        <label for="file-input"><i class="fa-solid fa-plus icon-btn"></i></label>
-        <input type="file" id="file-input" style="display:none" onchange="uploadMedia(this)" accept="image/*">
+        <label for="file-input" style="margin: 0; cursor: pointer; display: flex; align-items: center;">
+            <i class="fa-solid fa-plus icon-btn"></i>
+        </label>
+        <input type="file" id="file-input" style="display:none" accept="image/*">
+        
         <input type="text" id="message-input" placeholder="Escribe un mensaje...">
         <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
         <div id="emoji-picker-box"></div>
@@ -113,6 +97,7 @@ let currentChat = null; let unreadGlobal = 0; let chats = {}; let chatsData = {}
 const messagesEl = document.getElementById("messages");
 const chatListEl = document.getElementById("chat-list");
 
+// WebSocket
 const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
 ws.onmessage = (event) => {
@@ -178,7 +163,6 @@ function appendMessage(type, text, mediaUrl = null){
     t.style.padding = "4px 8px"; t.innerText = text;
     div.appendChild(t);
   }
-
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -190,23 +174,28 @@ async function sendMessage(){
   await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
 }
 
-async function uploadMedia(input) {
-    if(!input.files[0] || !currentChat) return;
-    
-    const file = input.files[0];
+// LÓGICA DE ENVÍO DE IMAGEN MEJORADA
+document.getElementById('file-input').addEventListener('change', async function() {
+    if(!this.files[0] || !currentChat) {
+        alert("Selecciona un chat primero");
+        return;
+    }
+
+    const file = this.files[0];
     const formData = new FormData();
     formData.append("file", file);
     formData.append("to", currentChat);
 
     try {
         const response = await fetch("/send-media", { method: "POST", body: formData });
-        if(response.ok) {
-            input.value = ""; // Limpiar input tras éxito
-        }
+        if(!response.ok) throw new Error("Error en servidor");
     } catch (err) {
         console.error("Error al subir:", err);
+        alert("Error al enviar imagen");
+    } finally {
+        this.value = ""; // Limpiar siempre
     }
-}
+});
 
 function increaseUnread(id){
   chats[id].unread++; unreadGlobal++;
@@ -214,7 +203,6 @@ function increaseUnread(id){
   document.getElementById("badge-"+id).style.display = "block";
   document.getElementById("global-badge").style.display = "block";
 }
-
 function resetUnread(id){
   unreadGlobal -= chats[id].unread; chats[id].unread = 0;
   document.getElementById("badge-"+id).style.display = "none";
@@ -227,7 +215,6 @@ document.getElementById("emoji-trigger").onclick = (e) => {
     box.style.display = box.style.display === "block" ? "none" : "block";
     if(box.innerHTML === ""){ const p = new EmojiMart.Picker({ onEmojiSelect: (emoji) => document.getElementById("message-input").value += emoji.native }); box.appendChild(p); }
 };
-
 document.addEventListener('click', (e) => { if(!document.getElementById("emoji-picker-box").contains(e.target)) document.getElementById("emoji-picker-box").style.display = "none"; });
 document.getElementById("message-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 </script>
