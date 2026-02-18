@@ -2,106 +2,90 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Webs Rápidas - Premium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CRM Webs Rápidas - Móvil</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
-        /* Sidebar de Redes */
-        .sidebar-redes { width: 80px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 30px; flex-shrink: 0; }
-        .red-icon { width: 45px; height: 45px; margin-bottom: 30px; cursor: pointer; transition: transform 0.2s; }
-        .red-icon:hover { transform: scale(1.1); }
-        .red-icon img { width: 100%; height: 100%; }
+        /* Sidebar Redes (Oculta en móviles pequeños para ganar espacio) */
+        .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
+        @media (max-width: 768px) { .sidebar-redes { display: none; } }
 
-        /* Lista de Chats */
-        .chat-list-container { width: 400px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
-        .list-header { padding: 30px 25px; font-weight: 700; font-size: 22px; color: #050505; border-bottom: 1px solid #f0f2f5; }
+        /* Contenedor de Lista de Chats */
+        .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; transition: all 0.3s ease; }
+        .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
         .chat-list { flex: 1; overflow-y: auto; }
-        .chat-item { padding: 20px 25px; display: flex; align-items: center; gap: 15px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: background 0.2s; }
-        .chat-item:hover { background: #f5f6f7; }
-        .chat-item.active { background: #e7f3ff; border-left: 5px solid #0084ff; }
-        .pfp { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
+        .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
+        .chat-item.active { background: #e7f3ff; }
+        .pfp { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .chat-info { flex: 1; overflow: hidden; }
-        .chat-name { font-weight: 700; font-size: 15px; color: #050505; margin-bottom: 4px; }
-        .last-msg { font-size: 13px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+        .last-msg { font-size: 12px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Área de Chat (Full Width) */
-        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; position: relative; }
-        .top-bar { padding: 15px 30px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #e4e6eb; background: #fff; z-index: 10; }
-        .top-bar img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; }
-        .top-bar-info { display: flex; flex-direction: column; }
-        .top-name { font-weight: 700; font-size: 17px; }
-        .top-status { font-size: 12px; color: #00a884; font-weight: 600; }
+        /* Área de Chat */
+        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; transition: all 0.3s ease; }
+        .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; }
+        .back-btn { display: none; font-size: 20px; color: #0084ff; cursor: pointer; padding-right: 10px; }
+        .top-bar img { width: 40px; height: 40px; border-radius: 50%; }
+        .top-name { font-weight: 700; font-size: 15px; }
 
         /* Mensajes */
-        .messages-area { flex: 1; padding: 30px; overflow-y: auto; background: #f9f9fb; display: flex; flex-direction: column; gap: 15px; }
-        .msg-bubble { max-width: 65%; padding: 12px 18px; font-size: 15px; border-radius: 18px; line-height: 1.5; position: relative; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
-        
-        .msg-received { align-self: flex-start; background: #ffffff; color: #050505; border-bottom-left-radius: 4px; }
-        .msg-sent { align-self: flex-end; background: #0084ff; color: #ffffff; border-bottom-right-radius: 4px; }
-        
-        .msg-image { width: 100%; max-width: 350px; border-radius: 12px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.2s; }
-        .msg-image:hover { opacity: 0.9; }
+        .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
+        .msg-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; border-radius: 15px; line-height: 1.4; display: flex; flex-direction: column; }
+        .msg-received { align-self: flex-start; background: #fff; border-bottom-left-radius: 4px; }
+        .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; border-bottom-right-radius: 4px; }
+        .msg-image { width: 100%; max-width: 250px; border-radius: 10px; margin-bottom: 5px; }
 
-        /* Área de Input */
-        .input-area { padding: 20px 30px; display: flex; align-items: center; gap: 20px; border-top: 1px solid #e4e6eb; background: #fff; }
-        .icon-btn { color: #65676b; font-size: 24px; cursor: pointer; transition: color 0.2s; }
-        .icon-btn:hover { color: #0084ff; }
-        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 25px; padding: 5px 20px; display: flex; align-items: center; }
-        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 12px 0; outline: none; font-family: 'Montserrat'; font-size: 15px; }
-        .send-btn { background: #0084ff; color: #ffffff; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
-        .send-btn:hover { background: #0073e6; }
+        /* Input */
+        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; }
+        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; display: flex; align-items: center; }
+        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 8px 0; outline: none; font-family: 'Montserrat'; font-size: 14px; }
+        .send-btn { background: #0084ff; color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #bcc0c4; border-radius: 10px; }
+        /* MOBILE RESPONSIVE LOGIC */
+        @media (max-width: 768px) {
+            .chat-list-container { width: 100%; }
+            .chat-content { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; }
+            .chat-content.open { right: 0; }
+            .back-btn { display: block; }
+        }
     </style>
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp"></div>
+        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
     </div>
 
-    <div class="chat-list-container">
+    <div class="chat-list-container" id="list-container">
         <div class="list-header">Mensajes</div>
         <div id="chat-list" class="chat-list"></div>
     </div>
 
-    <div class="chat-content">
+    <div class="chat-content" id="chat-view">
         <div class="top-bar">
-            <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM&background=random">
-            <div class="top-bar-info">
-                <div id="h-name" class="top-name">Selecciona un chat</div>
-                <div class="top-status">En línea (Webs Rápidas)</div>
-            </div>
+            <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
+            <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
+            <div id="h-name" class="top-name">Selecciona un chat</div>
         </div>
-        
         <div id="messages" class="messages-area"></div>
-
         <div class="input-area">
-            <label for="file-input" style="display: flex; align-items: center;">
-                <i class="fa-solid fa-plus icon-btn"></i>
-            </label>
+            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
             <input type="file" id="file-input" style="display:none" accept="image/*">
-            
             <div class="input-wrapper">
-                <input type="text" id="m-input" placeholder="Escribe un mensaje aquí...">
+                <input type="text" id="m-input" placeholder="Mensaje...">
             </div>
-            
-            <div class="send-btn" onclick="sendMessage()">
-                <i class="fa-solid fa-paper-plane"></i>
-            </div>
+            <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
         </div>
     </div>
 
     <script>
-        let currentChat = null;
-        let chats = {};
+        let currentChat = null; let chats = {};
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
+        const chatView = document.getElementById("chat-view");
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
@@ -128,8 +112,7 @@
                 chats[id] = { name: data.pushname || id };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
-                div.innerHTML = `
-                    <img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
+                div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
                     <div class="chat-info">
                         <div class="chat-name">${chats[id].name}</div>
                         <div class="last">${data.text || "📷 Imagen"}</div>
@@ -145,11 +128,13 @@
         }
 
         async function openChat(id){
-            currentChat = id; 
-            messagesEl.innerHTML = "";
+            currentChat = id; messagesEl.innerHTML = "";
             document.getElementById("h-name").innerText = chats[id].name;
             document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
             
+            // Animación móvil
+            if(window.innerWidth <= 768) chatView.classList.add("open");
+
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
             
@@ -158,12 +143,12 @@
             msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
         }
 
+        function closeChat() { chatView.classList.remove("open"); currentChat = null; }
+
         function appendMessage(type, text, mediaUrl){
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
-            if(mediaUrl) {
-                div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
-            }
+            if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
             if(text && text !== "📷 Imagen") {
                 const textDiv = document.createElement("div");
                 textDiv.innerText = text;
