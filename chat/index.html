@@ -10,11 +10,26 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
-        .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
-        @media (max-width: 768px) { .sidebar-redes { display: none; } }
+        /* Sidebar con iconos */
+        .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; gap: 20px; }
+        .red-icon { width: 45px; height: 45px; cursor: pointer; transition: 0.3s; padding: 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .red-icon:hover { background: #f0f2f5; }
+        .red-icon.active { background: #e7f3ff; border: 1px solid #0084ff; }
+        .red-icon img { width: 100%; height: 100%; }
 
+        /* Contenedores Principales */
         .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
+        
+        /* Contenido Dinámico */
+        .main-content-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+        
+        /* Box de Instagram */
+        #instagram-view { display: none; width: 100%; height: 100%; background: #fff; }
+        #instagram-view iframe { width: 100%; height: 100%; border: none; }
+
+        /* Estilos existentes del Chat */
         .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
         .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; transition: 0.2s; position: relative; }
         .chat-item.active { background: #e7f3ff; }
@@ -26,7 +41,6 @@
         .last-msg { font-size: 12px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .unread-badge { background: #0084ff; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: none; margin-left: 5px; }
 
-        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; transition: all 0.3s ease; }
         .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; justify-content: space-between; }
         .top-bar-left { display: flex; align-items: center; gap: 12px; }
         .back-btn { display: none; font-size: 20px; color: #0084ff; cursor: pointer; padding-right: 10px; }
@@ -47,46 +61,93 @@
         .send-btn { background: #0084ff; color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
 
         @media (max-width: 768px) {
+            .sidebar-redes { display: none; }
             .chat-list-container { width: 100%; }
-            .chat-content { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; }
-            .chat-content.open { right: 0; }
+            .main-content-area { position: fixed; right: -100%; top: 0; width: 100%; height: 100%; z-index: 100; transition: 0.3s; }
+            .main-content-area.open { right: 0; }
             .back-btn { display: block; }
         }
     </style>
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
-    </div>
-    <div class="chat-list-container">
-        <div class="list-header">Mensajes</div>
-        <div id="chat-list" class="chat-list"></div>
-    </div>
-    <div class="chat-content" id="chat-view">
-        <div class="top-bar">
-            <div class="top-bar-left">
-                <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
-                <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
-                <div id="h-name" class="top-name">Selecciona un chat</div>
-            </div>
-            <i class="fa-solid fa-trash-can delete-btn" onclick="deleteFullChat()" id="del-icon" style="display:none"></i>
+        <div class="red-icon active" id="tab-ws" onclick="switchTab('ws')">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
         </div>
-        <div id="messages" class="messages-area"></div>
-        <div class="input-area">
-            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
-            <input type="file" id="file-input" style="display:none" accept="image/*">
-            <div class="input-wrapper">
-                <input type="text" id="m-input" placeholder="Mensaje...">
-            </div>
-            <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
+        <div class="red-icon" id="tab-ig" onclick="switchTab('ig')">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg" alt="Instagram">
         </div>
     </div>
 
+    <div class="chat-list-container" id="side-ws">
+        <div class="list-header">WhatsApp</div>
+        <div id="chat-list" class="chat-list"></div>
+    </div>
+
+    <div class="main-content-area" id="main-area">
+        
+        <div class="chat-content" id="chat-view">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <i class="fa-solid fa-arrow-left back-btn" onclick="closeChat()"></i>
+                    <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM">
+                    <div id="h-name" class="top-name">Selecciona un chat</div>
+                </div>
+                <i class="fa-solid fa-trash-can delete-btn" onclick="deleteFullChat()" id="del-icon" style="display:none"></i>
+            </div>
+            <div id="messages" class="messages-area"></div>
+            <div class="input-area">
+                <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
+                <input type="file" id="file-input" style="display:none" accept="image/*">
+                <div class="input-wrapper">
+                    <input type="text" id="m-input" placeholder="Mensaje...">
+                </div>
+                <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
+            </div>
+        </div>
+
+        <div id="instagram-view">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <i class="fa-solid fa-arrow-left back-btn" onclick="switchTab('ws')"></i>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg">
+                    <div class="top-name">Instagram Direct</div>
+                </div>
+            </div>
+            <iframe src="https://www.instagram.com/direct/inbox/" allow="camera; microphone; clipboard-read; clipboard-write"></iframe>
+        </div>
+
+    </div>
+
     <script>
+        // LÓGICA DE INTERCAMBIO DE PESTAÑAS
+        function switchTab(tab) {
+            const wsTab = document.getElementById('tab-ws');
+            const igTab = document.getElementById('tab-ig');
+            const wsView = document.getElementById('chat-view');
+            const igView = document.getElementById('instagram-view');
+            const wsSidebar = document.getElementById('side-ws');
+
+            if (tab === 'ws') {
+                wsTab.classList.add('active');
+                igTab.classList.remove('active');
+                wsView.style.display = 'flex';
+                igView.style.display = 'none';
+                wsSidebar.style.display = 'flex';
+            } else {
+                igTab.classList.add('active');
+                wsTab.classList.remove('active');
+                wsView.style.display = 'none';
+                igView.style.display = 'block';
+                wsSidebar.style.display = 'none'; // Ocultamos lista de WhatsApp en modo IG
+            }
+        }
+
+        // --- TU CÓDIGO ORIGINAL DE WHATSAPP (SIN CAMBIOS) ---
         let currentChat = null; let chats = {};
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
-        const chatView = document.getElementById("chat-view");
+        const chatView = document.getElementById("main-area"); // Cambiado a main-area para mobile
 
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
