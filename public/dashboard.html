@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard</title>
+</head>
+<body>
+  <h2>Dashboard</h2>
+  <button onclick="crearFlow()">Crear Flow</button>
+  <ul id="lista"></ul>
+
+  <script>
+    const token = localStorage.getItem("token");
+
+    async function crearFlow() {
+      await fetch("/api/flows", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": token
+        },
+        body: JSON.stringify({ name: "Nuevo Flow" })
+      });
+
+      cargarFlows();
+    }
+
+    async function cargarFlows() {
+      const res = await fetch("/api/flows", {
+        headers: { "Authorization": token }
+      });
+      const flows = await res.json();
+
+      const lista = document.getElementById("lista");
+      lista.innerHTML = "";
+
+      flows.forEach(f => {
+        const li = document.createElement("li");
+        li.innerText = f.name;
+        lista.appendChild(li);
+      });
+    }
+
+    cargarFlows();
+  </script>
+</body>
+</html>

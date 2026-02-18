@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM WhatsApp Meta</title>
+
+<!-- FontAwesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<!-- Emoji Mart -->
+<link href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; height:100%; font-family:Arial,sans-serif; background:#ddd; }
+.whatsapp-container { display:flex; height:100vh; background:white; }
+.sidebar { width:320px; border-right:1px solid #ccc; display:flex; flex-direction:column; }
+.sidebar-header { padding:15px; background:#f0f2f5; font-weight:bold; }
+.chat-list { flex:1; overflow-y:auto; }
+.chat-item { display:flex; align-items:center; gap:10px; padding:10px; cursor:pointer; border-bottom:1px solid #eee; }
+.chat-item:hover { background:#f5f5f5; }
+.chat-avatar { width:45px; height:45px; border-radius:50%; }
+
+.chat-area { flex:1; display:flex; flex-direction:column; }
+.chat-header { display:flex; align-items:center; gap:10px; padding:15px; background:#f0f2f5; }
+.header-avatar { width:40px; height:40px; border-radius:50%; }
+.messages { flex:1; padding:15px; overflow-y:auto; background:#e5ddd5; }
+.message { max-width:60%; padding:8px 12px; border-radius:8px; margin-bottom:10px; word-wrap:break-word; }
+.sent { background:#dcf8c6; margin-left:auto; }
+.received { background:white; }
+.message img { max-width:200px; border-radius:6px; }
+
+.chat-input { display:flex; align-items:center; padding:10px; background:#f0f2f5; gap:10px; position:relative; }
+.chat-input i { cursor:pointer; font-size:20px; color:#555; }
+.chat-input input[type="text"] { flex:1; padding:10px; border-radius:20px; border:1px solid #ccc; }
+.send-btn { background:#25D366; color:white; padding:10px; border-radius:50%; cursor:pointer; }
+#emoji-picker { position:absolute; bottom:60px; left:10px; display:none; z-index:999; }
+</style>
+</head>
+
+<body>
+
+<div class="whatsapp-container">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">Chats</div>
+    <div class="chat-list" id="chat-list"></div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <img id="header-avatar" class="header-avatar" src="">
+      <span id="chat-header">Selecciona un chat</span>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="chat-input">
+      <i class="fa-regular fa-face-smile" onclick="toggleEmoji()"></i>
+      <input type="text" id="message-input" placeholder="Escribe un mensaje">
+      <i class="fa-solid fa-paperclip" onclick="document.getElementById('file-input').click()"></i>
+      <input type="file" id="file-input" hidden onchange="handleFile(event)">
+      <i class="fa-solid fa-microphone" id="audio-btn"></i>
+      <div class="send-btn" onclick="sendMessage()">
+        <i class="fa-solid fa-paper-plane"></i>
+      </div>
+      <div id="emoji-picker"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+
+// 🔹 CONFIGURACIÓN API META
+const PHONE_NUMBER_ID = "1002041132989533";
+const ACCESS_TOKEN = "EAAKa0yxdv4YBQoOsjGZCopiCZASbV99GD2APpMc8ZCfJN1OOqZBnX5WSOOJvFr01wj5SB7UufI9PbbmlZBxZC9nZCwpGn0Htqxn6bFkZAkZB9ODDKD40RjRwwGleZBeCL4DBqaZBUIZCvb8Q3ftCVY5x9CcUbs0VDAjjw2obIhTL9CSk4souh3tCOvTFOZCUpLHGDOe90";
+
+// 🔹 CHATS
+const chats = [
+  { id: "51987654321", name:"Cliente 1", avatar:"https://i.pravatar.cc/150?img=1" },
+  { id: "51912345678", name:"Cliente 2", avatar:"https://i.pravatar.cc/150?img=2" }
+];
+
+let currentChatId = null;
+const messagesByChat = {};
+
+// LISTA CHATS
+const chatList = document.getElementById("chat-list");
+chats.forEach(chat => {
+  const div = document.createElement("div");
+  div.className = "chat-item";
+  div.innerHTML = `<img src="${chat.avatar}" class="chat-avatar"><span>${chat.name}</span>`;
+  div.onclick = ()=>openChat(chat);
+  chatList.appendChild(div);
+});
+
+// ABRIR CHAT
+function openChat(chat){
+  currentChatId = chat.id;
+  document.getElementById("chat-header").innerText = chat.name;
+  document.getElementById("header-avatar").src = chat.avatar;
+  showMessages();
+}
+
+// MOSTRAR MENSAJES
+function showMessages(){
+  const container = document.getElementById("messages");
+  container.innerHTML = "";
+  const msgs = messagesByChat[currentChatId] || [];
+  msgs.forEach(m=>{
+    const div = document.createElement("div");
+    div.className = "message " + m.from;
+    if(m.type === "text") div.innerText = m.text;
+    if(m.type === "image") div.innerHTML = `<img src="${m.url}">`;
+    if(m.type === "file") div.innerHTML = `<a href="${m.url}" target="_blank">📄 ${m.name}</a>`;
+    if(m.type === "audio") div.innerHTML = `<audio controls src="${m.url}"></audio>`;
+    container.appendChild(div);
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+// 🔹 FUNCIONES PARA ENVIAR MENSAJES
+
+// 1️⃣ Enviar texto
+function sendMessage(){
+  const input = document.getElementById("message-input");
+  const text = input.value.trim();
+  if(!text || !currentChatId) return;
+
+  // Guardar localmente para mostrar
+  messagesByChat[currentChatId] = messagesByChat[currentChatId] || [];
+  messagesByChat[currentChatId].push({ type:"text", text, from:"sent" });
+  showMessages();
+  input.value = "";
+
+  // Enviar a API Meta
+  fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
+    method:"POST",
+    headers:{
+      "Authorization": `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: currentChatId,
+      type: "text",
+      text: { body: text }
+    })
+  }).then(res=>res.json())
+    .then(data=>console.log("Mensaje enviado:", data))
+    .catch(err=>console.error("Error:", err));
+}
+
+// ENTER para enviar
+document.getElementById("message-input").addEventListener("keypress", e=>{
+  if(e.key==="Enter") sendMessage();
+});
+
+// 2️⃣ Emoji
+const picker = new EmojiMart.Picker({ onEmojiSelect: emoji => {
+  document.getElementById("message-input").value += emoji.native;
+}});
+document.getElementById("emoji-picker").appendChild(picker);
+function toggleEmoji(){
+  const box = document.getElementById("emoji-picker");
+  box.style.display = box.style.display==="block"?"none":"block";
+}
+
+// 3️⃣ Archivos
+function handleFile(event){
+  const file = event.target.files[0];
+  if(!file || !currentChatId) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const type = file.type.startsWith("image/")?"image":"document";
+    messagesByChat[currentChatId] = messagesByChat[currentChatId] || [];
+    messagesByChat[currentChatId].push({ type, url:e.target.result, name:file.name, from:"sent" });
+    showMessages();
+
+    // Enviar archivo a API
+    fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
+      method:"POST",
+      headers:{
+        "Authorization": `Bearer ${ACCESS_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: currentChatId,
+        type,
+        [type]: { link: e.target.result, caption: file.name }
+      })
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+// 4️⃣ Audio
+let mediaRecorder, audioChunks=[];
+const audioBtn=document.getElementById("audio-btn");
+audioBtn.addEventListener("mousedown", async ()=>{
+  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  mediaRecorder = new MediaRecorder(stream);
+  audioChunks=[];
+  mediaRecorder.ondataavailable = e=>audioChunks.push(e.data);
+  mediaRecorder.onstop = ()=>{
+    const blob = new Blob(audioChunks,{type:"audio/mp3"});
+    const url = URL.createObjectURL(blob);
+    messagesByChat[currentChatId] = messagesByChat[currentChatId] || [];
+    messagesByChat[currentChatId].push({ type:"audio", url, from:"sent" });
+    showMessages();
+
+    const reader = new FileReader();
+    reader.onload = evt=>{
+      fetch(`https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`, {
+        method:"POST",
+        headers:{
+          "Authorization": `Bearer ${ACCESS_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: currentChatId,
+          type: "audio",
+          audio: { link: evt.target.result }
+        })
+      });
+    };
+    reader.readAsDataURL(blob);
+  };
+  mediaRecorder.start();
+});
+audioBtn.addEventListener("mouseup", ()=>{ if(mediaRecorder && mediaRecorder.state==="recording") mediaRecorder.stop(); });
+
+</script>
+</body>
+</html>

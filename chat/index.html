@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM WhatsApp MultiRed</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;font-family:Arial,sans-serif;background:#ddd}
+.container{display:flex;height:100vh;background:white}
+.sidebar-redes{width:80px;border-right:1px solid #ccc;display:flex;flex-direction:column;align-items:center;padding-top:10px;background:#f5f5f5}
+.red-icon{width:50px;height:50px;margin:10px;cursor:pointer;position:relative}
+.red-icon img{width:100%;height:100%;border-radius:50%}
+.red-icon .unread{position:absolute;top:0;right:0;font-size:12px;background:red;color:white;padding:2px 6px;border-radius:12px;display:none}
+.sidebar{width:320px;border-right:1px solid #ccc;display:flex;flex-direction:column}
+.sidebar-header{padding:15px;background:#f0f2f5;font-weight:bold}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{display:flex;align-items:center;gap:10px;padding:10px;cursor:pointer;border-bottom:1px solid #eee}
+.chat-item:hover{background:#f5f5f5}
+.chat-avatar{width:45px;height:45px;border-radius:50%}
+.chat-area{flex:1;display:flex;flex-direction:column}
+.chat-header{display:flex;align-items:center;gap:10px;padding:15px;background:#f0f2f5}
+.header-avatar{width:40px;height:40px;border-radius:50%}
+.messages{flex:1;padding:15px;overflow-y:auto;background:#e5ddd5;display:flex;flex-direction:column}
+.message{max-width:60%;padding:8px 12px;border-radius:8px;margin-bottom:10px;word-wrap:break-word;display:flex;flex-direction:column}
+.sent{background:#dcf8c6;align-self:flex-end}
+.received{background:white;align-self:flex-start}
+.message img{max-width:200px;border-radius:8px;margin-top:5px;cursor:pointer}
+.chat-input{display:flex;align-items:center;padding:10px;background:#f0f2f5;gap:10px;position:relative}
+.chat-input i{cursor:pointer;font-size:20px;color:#555}
+.chat-input input[type="text"]{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc}
+.send-btn{background:#25D366;color:white;padding:10px;border-radius:50%;cursor:pointer}
+#emoji-picker{position:absolute;bottom:60px;left:10px;display:none;z-index:999}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Sidebar redes -->
+  <div class="sidebar-redes">
+    <div class="red-icon" id="whatsapp">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
+      <div class="unread" id="unread-whatsapp">0</div>
+    </div>
+    <div class="red-icon" id="instagram">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg" alt="Instagram">
+      <div class="unread" id="unread-instagram">0</div>
+    </div>
+    <div class="red-icon" id="facebook">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg" alt="Facebook">
+      <div class="unread" id="unread-facebook">0</div>
+    </div>
+    <div class="red-icon" id="tiktok">
+      <img src="https://toppng.com/uploads/preview/tiktok-logo-png-hd-11661637630oxtuagjmpm.png" alt="TikTok">
+      <div class="unread" id="unread-tiktok">0</div>
+    </div>
+  </div>
+
+  <!-- Chats -->
+  <div class="sidebar">
+    <div class="sidebar-header">Chats</div>
+    <div class="chat-list" id="chat-list"></div>
+  </div>
+
+  <!-- Área de conversación -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <img id="header-avatar" class="header-avatar" src="">
+      <span id="chat-header">Selecciona un chat</span>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="chat-input">
+      <i class="fa-regular fa-face-smile" onclick="toggleEmoji()"></i>
+      <input type="text" id="message-input" placeholder="Escribe un mensaje">
+      <i class="fa-solid fa-paperclip" onclick="document.getElementById('file-input').click()"></i>
+      <input type="file" id="file-input" accept="image/*" hidden>
+      <i class="fa-solid fa-microphone" id="audio-btn"></i>
+      <div class="send-btn" onclick="sendMessage()">
+        <i class="fa-solid fa-paper-plane"></i>
+      </div>
+      <div id="emoji-picker"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentChat = null;
+const messagesEl = document.getElementById("messages");
+const chatListEl = document.getElementById("chat-list");
+const headerAvatar = document.getElementById("header-avatar");
+const chatHeader = document.getElementById("chat-header");
+
+let chats = {}; // chats abiertos
+let chatsData = {}; // mensajes históricos
+
+// ================= WEBSOCKET =================
+const ws = new WebSocket("wss://whatsapp-bot2-production-0129.up.railway.app");
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if(msg.type==="incoming"){
+    const data = msg.data;
+    if(!chatsData[data.from]) chatsData[data.from]=[];
+    chatsData[data.from].push(data);
+    createOrUpdateChat(data);
+    if(currentChat===data.from){
+      appendMessage(data.messageType==="image"?"received":"received", data.text, data.mediaUrl);
+    } else {
+      increaseUnread(data.from);
+    }
+  }
+  if(msg.type==="sent"){
+    if(currentChat===msg.data.to){
+      appendMessage("sent", msg.data.text, msg.data.imageUrl || null);
+    }
+    // 🔹 Guardar mensaje enviado en chatsData
+    if(!chatsData[msg.data.to]) chatsData[msg.data.to]=[];
+    chatsData[msg.data.to].push({from:"me", text:msg.data.text, messageType:"text"});
+  }
+};
+
+// ================= CHAT LIST =================
+function createOrUpdateChat(data){
+  const { from, pushname, profilePic, text } = data;
+  if(!chats[from]){
+    chats[from]={ name: pushname||from, avatar: profilePic||"https://i.pravatar.cc/150?u="+from, unread:0 };
+    const div=document.createElement("div");
+    div.className="chat-item"; div.id="chat-"+from;
+    div.innerHTML=`
+      <img class="chat-avatar" src="${chats[from].avatar}">
+      <div style="flex:1">
+        <div><strong>${chats[from].name}</strong></div>
+        <div style="font-size:12px;color:gray" class="last-msg">${text||"📷 Imagen"}</div>
+      </div>
+      <div class="unread" id="unread-${from}" style="display:none">0</div>
+    `;
+    div.onclick=()=>openChat(from);
+    chatListEl.prepend(div);
+  } else {
+    document.querySelector("#chat-"+from+" .last-msg").innerText=text||"📷 Imagen";
+    chatListEl.prepend(document.getElementById("chat-"+from));
+  }
+}
+
+async function openChat(number){
+  currentChat=number;
+  messagesEl.innerHTML="";
+  headerAvatar.src=chats[number].avatar;
+  chatHeader.innerText=chats[number].name;
+  resetUnread(number);
+
+  // 🔹 Cargar mensajes históricos desde el servidor
+  if(!chatsData[number]){
+    try{
+      const res = await fetch(`/chat/messages/${number}`);
+      const data = await res.json();
+      chatsData[number] = data.map(m => ({
+        from: m.from==="me"? "me" : m.from,
+        text: m.text,
+        messageType: m.type,
+        mediaUrl: m.mediaUrl
+      }));
+    } catch(err){ console.error("Error cargando mensajes históricos:", err); }
+  }
+
+  // mostrar todos los mensajes del chat
+  chatsData[number].forEach(m=>{
+    appendMessage(m.messageType==="image"?"received": (m.from==="me"?"sent":"received"), m.text, m.mediaUrl);
+  });
+}
+
+function increaseUnread(number){
+  chats[number].unread++;
+  const badge=document.getElementById("unread-"+number);
+  badge.innerText=chats[number].unread;
+  badge.style.display="block";
+}
+
+function resetUnread(number){
+  chats[number].unread=0;
+  const badge=document.getElementById("unread-"+number);
+  if(badge) badge.style.display="none";
+}
+
+// ================= MENSAJES =================
+function appendMessage(type,text,imageUrl=null){
+  const div=document.createElement("div");
+  div.className="message "+type;
+  if(imageUrl){
+    const img=document.createElement("img");
+    img.src=imageUrl;
+    img.onclick=()=>window.open(imageUrl,"_blank");
+    div.appendChild(img);
+    if(text){
+      const caption=document.createElement("div");
+      caption.innerText=text;
+      div.appendChild(caption);
+    }
+  } else {
+    div.innerText=text;
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop=messagesEl.scrollHeight;
+}
+
+// ================= ENVIAR MENSAJE =================
+async function sendMessage(){
+  const input=document.getElementById("message-input");
+  const text=input.value.trim();
+  if(!text || !currentChat) return;
+  input.value="";
+  appendMessage("sent", text);
+  try{
+    await fetch("/send-message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to:currentChat,text})});
+  } catch(err){ console.error("Error enviando mensaje:", err); }
+
+  // 🔹 Guardar mensaje enviado en chatsData para que no se repita al refrescar
+  if(!chatsData[currentChat]) chatsData[currentChat]=[];
+  chatsData[currentChat].push({from:"me", text, messageType:"text"});
+}
+
+// ================= EMOJI =================
+function toggleEmoji(){
+  const picker=document.getElementById("emoji-picker");
+  if(picker.style.display==="block"){picker.style.display="none"; return;}
+  picker.innerHTML=""; picker.style.display="block";
+  const emojiPicker=new EmojiMart.Picker({onEmojiSelect:(emoji)=>{document.getElementById("message-input").value+=emoji.native;}});
+  picker.appendChild(emojiPicker);
+}
+
+// cerrar emoji al hacer click fuera
+document.addEventListener("click",e=>{
+  const picker=document.getElementById("emoji-picker");
+  if(!picker.contains(e.target) && !document.querySelector(".fa-face-smile").contains(e.target)){
+    picker.style.display="none";
+  }
+});
+
+// ================= AUDIO SIMULADO =================
+document.getElementById("audio-btn").addEventListener("click",()=>{ appendMessage("sent","🎤 Grabación simulada"); });
+
+// ENTER para enviar
+document.getElementById("message-input").addEventListener("keypress",e=>{
+  if(e.key==="Enter") sendMessage();
+});
+
+</script>
+</body>
+</html>

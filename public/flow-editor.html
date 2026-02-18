@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Flow Builder</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+<style>
+body{
+margin:0;
+background:#f4f6fb;
+overflow:hidden;
+font-family:Inter,sans-serif;
+}
+
+/* HEADER */
+.editor-header{
+height:70px;
+background:#fff;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 30px;
+box-shadow:0 4px 20px rgba(0,0,0,.06);
+position:fixed;
+width:100%;
+z-index:1000;
+}
+
+.logo{
+height:40px;
+}
+
+.editor-header button{
+padding:8px 18px;
+border-radius:8px;
+border:none;
+color:#fff;
+font-weight:500;
+display:flex;
+align-items:center;
+gap:8px;
+}
+
+/* COLORES */
+.btn-trigger{background:#f97316;}
+.btn-message{background:#2563eb;}
+.btn-files{background:#0ea5e9;}
+.btn-menu{background:#8b5cf6;}
+.btn-ia{background:#16a34a;}
+.btn-save{background:#d4a017;}
+.btn-exit{background:#dc2626;}
+
+#drawflow{
+position:absolute;
+top:70px;
+left:0;
+width:100%;
+height:calc(100vh - 70px);
+background:#eef2f7;
+background-image:radial-gradient(#d0d6e2 1px,transparent 1px);
+background-size:20px 20px;
+}
+
+/* NODO */
+.drawflow-node{
+background:#fff!important;
+border-radius:16px!important;
+box-shadow:0 12px 30px rgba(0,0,0,.08)!important;
+border:1px solid #e5e7eb!important;
+min-width:320px;
+}
+
+.node-header{
+padding:12px 18px;
+border-top-left-radius:16px;
+border-top-right-radius:16px;
+font-weight:600;
+color:#fff;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.header-trigger{background:#f97316;}
+.header-message{background:#2563eb;}
+.header-menu{background:#8b5cf6;}
+.header-files{background:#0ea5e9;}
+
+.node-body{
+padding:18px;
+display:flex;
+flex-direction:column;
+gap:12px;
+}
+
+.node-body input,
+.node-body textarea{
+width:100%;
+border:1px solid #e5e7eb;
+border-radius:10px;
+padding:8px 10px;
+font-size:14px;
+}
+
+.file-upload{
+border:2px dashed #cbd5e1;
+border-radius:12px;
+padding:20px;
+text-align:center;
+cursor:pointer;
+color:#64748b;
+}
+
+.file-upload:hover{
+background:#f1f5f9;
+}
+
+/* Delay */
+.delay-container{
+margin-top:15px;
+padding-top:10px;
+border-top:1px solid #eee;
+font-size:13px;
+display:flex;
+align-items:center;
+gap:6px;
+}
+
+.delay-container input{
+width:60px;
+}
+
+.warning{
+color:#dc2626;
+font-size:12px;
+display:none;
+}
+
+/* CONNECTION */
+.connection .main-path{
+stroke:#6366f1;
+stroke-width:3;
+stroke-dasharray:8;
+animation:flow 1s linear infinite;
+}
+@keyframes flow{
+to{stroke-dashoffset:-16;}
+}
+
+.delete-connection{
+position:absolute;
+width:20px;
+height:20px;
+background:#dc2626;
+color:#fff;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:12px;
+cursor:pointer;
+z-index:9999;
+}
+
+/* ZOOM */
+.zoom-controls{
+position:absolute;
+bottom:20px;
+right:20px;
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.zoom-controls button{
+width:40px;
+height:40px;
+border-radius:50%;
+border:none;
+background:#fff;
+box-shadow:0 4px 15px rgba(0,0,0,.1);
+}
+</style>
+</head>
+<body>
+
+<div class="editor-header">
+<img src="https://www.websrapidas.com/wp-content/uploads/2025/09/logo-webs-rapidas-v1.jpg" class="logo">
+
+<div class="d-flex gap-2">
+<button class="btn-trigger"><i class="fa-solid fa-bolt"></i>Trigger</button>
+<button class="btn-message"><i class="fa-solid fa-comment"></i>Mensaje</button>
+<button class="btn-files"><i class="fa-solid fa-paperclip"></i>Archivos</button>
+<button class="btn-menu"><i class="fa-solid fa-bars"></i>Menú</button>
+<button class="btn-ia"><i class="fa-solid fa-robot"></i>IA</button>
+<button class="btn-save"><i class="fa-solid fa-floppy-disk"></i>Guardar</button>
+<button class="btn-exit"><i class="fa-solid fa-right-from-bracket"></i>Salir</button>
+</div>
+</div>
+
+<div id="drawflow"></div>
+
+<div class="zoom-controls">
+<button onclick="editor.zoom_in()"><i class="fa-solid fa-plus"></i></button>
+<button onclick="editor.zoom_out()"><i class="fa-solid fa-minus"></i></button>
+<button onclick="editor.zoom_reset()"><i class="fa-solid fa-arrows-rotate"></i></button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
+<script src="flow-editor.js"></script>
+</body>
+</html>
