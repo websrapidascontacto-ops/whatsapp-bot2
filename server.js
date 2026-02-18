@@ -11,11 +11,8 @@ require("dotenv").config();
 const Message = require("./models/Message");
 
 const app = express();
-
 const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir);
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const upload = multer({ dest: "uploads/" }); 
 
@@ -128,12 +125,19 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 });
 
 app.get("/chat/list", async (req, res) => {
-  const list = await Message.aggregate([
-    { $sort: { timestamp: -1 } },
-    { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } },
-    { $sort: { timestamp: -1 } }
-  ]);
-  res.json(list);
+  try {
+    const list = await Message.aggregate([
+      { $sort: { timestamp: -1 } },
+      { $group: { 
+          _id: "$chatId", 
+          text: { $first: "$text" }, 
+          pushname: { $first: "$pushname" },
+          timestamp: { $first: "$timestamp" }
+      }},
+      { $sort: { timestamp: -1 } }
+    ]);
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get("/chat/messages/:chatId", async (req, res) => {
