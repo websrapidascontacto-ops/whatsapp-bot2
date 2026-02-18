@@ -11,18 +11,15 @@ require("dotenv").config();
 const Message = require("./models/Message");
 
 const app = express();
-
 const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir);
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const upload = multer({ dest: "uploads/" }); 
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Conservamos tus rutas originales
+// Rutas originales
 app.use(express.static("public"));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -42,7 +39,6 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// Tu lógica de proxy original para las imágenes
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   try {
@@ -66,7 +62,6 @@ app.post("/webhook", async (req, res) => {
             const senderId = msg.from;
             const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
             let mediaUrl = null;
-
             if (msg.type === "image") {
               try {
                 const metaRes = await axios.get(`https://graph.facebook.com/v18.0/${msg.image.id}`, {
@@ -75,12 +70,7 @@ app.post("/webhook", async (req, res) => {
                 mediaUrl = `/proxy-media?url=${encodeURIComponent(metaRes.data.url)}`;
               } catch (e) {}
             }
-
-            const messageData = { 
-              from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), 
-              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl 
-            };
-
+            const messageData = { from: senderId, text: msg.text?.body || (msg.type === "image" ? "📷 Imagen" : ""), messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl };
             await Message.create({ chatId: senderId, ...messageData });
             broadcastMessage({ type: "incoming", data: messageData });
           }
@@ -112,15 +102,12 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
     form.append('type', file.mimetype);
     form.append('messaging_product', 'whatsapp');
-
     const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
       headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
     });
-
     await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
       messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
     }, { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } });
-
     const mediaUrl = `/uploads/${file.filename}`;
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
     await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" });
@@ -129,11 +116,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 });
 
 app.get("/chat/list", async (req, res) => {
-  const list = await Message.aggregate([
-    { $sort: { timestamp: -1 } },
-    { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } },
-    { $sort: { timestamp: -1 } }
-  ]);
+  const list = await Message.aggregate([{ $sort: { timestamp: -1 } }, { $group: { _id: "$chatId", text: { $first: "$text" }, pushname: { $first: "$pushname" }, timestamp: { $first: "$timestamp" } } }, { $sort: { timestamp: -1 } }]);
   res.json(list);
 });
 

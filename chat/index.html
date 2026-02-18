@@ -89,11 +89,12 @@ function appendMessage(type, text, mediaUrl){
   document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
 }
 
+// ARREGLO PARA PODER ESCRIBIR
 async function sendMessage(){
-  const input = document.getElementById("message-input");
+  const input = document.getElementById("message-input"); // Usamos el ID correcto
   const text = input.value.trim();
   if(!text || !currentChat) return;
-  input.value = "";
+  input.value = ""; // Limpiamos el campo al enviar
   await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text}) });
 }
 
@@ -113,6 +114,7 @@ window.onload = async () => {
     const list = await res.json();
     list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
 };
+// Escuchar la tecla Enter en el input
 document.getElementById("message-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
 </script>
 </body>
