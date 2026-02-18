@@ -51,7 +51,7 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
-// NUEVO: Obtener la lista de chats para la barra lateral
+// Obtener lista de chats (Contactos)
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -69,11 +69,15 @@ app.get("/chat/list", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Obtener mensajes de un chat específico
 app.get("/chat/messages/:chatId", async (req, res) => {
-  const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-  res.json(messages);
+  try {
+    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
+    res.json(messages);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// WEBHOOK CORREGIDO: Recepción garantizada
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -83,12 +87,14 @@ app.post("/webhook", async (req, res) => {
         if (value.messages) {
           for (const msg of value.messages) {
             const senderId = msg.from;
-            const pushName = value.contacts?.[0]?.profile?.name || "Cliente";
-            let profilePic = ""; let mediaUrl = null;
+            // Aseguramos que pushName siempre tenga algo
+            const pushName = value.contacts?.[0]?.profile?.name || senderId;
+            let profilePic = ""; 
+            let mediaUrl = null;
 
             try {
               const pfpRes = await axios.get(`https://graph.facebook.com/v18.0/${senderId}?fields=profile_pic&access_token=${process.env.ACCESS_TOKEN}`);
-              profilePic = pfpRes.data.profile_pic;
+              profilePic = pfpRes.data.profile_pic || "";
             } catch (e) {}
 
             if (msg.type === "image") {
@@ -100,9 +106,16 @@ app.post("/webhook", async (req, res) => {
               } catch (e) {}
             }
 
+            // IMPORTANTE: Asegurar que chatId y from estén presentes
             const messageData = { 
-              chatId: senderId, from: senderId, text: msg.text?.body || "", 
-              messageType: msg.type, source: "whatsapp", pushname: pushName, profilePic, mediaUrl 
+              chatId: senderId, 
+              from: senderId, 
+              text: msg.text?.body || "", 
+              messageType: msg.type, 
+              source: "whatsapp", 
+              pushname: pushName, 
+              profilePic: profilePic, 
+              mediaUrl: mediaUrl 
             };
 
             await Message.create(messageData);
@@ -115,6 +128,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+// ENVIAR TEXTO
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -122,13 +136,14 @@ app.post("/send-message", async (req, res) => {
       { messaging_product: "whatsapp", to, text: { body: text } },
       { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
-    const messageData = { chatId: to, from: "me", text, source: "whatsapp" };
+    const messageData = { chatId: to, from: "me", text, source: "whatsapp", pushname: "Yo" };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: { to, text, source: "whatsapp" } });
     res.json({ status: "ok" });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ENVIAR IMAGEN
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
@@ -150,7 +165,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     );
 
     const mediaUrl = `/uploads/${file.filename}`;
-    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp" };
+    const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp", pushname: "Yo" };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: { to, text: "", mediaUrl, source: "whatsapp" } });
     res.json({ status: "ok" });
