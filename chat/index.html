@@ -44,9 +44,11 @@
         .top-bar { padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .messages-area { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
-        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; }
-        .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; }
+        /* --- BURBUJAS CORREGIDAS --- */
+        .msg-bubble { max-width: 70%; padding: 10px 14px; font-size: 14px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; position: relative; }
+        .msg-sent { align-self: flex-end; background: var(--msg-sent); color: #fff; border-bottom-right-radius: 4px; text-align: left; }
+        .msg-received { align-self: flex-start; background: var(--msg-received); color: var(--text-main); border-bottom-left-radius: 4px; text-align: left; }
+        
         .msg-image { width: 100%; max-width: 280px; border-radius: 12px; cursor: pointer; margin-bottom: 5px; }
         .msg-time { font-size: 10px; opacity: 0.5; margin-top: 5px; text-align: right; }
 
@@ -101,18 +103,14 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
-        // BUSCADOR MEJORADO: Busca en Nombre y en el Texto del último mensaje
+        // BUSCADOR GLOBAL (Estilo WhatsApp: busca en cualquier parte)
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
                 const name = item.querySelector(".chat-name").innerText.toLowerCase();
                 const lastMsg = item.querySelector(".last-msg").innerText.toLowerCase();
-                // Mostrar si el término está en el nombre O en la palabra del mensaje
-                if(name.includes(term) || lastMsg.includes(term)){
-                    item.style.display = "flex";
-                } else {
-                    item.style.display = "none";
-                }
+                // Si la palabra está en el nombre o en el último mensaje conocido
+                item.style.display = (name.includes(term) || lastMsg.includes(term)) ? "flex" : "none";
             });
         }
 
@@ -143,9 +141,10 @@
 
         function createChat(data){
             const id = data.from;
+            if(!chats[id]) chats[id] = { name: data.pushname || id };
+            
             let existing = document.getElementById("chat-"+id);
             if(!existing){
-                chats[id] = { name: data.pushname || id };
                 const div = document.createElement("div");
                 div.className = "chat-item"; div.id = "chat-"+id;
                 div.innerHTML = `<img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
@@ -180,6 +179,7 @@
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
             msgs.forEach(m => {
+                // CORRECCIÓN DE COLUMNAS: "me" siempre derecha (sent)
                 const type = (m.from === "me") ? "sent" : "received";
                 appendMessage(type, m.text, m.mediaUrl, m.timestamp);
             });
