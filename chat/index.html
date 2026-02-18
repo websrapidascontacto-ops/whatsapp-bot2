@@ -1,139 +1,75 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>CRM WhatsApp</title>
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM Chat</title>
 
 <style>
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    display: flex;
-    height: 100vh;
-}
-
-.sidebar {
-    width: 30%;
-    border-right: 1px solid #ddd;
-    overflow-y: auto;
-}
-
-.chat-item {
-    padding: 15px;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
-}
-
-.chat-item:hover {
-    background: #f5f5f5;
-}
-
-.chat-item.active {
-    background: #e9f3ff;
-}
-
-.chat-container {
-    width: 70%;
-    display: flex;
-    flex-direction: column;
-}
-
-.header {
-    padding: 15px;
-    border-bottom: 1px solid #ddd;
-    font-weight: bold;
-}
-
-.messages {
-    flex: 1;
-    padding: 15px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-.message {
-    max-width: 60%;
-    padding: 10px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-    word-wrap: break-word;
-}
-
-.sent {
-    align-self: flex-end;
-    background: #DCF8C6;
-}
-
-.received {
-    align-self: flex-start;
-    background: #f1f1f1;
-}
-
-.input-area {
-    display: flex;
-    padding: 10px;
-    border-top: 1px solid #ddd;
-}
-
-.input-area input {
-    flex: 1;
-    padding: 10px;
-}
-
-.input-area button {
-    padding: 10px 15px;
-    cursor: pointer;
-}
+body{margin:0;font-family:sans-serif;display:flex;height:100vh}
+#chat-list{width:300px;border-right:1px solid #ddd;overflow-y:auto}
+.chat-item{padding:10px;cursor:pointer;border-bottom:1px solid #eee;display:flex;gap:10px}
+.chat-item.active{background:#f5f5f5}
+#chat-area{flex:1;display:flex;flex-direction:column}
+#header{padding:15px;border-bottom:1px solid #ddd}
+#messages{flex:1;padding:15px;overflow-y:auto;background:#f0f2f5}
+.msg-bubble{max-width:60%;padding:10px;margin-bottom:10px;border-radius:10px}
+.msg-sent{background:#dcf8c6;margin-left:auto}
+.msg-received{background:white}
+#input-area{display:flex;padding:10px;border-top:1px solid #ddd}
+#message-input{flex:1;padding:8px}
 </style>
 </head>
+
 <body>
 
-<div class="sidebar" id="chat-list"></div>
+<div id="chat-list"></div>
 
-<div class="chat-container">
-    <div class="header" id="header-name">Selecciona un chat</div>
-    <div class="messages" id="messages"></div>
-
-    <div class="input-area">
-        <input type="text" id="message-input" placeholder="Escribe un mensaje 😊">
-        <button onclick="sendMessage()">Enviar</button>
-    </div>
+<div id="chat-area">
+<div id="header"><b id="header-name">Selecciona un chat</b></div>
+<div id="messages"></div>
+<div id="input-area">
+<input id="message-input" placeholder="Escribe mensaje">
+<button onclick="sendMessage()">Enviar</button>
+</div>
 </div>
 
 <script>
-let currentChat = null;
+let currentChat=null;
+let chats={};
 
-// ===============================
-// CARGAR CHATS
-// ===============================
-async function loadChats() {
-    const res = await fetch("/chat/list");
-    const data = await res.json();
+const ws=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}`);
 
-    const chatList = document.getElementById("chat-list");
-    chatList.innerHTML = "";
+ws.onmessage=(event)=>{
+  const msg=JSON.parse(event.data);
 
-    data.forEach(chat => {
-        const div = document.createElement("div");
-        div.className = "chat-item";
-        div.id = "chat-" + chat._id;
-        div.innerText = chat.pushname || chat._id;
-        div.onclick = () => openChat(chat._id);
-        chatList.appendChild(div);
-    });
+  if(msg.type==="sent"){
+    if(currentChat===msg.data.to){
+      appendMessage("sent",msg.data.text,msg.data.mediaUrl);
+    }
+  }
+};
+
+function createOrUpdateChat(data){
+  const id=data.chatId;
+  chats[id]={name:id};
+
+  let item=document.getElementById("chat-"+id);
+
+  if(!item){
+    item=document.createElement("div");
+    item.className="chat-item";
+    item.id="chat-"+id;
+    item.onclick=()=>openChat(id);
+    document.getElementById("chat-list").prepend(item);
+  }
+
+  item.innerHTML=`<b>${id}</b><br><small>${data.text||""}</small>`;
 }
 
-// ===============================
-// ABRIR CHAT
-// ===============================
-async function openChat(id) {
-
+async function openChat(id){
     currentChat = id;
 
-    document.getElementById("header-name").innerText = id;
+    document.getElementById("header-name").innerText = chats[id].name;
 
     document.querySelectorAll('.chat-item')
         .forEach(el => el.classList.remove('active'));
@@ -149,7 +85,8 @@ async function openChat(id) {
 
     msgs.forEach(m => {
 
-        const isReceived = normalizeNumber(m.from) === normalizeNumber(id);
+        // CAMBIO SOLICITADO (NADA MÁS)
+        const isReceived = m.from === id;
 
         appendMessage(
             isReceived ? "received" : "sent",
@@ -157,88 +94,44 @@ async function openChat(id) {
             m.mediaUrl
         );
     });
-
-    scrollToBottom();
 }
 
-// ===============================
-function normalizeNumber(num) {
-    if (!num) return "";
-    return num.replace("whatsapp:", "").replace("+", "").trim();
+function appendMessage(type,text,mediaUrl){
+  const div=document.createElement("div");
+  div.className="msg-bubble "+(type==="sent"?"msg-sent":"msg-received");
+
+  if(text) div.innerHTML+=`<div>${text}</div>`;
+  if(mediaUrl) div.innerHTML+=`<img src="${mediaUrl}" width="150">`;
+
+  document.getElementById("messages").appendChild(div);
+  document.getElementById("messages").scrollTop=
+  document.getElementById("messages").scrollHeight;
 }
 
-// ===============================
-function appendMessage(type, text, mediaUrl = null) {
+async function sendMessage(){
+  const input=document.getElementById("message-input");
+  const text=input.value.trim();
+  if(!text||!currentChat)return;
 
-    const container = document.getElementById("messages");
+  input.value="";
 
-    const div = document.createElement("div");
-    div.classList.add("message", type);
-
-    if (text) {
-        div.innerText = text;
-    }
-
-    if (mediaUrl) {
-        const img = document.createElement("img");
-        img.src = mediaUrl;
-        img.style.maxWidth = "200px";
-        img.style.marginTop = "5px";
-        img.style.borderRadius = "8px";
-        div.appendChild(document.createElement("br"));
-        div.appendChild(img);
-    }
-
-    container.appendChild(div);
+  await fetch("/send-message",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({to:currentChat,text})
+  });
 }
 
-// ===============================
-async function sendMessage() {
-
-    const input = document.getElementById("message-input");
-    const text = input.value.trim();
-
-    if (!text || !currentChat) return;
-
-    await fetch("/send-message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            to: currentChat,
-            text: text
-        })
-    });
-
-    input.value = "";
-}
-
-// ===============================
-const socket = new WebSocket(`ws://${location.host}`);
-
-socket.onmessage = function(event) {
-
-    const msg = JSON.parse(event.data);
-
-    if (!currentChat) return;
-
-    if (msg.type === "incoming" && msg.data.chatId === currentChat) {
-        appendMessage("received", msg.data.text, msg.data.mediaUrl);
-    }
-
-    if (msg.type === "sent" && msg.data.to === currentChat) {
-        appendMessage("sent", msg.data.text, msg.data.mediaUrl);
-    }
-
-    loadChats();
+window.onload=async()=>{
+  const res=await fetch("/chat/list");
+  const list=await res.json();
+  list.reverse().forEach(c=>createOrUpdateChat(c));
 };
 
-// ===============================
-function scrollToBottom() {
-    const container = document.getElementById("messages");
-    container.scrollTop = container.scrollHeight;
-}
-
-loadChats();
+document.getElementById("message-input")
+.addEventListener("keypress",(e)=>{
+  if(e.key==='Enter')sendMessage()
+});
 </script>
 
 </body>
