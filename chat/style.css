@@ -1,46 +1,76 @@
-* { box-sizing: border-box; }
-html, body { margin:0; padding:0; height:100%; font-family:Arial,sans-serif; background:#ddd; }
-.whatsapp-container { display:flex; height:100vh; background:white; }
-.sidebar { width:320px; border-right:1px solid #ccc; display:flex; flex-direction:column; }
-.sidebar-header { padding:15px; background:#f0f2f5; font-weight:bold; }
-.chat-list { flex:1; overflow-y:auto; }
-.chat-item { display:flex; align-items:center; gap:10px; padding:10px; cursor:pointer; border-bottom:1px solid #eee; }
-.chat-item:hover { background:#f5f5f5; }
-.chat-avatar { width:45px; height:45px; border-radius:50%; }
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap');
 
-.chat-area { flex:1; display:flex; flex-direction:column; }
-.chat-header { display:flex; align-items:center; gap:10px; padding:15px; background:#f0f2f5; }
-.header-avatar { width:40px; height:40px; border-radius:50%; }
-.messages { flex:1; padding:15px; overflow-y:auto; background:#e5ddd5; }
-.message { max-width:60%; padding:8px 12px; border-radius:8px; margin-bottom:10px; word-wrap:break-word; }
-.sent { background:#dcf8c6; margin-left:auto; }
-.received { background:white; }
-.message img { max-width:200px; border-radius:6px; }
-
-.chat-input { display:flex; align-items:center; padding:10px; background:#f0f2f5; gap:10px; position:relative; }
-.chat-input i { cursor:pointer; font-size:20px; color:#555; }
-.chat-input input[type="text"] { flex:1; padding:10px; border-radius:20px; border:1px solid #ccc; }
-.send-btn { background:#25D366; color:white; padding:10px; border-radius:50%; cursor:pointer; }
-#emoji-picker { position:absolute; bottom:60px; left:10px; display:none; z-index:999; }
-.sidebar { width:320px; }
-.chat-item {
-  display:flex;
-  gap:10px;
-  padding:10px;
-  cursor:pointer;
-  border-bottom:1px solid #eee;
-}
-.chat-item:hover { background:#f5f5f5; }
-.chat-avatar {
-  width:45px;
-  height:45px;
-  border-radius:50%;
-  object-fit:cover;
-}
-.time {
-  font-size: 11px;
-  opacity: 0.6;
-  text-align: right;
-  margin-top: 3px;
+:root {
+    --bg-dark: #0f172a;
+    --glass: rgba(30, 41, 59, 0.7);
+    --whatsapp: #22c55e;
+    --facebook: #1877f2;
+    --instagram: #e4405f;
+    --tiktok: #ff0050;
+    --text: #f8fafc;
 }
 
+body {
+    font-family: 'Montserrat', sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    margin: 0;
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar Estilizada */
+.sidebar {
+    width: 260px;
+    background: rgba(15, 23, 42, 0.95);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: 0.3s;
+    position: relative;
+}
+
+.nav-item i { margin-right: 12px; font-size: 1.2rem; }
+
+.nav-item.active { background: rgba(255, 255, 255, 0.1); }
+
+/* Badge de Notificación */
+.badge {
+    background: #ef4444;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.nav-disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Contenedor de Chats Horizontales */
+#chat-container {
+    flex: 1;
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    overflow-x: auto;
+    align-items: flex-start;
+}
