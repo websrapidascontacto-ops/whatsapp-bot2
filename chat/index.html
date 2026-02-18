@@ -96,7 +96,6 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
-        // BUSCADOR GLOBAL
         function filterChats() {
             const term = document.getElementById("chat-search").value.toLowerCase();
             document.querySelectorAll(".chat-item").forEach(item => {
@@ -141,7 +140,7 @@
                 document.getElementById(`last-${id}`).innerText = data.text || "📷 Imagen";
                 const b = document.getElementById(`badge-${id}`);
                 if(chats[id].unread > 0){ b.innerText = chats[id].unread; b.style.display = "block"; }
-                chatListEl.prepend(existing); // Siempre arriba el más reciente
+                chatListEl.prepend(existing);
             }
         }
 
@@ -177,7 +176,6 @@
             }
         };
 
-        // Lógica de imágenes
         document.getElementById('file-input').onchange = function() {
             selectedFiles = Array.from(this.files); if(!selectedFiles.length) return;
             const modal = document.getElementById('preview-modal');
@@ -201,6 +199,7 @@
                 if(i === 0 && cap.trim()) await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to, text:cap}) });
                 await fetch("/send-media", { method:"POST", body:fd });
             }
+            document.getElementById('preview-caption').value = "";
         }
 
         async function sendMessage(){
@@ -208,7 +207,9 @@
             const t = i.value; i.value = "";
             await fetch("/send-message", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:currentChat, text:t}) });
         }
-        document.getElementById("m-input").onkeypress = (e) => e.key === 'Enter' && sendMessage();
+        document.getElementById("m-input").addEventListener("keypress", (e) => {
+            if(e.key === 'Enter') sendMessage();
+        });
     </script>
 </body>
 </html>

@@ -19,15 +19,10 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// --- CONFIGURACIÓN DE RUTAS ESTÁTICAS ---
 app.use("/uploads", express.static(uploadDir));
-// Esta línea sirve los archivos dentro de la carpeta /chat
 app.use("/chat", express.static(path.join(__dirname, "chat")));
 
-// Redirección opcional: Si entras a la raíz, te lleva al chat
-app.get("/", (req, res) => {
-  res.redirect("/chat/index.html");
-});
+app.get("/", (req, res) => { res.redirect("/chat/index.html"); });
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB conectado"))
