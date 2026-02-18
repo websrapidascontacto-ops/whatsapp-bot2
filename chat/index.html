@@ -1,141 +1,193 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CRM Webs Rápidas - Premium</title>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
-<style>
-/* Los estilos se mantienen igual a los anteriores, usa los de tu archivo actual */
-*{box-sizing:border-box}
-body{margin:0;padding:0;height:100vh;font-family:'Montserrat',sans-serif;background:#f0f2f5;display:flex}
-.sidebar-redes{width:75px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;align-items:center;padding-top:25px}
-.red-icon{width:35px;height:35px;margin-bottom:30px;cursor:pointer;position:relative}
-.red-icon img{width:100%}
-.chat-list-container{width:360px;background:#fff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column}
-.list-header{padding:25px;font-weight:700;font-size:20px;border-bottom:1px solid #f0f2f5}
-.chat-list{flex:1;overflow-y:auto}
-.chat-item{padding:15px 20px;display:flex;align-items:center;gap:15px;cursor:pointer;border-bottom:1px solid #f0f2f5}
-.chat-item.active{background:#e7f3ff;border-left:4px solid #0084ff}
-.pfp-img{width:55px;height:55px;border-radius:50%;object-fit:cover}
-.chat-content{flex:1;display:flex;flex-direction:column;background:#fff}
-.top-bar{padding:12px 25px;display:flex;align-items:center;gap:15px;border-bottom:1px solid #e4e6eb}
-.messages-area{flex:1;padding:25px;overflow-y:auto;background:#f9f9fb;display:flex;flex-direction:column;gap:10px}
-.msg-bubble{max-width:65%;padding:10px;font-size:14px;border-radius:12px;display:flex;flex-direction:column}
-.msg-received{background:#fff;align-self:flex-start;border-bottom-left-radius:4px;box-shadow:0 1px 2px #ccc}
-.msg-sent{background:#0084ff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
-.msg-image{width:100%;max-width:300px;border-radius:8px;margin-bottom:5px}
-.input-area{padding:15px 25px;display:flex;align-items:center;gap:15px;border-top:1px solid #e4e6eb;position:relative}
-.input-area input[type="text"]{flex:1;background:#f0f2f5;border:none;padding:12px;border-radius:20px;outline:none;font-family:'Montserrat'}
-.send-btn{background:#0084ff;color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Webs Rápidas - Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
+
+        /* Sidebar de Redes */
+        .sidebar-redes { width: 80px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 30px; flex-shrink: 0; }
+        .red-icon { width: 45px; height: 45px; margin-bottom: 30px; cursor: pointer; transition: transform 0.2s; }
+        .red-icon:hover { transform: scale(1.1); }
+        .red-icon img { width: 100%; height: 100%; }
+
+        /* Lista de Chats */
+        .chat-list-container { width: 400px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
+        .list-header { padding: 30px 25px; font-weight: 700; font-size: 22px; color: #050505; border-bottom: 1px solid #f0f2f5; }
+        .chat-list { flex: 1; overflow-y: auto; }
+        .chat-item { padding: 20px 25px; display: flex; align-items: center; gap: 15px; cursor: pointer; border-bottom: 1px solid #f9f9f9; transition: background 0.2s; }
+        .chat-item:hover { background: #f5f6f7; }
+        .chat-item.active { background: #e7f3ff; border-left: 5px solid #0084ff; }
+        .pfp { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
+        .chat-info { flex: 1; overflow: hidden; }
+        .chat-name { font-weight: 700; font-size: 15px; color: #050505; margin-bottom: 4px; }
+        .last-msg { font-size: 13px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Área de Chat (Full Width) */
+        .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; position: relative; }
+        .top-bar { padding: 15px 30px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #e4e6eb; background: #fff; z-index: 10; }
+        .top-bar img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; }
+        .top-bar-info { display: flex; flex-direction: column; }
+        .top-name { font-weight: 700; font-size: 17px; }
+        .top-status { font-size: 12px; color: #00a884; font-weight: 600; }
+
+        /* Mensajes */
+        .messages-area { flex: 1; padding: 30px; overflow-y: auto; background: #f9f9fb; display: flex; flex-direction: column; gap: 15px; }
+        .msg-bubble { max-width: 65%; padding: 12px 18px; font-size: 15px; border-radius: 18px; line-height: 1.5; position: relative; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+        
+        .msg-received { align-self: flex-start; background: #ffffff; color: #050505; border-bottom-left-radius: 4px; }
+        .msg-sent { align-self: flex-end; background: #0084ff; color: #ffffff; border-bottom-right-radius: 4px; }
+        
+        .msg-image { width: 100%; max-width: 350px; border-radius: 12px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.2s; }
+        .msg-image:hover { opacity: 0.9; }
+
+        /* Área de Input */
+        .input-area { padding: 20px 30px; display: flex; align-items: center; gap: 20px; border-top: 1px solid #e4e6eb; background: #fff; }
+        .icon-btn { color: #65676b; font-size: 24px; cursor: pointer; transition: color 0.2s; }
+        .icon-btn:hover { color: #0084ff; }
+        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 25px; padding: 5px 20px; display: flex; align-items: center; }
+        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 12px 0; outline: none; font-family: 'Montserrat'; font-size: 15px; }
+        .send-btn { background: #0084ff; color: #ffffff; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+        .send-btn:hover { background: #0073e6; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #bcc0c4; border-radius: 10px; }
+    </style>
 </head>
 <body>
-<div class="sidebar-redes">
-    <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
-</div>
-<div class="chat-list-container">
-    <div class="list-header">Mensajes</div>
-    <div class="chat-list" id="chat-list"></div>
-</div>
-<div class="chat-content">
-    <div class="top-bar">
-        <img id="header-pic" src="https://via.placeholder.com/42" style="width:42px;height:42px;border-radius:50%">
-        <div id="header-name" style="font-weight:700">Selecciona un chat</div>
+    <div class="sidebar-redes">
+        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp"></div>
     </div>
-    <div class="messages-area" id="messages"></div>
-    <div class="input-area">
-        <label for="file-input" style="cursor:pointer"><i class="fa-solid fa-plus" style="font-size:20px;color:#65676b"></i></label>
-        <input type="file" id="file-input" style="display:none" accept="image/*">
-        <input type="text" id="message-input" placeholder="Escribe un mensaje...">
-        <div class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></div>
+
+    <div class="chat-list-container">
+        <div class="list-header">Mensajes</div>
+        <div id="chat-list" class="chat-list"></div>
     </div>
-</div>
 
-<script>
-let currentChat = null; let chats = {};
-const messagesEl = document.getElementById("messages");
-const chatListEl = document.getElementById("chat-list");
+    <div class="chat-content">
+        <div class="top-bar">
+            <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM&background=random">
+            <div class="top-bar-info">
+                <div id="h-name" class="top-name">Selecciona un chat</div>
+                <div class="top-status">En línea (Webs Rápidas)</div>
+            </div>
+        </div>
+        
+        <div id="messages" class="messages-area"></div>
 
-const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
+        <div class="input-area">
+            <label for="file-input" style="display: flex; align-items: center;">
+                <i class="fa-solid fa-plus icon-btn"></i>
+            </label>
+            <input type="file" id="file-input" style="display:none" accept="image/*">
+            
+            <div class="input-wrapper">
+                <input type="text" id="m-input" placeholder="Escribe un mensaje aquí...">
+            </div>
+            
+            <div class="send-btn" onclick="sendMessage()">
+                <i class="fa-solid fa-paper-plane"></i>
+            </div>
+        </div>
+    </div>
 
-ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    if(msg.type === "incoming"){
-        createOrUpdateChat(msg.data);
-        if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
-    }
-    if(msg.type === "sent"){
-        if(currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
-        updateLastMsg(msg.data.to, msg.data.text || "📷 Imagen");
-    }
-};
+    <script>
+        let currentChat = null;
+        let chats = {};
+        const messagesEl = document.getElementById("messages");
+        const chatListEl = document.getElementById("chat-list");
 
-window.onload = async () => {
-    const res = await fetch("/chat/list");
-    const chatList = await res.json();
-    chatList.forEach(c => createOrUpdateChat({from: c._id, pushname: c.pushname, profilePic: c.profilePic, text: c.text}));
-};
+        const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
-function createOrUpdateChat(data){
-    const id = data.from;
-    if(!chats[id]){
-        chats[id] = { name: data.pushname || id, avatar: data.profilePic || `https://ui-avatars.com/api/?name=${id}` };
-        const div = document.createElement("div");
-        div.className = "chat-item"; div.id = "chat-"+id;
-        div.innerHTML = `<img src="${chats[id].avatar}" class="pfp-img">
-            <div style="flex:1;overflow:hidden"><div style="font-weight:700">${chats[id].name}</div>
-            <div class="last-msg" style="font-size:12px;color:#65676b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${data.text || "📷 Imagen"}</div></div>`;
-        div.onclick = () => openChat(id);
-        chatListEl.prepend(div);
-    } else {
-        updateLastMsg(id, data.text);
-    }
-}
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if(msg.type === "incoming"){
+                createChat(msg.data);
+                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
+            } else if(msg.type === "sent"){
+                if(currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
+                updateLast(msg.data.to, msg.data.text || "📷 Imagen");
+            }
+        };
 
-function updateLastMsg(id, text){
-    const el = document.querySelector(`#chat-${id} .last-msg`);
-    if(el) el.innerText = text || "📷 Imagen";
-}
+        window.onload = async () => {
+            const res = await fetch("/chat/list");
+            const list = await res.json();
+            list.forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text}));
+        };
 
-async function openChat(id){
-    currentChat = id; messagesEl.innerHTML = "";
-    document.getElementById("header-pic").src = chats[id].avatar;
-    document.getElementById("header-name").innerText = chats[id].name;
-    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    document.getElementById("chat-"+id).classList.add('active');
-    
-    const res = await fetch(`/chat/messages/${id}`);
-    const msgs = await res.json();
-    msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
-}
+        function createChat(data){
+            const id = data.from;
+            if(!chats[id]){
+                chats[id] = { name: data.pushname || id };
+                const div = document.createElement("div");
+                div.className = "chat-item"; div.id = "chat-"+id;
+                div.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${id}&background=random&color=fff" class="pfp">
+                    <div class="chat-info">
+                        <div class="chat-name">${chats[id].name}</div>
+                        <div class="last">${data.text || "📷 Imagen"}</div>
+                    </div>`;
+                div.onclick = () => openChat(id);
+                chatListEl.prepend(div);
+            } else { updateLast(id, data.text); }
+        }
 
-function appendMessage(type, text, mediaUrl){
-    const div = document.createElement("div");
-    div.className = `msg-bubble msg-${type}`;
-    if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
-    if(text) div.innerHTML += `<div>${text}</div>`;
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-}
+        function updateLast(id, t){ 
+            const el = document.querySelector(`#chat-${id} .last`); 
+            if(el) el.innerText = t || "📷 Imagen"; 
+        }
 
-async function sendMessage(){
-    const input = document.getElementById("message-input");
-    if(!input.value.trim() || !currentChat) return;
-    const text = input.value; input.value = "";
-    await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
-}
+        async function openChat(id){
+            currentChat = id; 
+            messagesEl.innerHTML = "";
+            document.getElementById("h-name").innerText = chats[id].name;
+            document.getElementById("h-pic").src = `https://ui-avatars.com/api/?name=${id}&background=random&color=fff`;
+            
+            document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+            document.getElementById("chat-"+id).classList.add('active');
+            
+            const res = await fetch(`/chat/messages/${id}`);
+            const msgs = await res.json();
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
+        }
 
-document.getElementById('file-input').addEventListener('change', async function() {
-    if(!this.files[0] || !currentChat) return;
-    const formData = new FormData();
-    formData.append("file", this.files[0]);
-    formData.append("to", currentChat);
-    await fetch("/send-media", { method: "POST", body: formData });
-    this.value = "";
-});
-</script>
+        function appendMessage(type, text, mediaUrl){
+            const div = document.createElement("div");
+            div.className = `msg-bubble msg-${type}`;
+            if(mediaUrl) {
+                div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
+            }
+            if(text && text !== "📷 Imagen") {
+                const textDiv = document.createElement("div");
+                textDiv.innerText = text;
+                div.appendChild(textDiv);
+            }
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function sendMessage(){
+            const input = document.getElementById("m-input");
+            if(!input.value.trim() || !currentChat) return;
+            const text = input.value; input.value = "";
+            await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
+        }
+
+        document.getElementById('file-input').onchange = async function() {
+            if(!this.files[0] || !currentChat) return;
+            const fd = new FormData(); fd.append("file", this.files[0]); fd.append("to", currentChat);
+            await fetch("/send-media", { method: "POST", body: fd });
+            this.value = "";
+        };
+        
+        document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+    </script>
 </body>
 </html>

@@ -51,7 +51,6 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
-// Obtener lista de chats (Contactos)
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -69,7 +68,6 @@ app.get("/chat/list", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Obtener mensajes de un chat específico
 app.get("/chat/messages/:chatId", async (req, res) => {
   try {
     const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
@@ -77,7 +75,6 @@ app.get("/chat/messages/:chatId", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// WEBHOOK CORREGIDO: Recepción garantizada
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -87,15 +84,8 @@ app.post("/webhook", async (req, res) => {
         if (value.messages) {
           for (const msg of value.messages) {
             const senderId = msg.from;
-            // Aseguramos que pushName siempre tenga algo
             const pushName = value.contacts?.[0]?.profile?.name || senderId;
-            let profilePic = ""; 
             let mediaUrl = null;
-
-            try {
-              const pfpRes = await axios.get(`https://graph.facebook.com/v18.0/${senderId}?fields=profile_pic&access_token=${process.env.ACCESS_TOKEN}`);
-              profilePic = pfpRes.data.profile_pic || "";
-            } catch (e) {}
 
             if (msg.type === "image") {
               try {
@@ -106,16 +96,9 @@ app.post("/webhook", async (req, res) => {
               } catch (e) {}
             }
 
-            // IMPORTANTE: Asegurar que chatId y from estén presentes
             const messageData = { 
-              chatId: senderId, 
-              from: senderId, 
-              text: msg.text?.body || "", 
-              messageType: msg.type, 
-              source: "whatsapp", 
-              pushname: pushName, 
-              profilePic: profilePic, 
-              mediaUrl: mediaUrl 
+              chatId: senderId, from: senderId, text: msg.text?.body || "", 
+              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl 
             };
 
             await Message.create(messageData);
@@ -128,7 +111,6 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// ENVIAR TEXTO
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -143,7 +125,6 @@ app.post("/send-message", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ENVIAR IMAGEN
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
