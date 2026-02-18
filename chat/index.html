@@ -93,130 +93,110 @@ body{margin:0;padding:0;height:100vh;font-family: 'Montserrat', sans-serif; back
 </div>
 
 <script>
-let currentChat = null; let unreadGlobal = 0; let chats = {}; let chatsData = {};
-const messagesEl = document.getElementById("messages");
-const chatListEl = document.getElementById("chat-list");
+let currentChat = null; 
+let chats = {};
 
-// WebSocket
+// Conexión WebSocket
 const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
   if(msg.type === "incoming"){
-    const data = msg.data;
-    if(!chatsData[data.from]) chatsData[data.from] = [];
-    chatsData[data.from].push(data);
-    createOrUpdateChat(data);
-    if(currentChat === data.from) appendMessage("received", data.text, data.mediaUrl);
-    else increaseUnread(data.from);
-  }
-  if(msg.type === "sent"){
+    createOrUpdateChat(msg.data, true);
+    if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
+  } else if(msg.type === "sent"){
     if(currentChat === msg.data.to) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
-    if(!chatsData[msg.data.to]) chatsData[msg.data.to] = [];
-    chatsData[msg.data.to].push({from: "me", text: msg.data.text, mediaUrl: msg.data.mediaUrl});
   }
 };
 
-function createOrUpdateChat(data){
-  const { from, pushname, profilePic, text } = data;
-  const photoUrl = profilePic || `https://ui-avatars.com/api/?name=${pushname || from}&background=random&color=fff`;
-  if(!chats[from]){
-    chats[from] = { name: pushname || from, avatar: photoUrl, unread: 0 };
-    const div = document.createElement("div");
-    div.className = "chat-item"; div.id = "chat-"+from;
-    div.innerHTML = `<div class="pfp-wrapper"><img class="pfp-img" src="${photoUrl}"></div>
-      <div style="flex:1; overflow:hidden"><div style="font-weight:700; font-size:14px;">${chats[from].name}</div><div class="last-msg" style="font-size:12px; color:#65676b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${text || "📷 Imagen"}</div></div>
-      <div id="badge-${from}" style="display:none; background:#0084ff; color:white; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">0</div>`;
-    div.onclick = () => openChat(from);
-    chatListEl.prepend(div);
-  } else {
-    document.querySelector("#chat-"+from+" .last-msg").innerText = text || "📷 Imagen";
-    chatListEl.prepend(document.getElementById("chat-"+from));
+function createOrUpdateChat(data, isNew){
+  const id = data.from || data.chatId;
+  const name = data.pushname || chats[id]?.name || id;
+  if(!chats[id]) chats[id] = { name: name };
+  
+  let item = document.getElementById("chat-"+id);
+  if(!item){
+    item = document.createElement("div");
+    item.className = "chat-item"; 
+    item.id = "chat-"+id;
+    item.onclick = () => openChat(id);
+    document.getElementById("chat-list").prepend(item);
   }
+  item.innerHTML = `<img src="https://ui-avatars.com/api/?name=${name}&background=random&color=fff" style="width:45px;border-radius:50%">
+    <div style="flex:1"><b>${name}</b><br><small style="color:#65676b">${data.text || "📷 Imagen"}</small></div>`;
+  if(isNew) document.getElementById("chat-list").prepend(item);
 }
 
 async function openChat(id){
-  currentChat = id; messagesEl.innerHTML = "";
-  document.getElementById("header-pic").src = chats[id].avatar;
-  document.getElementById("header-name").innerText = chats[id].name;
+  currentChat = id; 
   document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
   document.getElementById("chat-"+id).classList.add('active');
-  resetUnread(id);
-  if(!chatsData[id]){ const res = await fetch(`/chat/messages/${id}`); chatsData[id] = await res.json(); }
-  chatsData[id].forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
+  
+  const res = await fetch(`/chat/messages/${id}`);
+  const msgs = await res.json();
+  document.getElementById("messages").innerHTML = "";
+  msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
 }
 
-function appendMessage(type, text, mediaUrl = null){
+function appendMessage(type, text, mediaUrl){
   const div = document.createElement("div");
   div.className = "msg-bubble " + (type === "sent" ? "msg-sent" : "msg-received");
-  
-  if(mediaUrl) {
-    const img = document.createElement("img");
-    img.src = mediaUrl;
-    img.className = "msg-image";
-    img.onclick = () => window.open(mediaUrl, '_blank');
-    div.appendChild(img);
-  }
-  
-  if(text && text !== "") {
-    const t = document.createElement("div");
-    t.style.padding = "4px 8px"; t.innerText = text;
-    div.appendChild(t);
-  }
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
+  if(text && text !== "") div.innerHTML += `<div>${text}</div>`;
+  document.getElementById("messages").appendChild(div);
+  document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
 }
 
+// --- ESTA ES LA FUNCIÓN QUE CORRIGE LA ESCRITURA ---
 async function sendMessage(){
-  const input = document.getElementById("message-input"); const text = input.value.trim();
+  const input = document.getElementById("message-input");
+  const text = input.value.trim();
+  
+  // Validamos que haya texto y un chat seleccionado
   if(!text || !currentChat) return;
-  input.value = ""; 
-  await fetch("/send-message", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({to: currentChat, text}) });
+  
+  input.value = ""; // Limpia el input inmediatamente
+  
+  await fetch("/send-message", { 
+    method: "POST", 
+    headers: { "Content-Type": "application/json" }, 
+    body: JSON.stringify({ to: currentChat, text: text }) 
+  });
 }
 
-// LÓGICA DE ENVÍO DE IMAGEN MEJORADA
-document.getElementById('file-input').addEventListener('change', async function() {
-    if(!this.files[0] || !currentChat) {
-        alert("Selecciona un chat primero");
-        return;
+// Envío de imágenes
+document.getElementById('file-input').onchange = async function() {
+    if(!this.files.length || !currentChat) return;
+    const caption = prompt("¿Añadir comentario?");
+    if(caption) {
+        await fetch("/send-message", { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify({ to: currentChat, text: caption }) 
+        });
     }
+    for(let file of this.files){
+        const fd = new FormData(); 
+        fd.append("file", file); 
+        fd.append("to", currentChat);
+        await fetch("/send-media", { method: "POST", body: fd });
+    }
+    this.value = "";
+};
 
-    const file = this.files[0];
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("to", currentChat);
+// Carga inicial de chats
+window.onload = async () => {
+    const res = await fetch("/chat/list");
+    const list = await res.json();
+    list.reverse().forEach(c => createOrUpdateChat({chatId: c._id, pushname: c.pushname, text: c.text}, false));
+};
 
-    try {
-        const response = await fetch("/send-media", { method: "POST", body: formData });
-        if(!response.ok) throw new Error("Error en servidor");
-    } catch (err) {
-        console.error("Error al subir:", err);
-        alert("Error al enviar imagen");
-    } finally {
-        this.value = ""; // Limpiar siempre
+// Detectar tecla Enter
+document.getElementById("message-input").addEventListener("keypress", (e) => {
+    if(e.key === 'Enter') {
+        sendMessage();
     }
 });
-
-function increaseUnread(id){
-  chats[id].unread++; unreadGlobal++;
-  document.getElementById("badge-"+id).innerText = chats[id].unread;
-  document.getElementById("badge-"+id).style.display = "block";
-  document.getElementById("global-badge").style.display = "block";
-}
-function resetUnread(id){
-  unreadGlobal -= chats[id].unread; chats[id].unread = 0;
-  document.getElementById("badge-"+id).style.display = "none";
-  if(unreadGlobal <= 0) document.getElementById("global-badge").style.display = "none";
-}
-
-document.getElementById("emoji-trigger").onclick = (e) => {
-    e.stopPropagation();
-    const box = document.getElementById("emoji-picker-box");
-    box.style.display = box.style.display === "block" ? "none" : "block";
-    if(box.innerHTML === ""){ const p = new EmojiMart.Picker({ onEmojiSelect: (emoji) => document.getElementById("message-input").value += emoji.native }); box.appendChild(p); }
-};
-document.addEventListener('click', (e) => { if(!document.getElementById("emoji-picker-box").contains(e.target)) document.getElementById("emoji-picker-box").style.display = "none"; });
-document.getElementById("message-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 </script>
 </body>
 </html>
