@@ -6,35 +6,37 @@
     <title>CRM Webs Rápidas</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
     <style>
-        /* Base e Interfaz */
+        /* Base e Interfaz Protegida */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { height: 100vh; font-family: 'Montserrat', sans-serif; background: #f0f2f5; display: flex; overflow: hidden; }
 
         .sidebar-redes { width: 70px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; gap: 15px; }
-        .red-icon { width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+        .red-icon { width: 45px; height: 45px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 12px; position: relative; }
+        .badge-dot { position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #ff4757; border: 2px solid #fff; border-radius: 50%; display: none; }
 
         .chat-list-container { width: 350px; background: #ffffff; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; flex-shrink: 0; }
         .list-header { padding: 20px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #f0f2f5; }
         .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
         
-        /* Contenedor Principal */
         .chat-content { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
         .top-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; justify-content: space-between; }
         .messages-area { flex: 1; padding: 15px; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; gap: 10px; }
 
-        /* Burbujas y Multimedia Corregidos */
+        /* Burbujas */
         .msg-bubble { max-width: 80%; padding: 8px 12px; font-size: 14px; border-radius: 15px; position: relative; }
         .msg-sent { align-self: flex-end; background: #0084ff; color: #fff; }
         .msg-received { align-self: flex-start; background: #fff; }
-        
-        /* Fix Imagen Gigante */
-        .msg-image { width: 100%; max-width: 250px; height: auto; border-radius: 10px; cursor: pointer; display: block; margin-bottom: 5px; }
-        .msg-time { font-size: 10px; opacity: 0.7; text-align: right; margin-top: 4px; }
+        .msg-image { width: 100%; max-width: 250px; height: auto; border-radius: 10px; display: block; margin-bottom: 5px; }
 
-        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; }
-        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; }
-        .input-wrapper input { width: 100%; border: none; background: transparent; padding: 8px 0; outline: none; font-family: 'Montserrat'; }
+        /* Área de Input con Icono de Emoji */
+        .input-area { padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e4e6eb; background: #fff; flex-shrink: 0; position: relative; }
+        .input-wrapper { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 5px 15px; display: flex; align-items: center; }
+        .input-wrapper input { flex: 1; background: transparent; border: none; padding: 8px 0; outline: none; font-family: 'Montserrat'; }
+        
+        #emoji-picker-box { position: absolute; bottom: 70px; left: 15px; display: none; z-index: 1000; }
+        .icon-btn { color: #65676b; font-size: 20px; cursor: pointer; }
 
         .chat-item { padding: 15px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f9f9f9; order: 2; }
         .chat-item.active { background: #e7f3ff; }
@@ -43,7 +45,10 @@
 </head>
 <body>
     <div class="sidebar-redes">
-        <div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="30"></div>
+        <div class="red-icon">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" width="30">
+            <div class="badge-dot" id="global-badge"></div>
+        </div>
         <div class="red-icon" onclick="window.open('https://business.facebook.com/latest/inbox/all', 'Meta', 'width=1100,height=700')">
             <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" width="30">
         </div>
@@ -60,11 +65,14 @@
                 <img id="h-pic" src="https://ui-avatars.com/api/?name=CRM" style="width:40px; height:40px; border-radius:50%;">
                 <div id="h-name" style="font-weight:700;">Selecciona un chat</div>
             </div>
-            <i class="fa-solid fa-trash-can" onclick="deleteFullChat()" id="del-icon" style="display:none; color:red; cursor:pointer;"></i>
         </div>
         <div id="messages" class="messages-area"></div>
+        
+        <div id="emoji-picker-box"></div>
+
         <div class="input-area">
-            <label for="file-input"><i class="fa-solid fa-paperclip" style="color:#65676b; font-size:20px; cursor:pointer"></i></label>
+            <i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
+            <label for="file-input"><i class="fa-solid fa-plus icon-btn"></i></label>
             <input type="file" id="file-input" style="display:none" accept="image/*" multiple>
             <div class="input-wrapper">
                 <input type="text" id="m-input" placeholder="Escribe un mensaje...">
@@ -78,22 +86,40 @@
         const messagesEl = document.getElementById("messages");
         const chatListEl = document.getElementById("chat-list");
 
+        // LÓGICA DE ICONOS (EMOJIS) RESTAURADA
+        document.getElementById("emoji-trigger").onclick = (e) => {
+            e.stopPropagation();
+            const box = document.getElementById("emoji-picker-box");
+            box.style.display = box.style.display === "block" ? "none" : "block";
+            if(box.innerHTML === ""){ 
+                const p = new EmojiMart.Picker({ 
+                    onEmojiSelect: (emoji) => document.getElementById("m-input").value += emoji.native 
+                }); 
+                box.appendChild(p); 
+            }
+        };
+        document.addEventListener('click', (e) => { 
+            if(!document.getElementById("emoji-picker-box").contains(e.target)) 
+                document.getElementById("emoji-picker-box").style.display = "none"; 
+        });
+
+        // WebSocket y Funciones de Chat
         const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`);
 
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if(msg.type === "incoming"){
                 createChat(msg.data);
-                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                if(currentChat === msg.data.from) appendMessage("received", msg.data.text, msg.data.mediaUrl);
             } else if(msg.type === "sent"){
-                if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl, msg.data.timestamp);
+                if(currentChat === msg.data.chatId) appendMessage("sent", msg.data.text, msg.data.mediaUrl);
             }
         };
 
         window.onload = async () => {
             const res = await fetch("/chat/list");
             const list = await res.json();
-            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text, timestamp: c.timestamp}));
+            list.reverse().forEach(c => createChat({from: c._id, pushname: c.pushname, text: c.text}));
         };
 
         function createChat(data){
@@ -112,21 +138,18 @@
         async function openChat(id){
             currentChat = id; messagesEl.innerHTML = "";
             document.getElementById("h-name").innerText = chats[id].name;
-            document.getElementById("del-icon").style.display = "block";
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
             document.getElementById("chat-"+id).classList.add('active');
             const res = await fetch(`/chat/messages/${id}`);
             const msgs = await res.json();
-            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl, m.timestamp));
+            msgs.forEach(m => appendMessage(m.from === "me" ? "sent" : "received", m.text, m.mediaUrl));
         }
 
-        function appendMessage(type, text, mediaUrl, timestamp){
+        function appendMessage(type, text, mediaUrl){
             const div = document.createElement("div");
             div.className = `msg-bubble msg-${type}`;
             if(mediaUrl) div.innerHTML += `<img src="${mediaUrl}" class="msg-image" onclick="window.open('${mediaUrl}')">`;
             if(text && text !== "📷 Imagen") div.innerHTML += `<div>${text}</div>`;
-            const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
-            div.innerHTML += `<div class="msg-time">${time}</div>`;
             messagesEl.appendChild(div);
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
@@ -140,15 +163,9 @@
 
         document.getElementById("m-input").onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 
-        // ENVÍO MULTIPLE SEGURO (Uno por uno)
         document.getElementById('file-input').onchange = async function() {
-            const files = Array.from(this.files);
-            const chatIdAtStart = currentChat;
-            if(!files.length || !chatIdAtStart) return;
-            
-            for (let file of files) {
-                if(currentChat !== chatIdAtStart) break; // Detiene si cambias de chat
-                const fd = new FormData(); fd.append("file", file); fd.append("to", chatIdAtStart);
+            for (let file of this.files) {
+                const fd = new FormData(); fd.append("file", file); fd.append("to", currentChat);
                 await fetch("/send-media", { method: "POST", body: fd });
             }
             this.value = "";
