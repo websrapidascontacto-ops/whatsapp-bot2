@@ -14,13 +14,11 @@ const app = express();
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Multer configurado para mantener la extensión original si es necesario
 const upload = multer({ dest: "uploads/" }); 
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ESTO ES CLAVE: Servir la carpeta de subidas correctamente
 app.use(express.static("public"));
 app.use("/uploads", express.static(uploadDir));
 app.use("/chat", express.static(path.join(__dirname, "chat")));
@@ -40,7 +38,7 @@ function broadcastMessage(data) {
   wsClients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); });
 }
 
-// PROXY: Para imágenes recibidas de Meta
+// PROXY DINÁMICO: Esto es lo que permite ver imágenes antiguas de WhatsApp
 app.get("/proxy-media", async (req, res) => {
   const mediaUrl = req.query.url;
   if (!mediaUrl || mediaUrl === "null") return res.status(400).send("No URL");
