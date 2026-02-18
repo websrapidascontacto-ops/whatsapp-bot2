@@ -51,6 +51,7 @@ app.get("/proxy-media", async (req, res) => {
   } catch (e) { res.status(500).send("Error de proxy"); }
 });
 
+// --- LISTA DE CHATS (MEJORADA) ---
 app.get("/chat/list", async (req, res) => {
   try {
     const list = await Message.aggregate([
@@ -61,14 +62,16 @@ app.get("/chat/list", async (req, res) => {
           pushname: { $first: "$pushname" },
           timestamp: { $first: "$timestamp" }
       }},
-      { $sort: { timestamp: -1 } }
+      { $sort: { timestamp: -1 } } // Asegura que el más reciente esté arriba en la lista
     ]);
     res.json(list);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- MENSAJES DE UN CHAT (ORDEN CORREGIDO) ---
 app.get("/chat/messages/:chatId", async (req, res) => {
   try {
+    // Ordenamos por timestamp: 1 para que el historial cargue del más viejo al más nuevo (orden natural de lectura)
     const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
     res.json(messages);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -81,6 +84,7 @@ app.delete("/chat/messages/:chatId", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- WEBHOOK (RECIBIR MENSAJES) ---
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.object === "whatsapp_business_account") {
@@ -103,8 +107,13 @@ app.post("/webhook", async (req, res) => {
             }
 
             const messageData = { 
-              chatId: senderId, from: senderId, text: msg.text?.body || "", 
-              messageType: msg.type, source: "whatsapp", pushname: pushName, mediaUrl,
+              chatId: senderId, 
+              from: senderId, // Aquí se guarda el ID del cliente
+              text: msg.text?.body || "", 
+              messageType: msg.type, 
+              source: "whatsapp", 
+              pushname: pushName, 
+              mediaUrl,
               timestamp: new Date()
             };
 
@@ -118,6 +127,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+// --- ENVIAR TEXTO ---
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -125,6 +135,7 @@ app.post("/send-message", async (req, res) => {
       { messaging_product: "whatsapp", to, text: { body: text } },
       { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
     );
+    // IMPORTANTE: from: "me" para que el HTML lo ponga a la derecha
     const messageData = { chatId: to, from: "me", text, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
@@ -132,6 +143,7 @@ app.post("/send-message", async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// --- ENVIAR MEDIA ---
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
@@ -151,6 +163,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
     );
 
     const mediaUrl = `/uploads/${file.filename}`;
+    // IMPORTANTE: from: "me" para consistencia
     const messageData = { chatId: to, from: "me", text: "📷 Imagen", mediaUrl, source: "whatsapp", pushname: "Yo", timestamp: new Date() };
     await Message.create(messageData);
     broadcastMessage({ type: "sent", data: messageData });
