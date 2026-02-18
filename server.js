@@ -5,6 +5,8 @@ const WebSocket = require("ws");
 const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
+const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
@@ -14,23 +16,17 @@ const wss = new WebSocket.Server({ server });
    CONFIG
 ========================= */
 
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// 🔥 SERVIR CARPETA "chat" (SIN S)
 const chatPath = path.join(__dirname, "chat");
 app.use("/chat", express.static(chatPath));
 
-// uploads dentro de chat
 const uploadsPath = path.join(chatPath, "uploads");
 if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 app.use("/uploads", express.static(uploadsPath));
-
-/* =========================
-   RUTA PRINCIPAL OPCIONAL
-========================= */
 
 app.get("/", (req, res) => {
   res.redirect("/chat/index.html");
@@ -39,11 +35,6 @@ app.get("/", (req, res) => {
 /* =========================
    MONGODB
 ========================= */
-
-if (!process.env.MONGO_URI) {
-  console.log("❌ ERROR: MONGO_URI no configurado en Railway");
-  process.exit(1);
-}
 
 mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("✅ Mongo conectado"))
@@ -82,7 +73,64 @@ function broadcast(data) {
 }
 
 /* =========================
-   API
+   🔥 WEBHOOK WHATSAPP
+========================= */
+
+// VERIFICACION META
+app.get("/webhook", (req, res) => {
+  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token) {
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+      console.log("✅ Webhook verificado");
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  }
+});
+
+// RECIBIR MENSAJES
+app.post("/webhook", async (req, res) => {
+  const body = req.body;
+
+  if (body.object === "whatsapp_business_account") {
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        const value = change.value;
+
+        if (value.messages) {
+          for (const msg of value.messages) {
+            const sender = msg.from;
+            const text = msg.text?.body || "";
+
+            const saved = await Message.create({
+              chatId: sender,
+              from: sender,
+              text
+            });
+
+            broadcast({
+              type: "new_message",
+              message: saved
+            });
+
+            console.log("📩 Mensaje recibido:", text);
+          }
+        }
+      }
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+/* =========================
+   API LOCAL
 ========================= */
 
 app.get("/chats", async (req, res) => {
@@ -108,39 +156,42 @@ app.get("/messages/:chatId", async (req, res) => {
   res.json(messages);
 });
 
+/* =========================
+   ENVIAR MENSAJE REAL A META
+========================= */
+
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
 
-  const msg = await Message.create({
-    chatId: to,
-    from: "me",
-    text
-  });
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        text: { body: text }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+        }
+      }
+    );
 
-  broadcast({ type: "new_message", message: msg });
+    const msg = await Message.create({
+      chatId: to,
+      from: "me",
+      text
+    });
 
-  res.json({ success: true });
-});
+    broadcast({ type: "new_message", message: msg });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsPath),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
-});
+    res.json({ success: true });
 
-const upload = multer({ storage });
-
-app.post("/send-media", upload.single("file"), async (req, res) => {
-  const { to } = req.body;
-
-  const msg = await Message.create({
-    chatId: to,
-    from: "me",
-    media: "/uploads/" + req.file.filename
-  });
-
-  broadcast({ type: "new_message", message: msg });
-
-  res.json({ success: true });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: "Error enviando mensaje" });
+  }
 });
 
 /* =========================
@@ -149,6 +200,6 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log("🚀 Server corriendo en puerto", PORT);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Server activo en puerto", PORT);
 });
