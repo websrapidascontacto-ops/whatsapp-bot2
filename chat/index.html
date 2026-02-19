@@ -344,18 +344,25 @@ chatContent.classList.remove("active-mobile");
 chatListContainer.style.display="flex";
 }
 
-/* RENDER */
+/* ============================= */
+/* RENDER (CORREGIDO PARA IMAGEN) */
+/* ============================= */
 function renderMessage(msg){
 const div=document.createElement("div");
 div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
 
-if(msg.media){
+/* 🔥 SOPORTE IMAGEN */
+if(msg.media || msg.mediaUrl || msg.type==="image"){
 const img=document.createElement("img");
-img.src=msg.media;
+img.src=msg.media || msg.mediaUrl;
 img.className="msg-image";
+img.style.maxWidth="250px";
+img.style.borderRadius="10px";
+img.style.display="block";
 div.appendChild(img);
 }
 
+/* TEXTO */
 if(msg.text){
 const text=document.createElement("div");
 text.innerText=msg.text;
@@ -431,5 +438,6 @@ closeModal();
 loadChats();
 
 </script>
+
 </body>
 </html>
