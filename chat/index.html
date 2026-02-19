@@ -3,433 +3,168 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CRM Webs Rápidas - Premium</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+<title>CRM Webs Rápidas</title>
 
 <style>
-*{box-sizing:border-box}
-
-body{
-margin:0;
-padding:0;
-height:100vh;
-font-family:'Montserrat',sans-serif;
-background:radial-gradient(circle at top left,#0f172a,#020617 60%);
-color:#e2e8f0;
-display:flex;
-overflow:hidden;
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
 }
 
-/* SIDEBAR */
-.sidebar-redes{
-width:90px;
-background:rgba(15,23,42,.85);
-border-right:1px solid rgba(255,255,255,.05);
-display:flex;
-flex-direction:column;
-align-items:center;
-padding-top:30px;
-}
-.red-icon{width:50px;height:50px;margin-bottom:28px;display:flex;align-items:center;justify-content:center}
-.red-icon img{width:28px;height:28px}
-
-/* LISTA */
-.chat-list-container{
-width:380px;
-background:rgba(15,23,42,.95);
-border-right:1px solid rgba(255,255,255,.05);
-display:flex;
-flex-direction:column;
-}
-.list-header{padding:28px;font-weight:700;font-size:22px}
-.chat-list{flex:1;overflow-y:auto}
-.chat-item{padding:18px 22px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)}
-
-/* CHAT */
-.chat-content{
-flex:1;
-display:flex;
-flex-direction:column;
-background:linear-gradient(180deg,#0f172a,#0b1220);
-}
-.top-bar{
-padding:20px 30px;
-display:flex;
-align-items:center;
-gap:15px;
-border-bottom:1px solid rgba(255,255,255,.05);
-}
-.mobile-back{display:none;cursor:pointer;font-size:20px}
-.top-pfp{width:48px;height:48px;border-radius:50%}
-
-.messages-area{
-flex:1;
-padding:35px;
-overflow-y:auto;
-display:flex;
-flex-direction:column;
-gap:16px;
+.container {
+  display: flex;
+  height: 100vh;
 }
 
-.msg-bubble{
-max-width:60%;
-padding:14px 18px;
-border-radius:18px;
-display:flex;
-flex-direction:column;
-gap:6px;
-font-size:14px;
+.sidebar {
+  width: 30%;
+  background: #ffffff;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
 }
 
-.msg-received{
-background:rgba(30,41,59,.8);
-align-self:flex-start;
-border-bottom-left-radius:6px;
-}
-.msg-sent{
-background:linear-gradient(135deg,#3b82f6,#06b6d4);
-color:white;
-align-self:flex-end;
-border-bottom-right-radius:6px;
+.chat-area {
+  width: 70%;
+  display: flex;
+  flex-direction: column;
 }
 
-.msg-time{
-font-size:11px;
-opacity:.6;
-text-align:right;
+.messages {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  background: #e5ddd5;
 }
 
-.msg-image{
-width:100%;
-max-width:300px;
-border-radius:12px;
-margin-bottom:8px;
+.message {
+  max-width: 70%;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  word-wrap: break-word;
+  font-size: 14px;
 }
 
-.input-area{
-padding:18px 25px;
-display:flex;
-align-items:center;
-gap:14px;
-border-top:1px solid rgba(255,255,255,.05);
-position:relative;
+.sent {
+  background: #dcf8c6;
+  align-self: flex-end;
 }
 
-.input-area input[type="text"]{
-flex:1;
-background:rgba(30,41,59,.8);
-border:1px solid rgba(255,255,255,.05);
-padding:14px 18px;
-border-radius:16px;
-color:#e2e8f0;
-outline:none;
+.received {
+  background: #ffffff;
+  align-self: flex-start;
 }
 
-.icon-btn{
-font-size:20px;
-cursor:pointer;
-opacity:.7;
-}
-.icon-btn:hover{opacity:1}
-
-.send-btn{
-background:linear-gradient(135deg,#10b981,#06b6d4);
-width:45px;height:45px;
-border-radius:14px;
-display:flex;align-items:center;justify-content:center;
-cursor:pointer;
-color:white;
+.message img {
+  max-width: 220px;
+  border-radius: 10px;
+  display: block;
 }
 
-/* EMOJI */
-#emoji-picker-container{
-position:absolute;
-bottom:80px;
-left:20px;
-display:none;
-z-index:1000;
+.input-area {
+  display: flex;
+  padding: 10px;
+  background: #ffffff;
+  border-top: 1px solid #ddd;
 }
 
-/* MODAL */
-.modal-overlay{
-position:fixed;
-top:0;left:0;
-width:100%;height:100%;
-background:rgba(0,0,0,.75);
-display:none;
-align-items:center;
-justify-content:center;
-z-index:9999;
+input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 20px;
+  border: 1px solid #ccc;
+  outline: none;
 }
-.modal-box{
-background:#0f172a;
-padding:25px;
-border-radius:18px;
-width:500px;
-max-height:80vh;
-display:flex;
-flex-direction:column;
-gap:15px;
-}
-.preview-grid{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
-max-height:300px;
-overflow-y:auto;
-}
-.preview-grid img{
-width:100px;height:100px;
-object-fit:cover;
-border-radius:10px;
-}
-.modal-box textarea{
-background:rgba(30,41,59,.8);
-border:1px solid rgba(255,255,255,.05);
-border-radius:12px;
-padding:10px;
-color:white;
-resize:none;
-}
-.modal-actions{
-display:flex;
-justify-content:flex-end;
-gap:10px;
-}
-.btn{padding:8px 14px;border-radius:10px;cursor:pointer}
-.btn-cancel{background:#334155}
-.btn-send{background:#10b981}
 
-/* RESPONSIVE */
-@media(max-width:768px){
-
-body{flex-direction:column}
-
-.sidebar-redes{display:none}
-
-.chat-list-container{width:100%;height:100%}
-
-.chat-content{display:none;width:100%;height:100%}
-
-.chat-content.active-mobile{display:flex}
-
-.mobile-back{display:block}
-
-.messages-area{padding:20px}
-
-.msg-bubble{max-width:85%}
-
-.modal-box{width:90%}
-
+button {
+  margin-left: 10px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 20px;
+  background: #25d366;
+  color: white;
+  cursor: pointer;
 }
 </style>
 </head>
 
 <body>
 
-<div class="sidebar-redes">
-<div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
-<div class="red-icon"><img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg"></div>
-</div>
+<div class="container">
+  <div class="sidebar" id="chatList"></div>
 
-<div class="chat-list-container" id="chatListContainer">
-<div class="list-header">Mensajes</div>
-<div class="chat-list" id="chat-list"></div>
-</div>
+  <div class="chat-area">
+    <div class="messages" id="messages"></div>
 
-<div class="chat-content" id="chatContent">
-<div class="top-bar">
-<i class="fa-solid fa-arrow-left mobile-back" onclick="goBackMobile()"></i>
-<img id="header-pic" src="https://ui-avatars.com/api/?name=?" class="top-pfp">
-<div id="header-name" style="font-weight:700">Selecciona un chat</div>
-</div>
-
-<div class="messages-area" id="messages"></div>
-
-<div class="input-area">
-<div id="emoji-picker-container"></div>
-<i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
-<label for="file-input"><i class="fa-solid fa-paperclip icon-btn"></i></label>
-<input type="file" id="file-input" style="display:none" accept="image/*" multiple>
-<input type="text" id="message-input" placeholder="Escribe un mensaje..." autocomplete="off">
-<div class="send-btn" onclick="sendMessage()">
-<i class="fa-solid fa-paper-plane"></i>
-</div>
-</div>
-</div>
-
-<!-- MODAL -->
-<div class="modal-overlay" id="image-modal">
-<div class="modal-box">
-<h3>Enviar imágenes</h3>
-<div class="preview-grid" id="preview-container"></div>
-<textarea id="image-comment" rows="3" placeholder="Añadir comentario (opcional)"></textarea>
-<div class="modal-actions">
-<div class="btn btn-cancel" onclick="closeModal()">Cancelar</div>
-<div class="btn btn-send" onclick="confirmSendImages()">Enviar</div>
-</div>
-</div>
+    <div class="input-area">
+      <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+      <button onclick="sendMessage()">Enviar</button>
+    </div>
+  </div>
 </div>
 
 <script>
 
-let currentChat=null;
-const chatList=document.getElementById("chat-list");
-const messagesContainer=document.getElementById("messages");
-const chatContent=document.getElementById("chatContent");
-const chatListContainer=document.getElementById("chatListContainer");
+let currentChat = null;
 
-/* ENTER ENVÍA */
-document.getElementById("message-input").addEventListener("keypress",e=>{
-if(e.key==="Enter"){e.preventDefault();sendMessage();}
-});
+async function loadMessages(chatId) {
+  currentChat = chatId;
+  const res = await fetch(`/messages/${chatId}`);
+  const data = await res.json();
 
-/* EMOJI */
-const picker=new EmojiMart.Picker({onEmojiSelect:e=>{
-document.getElementById("message-input").value+=e.native;
-}});
-document.getElementById("emoji-picker-container").appendChild(picker);
+  const messagesDiv = document.getElementById("messages");
+  messagesDiv.innerHTML = "";
 
-document.getElementById("emoji-trigger").onclick=()=>{
-const c=document.getElementById("emoji-picker-container");
-c.style.display=c.style.display==="none"?"block":"none";
-};
+  data.forEach(msg => {
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message");
 
-/* WEBSOCKET */
-const ws=new WebSocket(
-location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host
-);
+    if (msg.from === "me") {
+      messageDiv.classList.add("sent");
+    } else {
+      messageDiv.classList.add("received");
+    }
 
-ws.onmessage=(event)=>{
-const data=JSON.parse(event.data);
-if(data.type==="new_message"){
-if(data.message.chatId===currentChat){renderMessage(data.message);}
-loadChats();
-}
-};
+    // 🔥 SI ES IMAGEN
+    if (msg.type === "image" && msg.mediaUrl) {
+      const img = document.createElement("img");
+      img.src = msg.mediaUrl;
+      img.alt = "Imagen recibida";
+      messageDiv.appendChild(img);
+    }
 
-/* CARGAR CHATS */
-async function loadChats(){
-const res=await fetch("/chats");
-const chats=await res.json();
-chatList.innerHTML="";
-chats.forEach(chat=>{
-const div=document.createElement("div");
-div.className="chat-item";
-div.innerHTML=`<div>${chat._id}</div><small>${chat.lastMessage||""}</small>`;
-div.onclick=()=>openChat(chat._id);
-chatList.appendChild(div);
-});
+    // 🔥 SI ES TEXTO
+    if (msg.type === "text" && msg.text) {
+      messageDiv.innerText = msg.text;
+    }
+
+    messagesDiv.appendChild(messageDiv);
+  });
+
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-/* ABRIR CHAT */
-async function openChat(chatId){
-currentChat=chatId;
-document.getElementById("header-name").innerText=chatId;
-messagesContainer.innerHTML="";
-if(window.innerWidth<=768){
-chatListContainer.style.display="none";
-chatContent.classList.add("active-mobile");
-}
-const res=await fetch("/messages/"+chatId);
-const msgs=await res.json();
-msgs.forEach(renderMessage);
-}
+async function sendMessage() {
+  const input = document.getElementById("messageInput");
+  const message = input.value;
 
-function goBackMobile(){
-chatContent.classList.remove("active-mobile");
-chatListContainer.style.display="flex";
+  if (!message || !currentChat) return;
+
+  await fetch("/send-message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: currentChat,
+      message: message
+    })
+  });
+
+  input.value = "";
+  loadMessages(currentChat);
 }
-
-/* RENDER */
-function renderMessage(msg){
-const div=document.createElement("div");
-div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
-
-if(msg.media){
-const img=document.createElement("img");
-img.src=msg.media;
-img.className="msg-image";
-div.appendChild(img);
-}
-
-if(msg.text){
-const text=document.createElement("div");
-text.innerText=msg.text;
-div.appendChild(text);
-}
-
-const time=document.createElement("div");
-time.className="msg-time";
-const now=msg.createdAt?new Date(msg.createdAt):new Date();
-time.innerText=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-div.appendChild(time);
-
-messagesContainer.appendChild(div);
-messagesContainer.scrollTop=messagesContainer.scrollHeight;
-}
-
-/* ENVIAR */
-async function sendMessage(){
-if(!currentChat)return;
-const input=document.getElementById("message-input");
-const text=input.value.trim();
-if(!text)return;
-await fetch("/send-message",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat,text})
-});
-input.value="";
-}
-
-/* MULTI IMAGEN */
-let selectedFiles=[];
-document.getElementById("file-input").addEventListener("change",(e)=>{
-if(!currentChat){alert("Selecciona un chat primero");return;}
-selectedFiles=[...e.target.files];
-if(selectedFiles.length===0)return;
-const container=document.getElementById("preview-container");
-container.innerHTML="";
-selectedFiles.forEach(file=>{
-const img=document.createElement("img");
-img.src=URL.createObjectURL(file);
-container.appendChild(img);
-});
-document.getElementById("image-modal").style.display="flex";
-});
-
-function closeModal(){
-document.getElementById("image-modal").style.display="none";
-document.getElementById("image-comment").value="";
-selectedFiles=[];
-document.getElementById("file-input").value="";
-}
-
-async function confirmSendImages(){
-if(!currentChat)return;
-const comment=document.getElementById("image-comment").value;
-for(const file of selectedFiles){
-const formData=new FormData();
-formData.append("file",file);
-formData.append("to",currentChat);
-await fetch("/send-media",{method:"POST",body:formData});
-}
-if(comment.trim()!==""){
-await fetch("/send-message",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat,text:comment})
-});
-}
-closeModal();
-}
-
-loadChats();
 
 </script>
+
 </body>
 </html>
