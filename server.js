@@ -27,6 +27,7 @@ const uploadsPath = path.join(chatPath, "uploads");
 if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
+
 app.use("/uploads", express.static(uploadsPath));
 
 app.get("/", (req, res) => {
@@ -74,18 +75,22 @@ function broadcast(data) {
 }
 
 /* =========================
-   🔥 WEBHOOK WHATSAPP (ARREGLADO)
+   WEBHOOK WHATSAPP
 ========================= */
 
 app.post("/webhook", async (req, res) => {
+
   const body = req.body;
 
   if (body.object === "whatsapp_business_account") {
+
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+
         const value = change.value;
 
         if (value.messages) {
+
           for (const msg of value.messages) {
 
             const sender = msg.from;
@@ -105,41 +110,47 @@ app.post("/webhook", async (req, res) => {
             /* ===== IMAGEN ===== */
             if (msg.type === "image") {
 
-              const mediaId = msg.image.id;
+              try {
 
-              // 1️⃣ Obtener URL temporal
-              const mediaRes = await axios.get(
-                `https://graph.facebook.com/v18.0/${mediaId}`,
-                {
+                const mediaId = msg.image.id;
+
+                // 1️⃣ Obtener URL temporal
+                const mediaInfo = await axios.get(
+                  `https://graph.facebook.com/v18.0/${mediaId}`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+                    }
+                  }
+                );
+
+                const mediaUrl = mediaInfo.data.url;
+
+                // 2️⃣ Descargar archivo
+                const mediaFile = await axios.get(mediaUrl, {
+                  responseType: "arraybuffer",
                   headers: {
                     Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
                   }
-                }
-              );
+                });
 
-              const mediaUrl = mediaRes.data.url;
+                const fileName = Date.now() + ".jpg";
+                const filePath = path.join(uploadsPath, fileName);
 
-              // 2️⃣ Descargar imagen
-              const fileRes = await axios.get(mediaUrl, {
-                responseType: "arraybuffer",
-                headers: {
-                  Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
-                }
-              });
+                fs.writeFileSync(filePath, mediaFile.data);
 
-              const fileName = Date.now() + ".jpg";
-              const filePath = path.join(uploadsPath, fileName);
+                // 3️⃣ Guardar en Mongo
+                const saved = await Message.create({
+                  chatId: sender,
+                  from: sender,
+                  media: "/uploads/" + fileName
+                });
 
-              fs.writeFileSync(filePath, fileRes.data);
+                broadcast({ type: "new_message", message: saved });
 
-              // 3️⃣ Guardar en Mongo
-              const saved = await Message.create({
-                chatId: sender,
-                from: sender,
-                media: "/uploads/" + fileName
-              });
-
-              broadcast({ type: "new_message", message: saved });
+              } catch (err) {
+                console.error("Error descargando imagen:", err.response?.data || err.message);
+              }
             }
 
           }
@@ -156,12 +167,13 @@ app.post("/webhook", async (req, res) => {
 ========================= */
 
 app.get("/chats", async (req, res) => {
+
   const chats = await Message.aggregate([
     { $sort: { timestamp: 1 } },
     {
       $group: {
         _id: "$chatId",
-        lastMessage: { $last: "$text" },
+        lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } },
         lastTime: { $last: "$timestamp" }
       }
     },
@@ -183,9 +195,11 @@ app.get("/messages/:chatId", async (req, res) => {
 ========================= */
 
 app.post("/send-message", async (req, res) => {
+
   const { to, text } = req.body;
 
   try {
+
     await axios.post(
       `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
       {
@@ -200,19 +214,90 @@ app.post("/send-message", async (req, res) => {
       }
     );
 
-    const msg = await Message.create({
+    const saved = await Message.create({
       chatId: to,
       from: "me",
       text
     });
 
-    broadcast({ type: "new_message", message: msg });
+    broadcast({ type: "new_message", message: saved });
 
     res.json({ success: true });
 
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: "Error enviando mensaje" });
+  }
+});
+
+/* =========================
+   ENVIAR IMAGEN
+========================= */
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsPath),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+});
+
+const upload = multer({ storage });
+
+app.post("/send-media", upload.single("file"), async (req, res) => {
+
+  try {
+
+    const { to } = req.body;
+    const file = req.file;
+
+    if (!file || !to) {
+      return res.status(400).json({ error: "Faltan datos" });
+    }
+
+    // 1️⃣ Subir archivo a Meta
+    const form = new FormData();
+    form.append("file", fs.createReadStream(file.path));
+    form.append("messaging_product", "whatsapp");
+
+    const uploadRes = await axios.post(
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    // 2️⃣ Enviar mensaje con media ID
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { id: uploadRes.data.id }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    // 3️⃣ Guardar local
+    const saved = await Message.create({
+      chatId: to,
+      from: "me",
+      media: "/uploads/" + file.filename
+    });
+
+    broadcast({ type: "new_message", message: saved });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("Error enviando imagen:", err.response?.data || err.message);
+    res.status(500).json({ error: "Error enviando imagen" });
   }
 });
 
