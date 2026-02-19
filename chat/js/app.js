@@ -17,10 +17,39 @@ document.getElementById("message-input").value+=e.native;
 }});
 document.getElementById("emoji-picker-container").appendChild(picker);
 
-document.getElementById("emoji-trigger").onclick=()=>{
+document.getElementById("emoji-trigger").onclick=(e)=>{
+e.stopPropagation();
 const c=document.getElementById("emoji-picker-container");
 c.style.display=c.style.display==="none"?"block":"none";
 };
+
+/* CERRAR EMOJI AL DAR CLICK AFUERA */
+document.addEventListener("click", (e) => {
+    const pickerContainer = document.getElementById("emoji-picker-container");
+    const emojiTrigger = document.getElementById("emoji-trigger");
+    if (pickerContainer.style.display === "block") {
+        if (!pickerContainer.contains(e.target) && e.target !== emojiTrigger) {
+            pickerContainer.style.display = "none";
+        }
+    }
+});
+
+/* FUNCIONES LIGHTBOX (POP-UP IMÁGENES) */
+function openLightbox(src) {
+    const lightbox = document.getElementById("lightbox");
+    const img = document.getElementById("lightbox-img");
+    const downloadLink = document.getElementById("download-link");
+    if(lightbox && img && downloadLink) {
+        img.src = src;
+        downloadLink.href = src;
+        lightbox.style.display = "flex";
+    }
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById("lightbox");
+    if(lightbox) lightbox.style.display = "none";
+}
 
 /* WEBSOCKET */
 const ws=new WebSocket(
@@ -104,6 +133,8 @@ if(msg.media){
 const img=document.createElement("img");
 img.src=msg.media;
 img.className="msg-image";
+img.style.cursor="pointer";
+img.onclick = () => openLightbox(msg.media);
 img.onerror=function(){this.style.display="none";};
 div.appendChild(img);
 }

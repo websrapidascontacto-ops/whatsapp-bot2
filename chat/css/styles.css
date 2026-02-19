@@ -362,3 +362,52 @@ body {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* ... (mantener todo lo anterior igual) ... */
+
+/* Ajuste de tamaño de imágenes en el chat */
+.msg-image {
+  max-width: 250px; /* Tamaño más contenido */
+  max-height: 250px;
+  border-radius: 12px;
+  margin-bottom: 5px;
+  display: block;
+  cursor: pointer; /* Indica que es clickeable */
+  transition: opacity 0.2s;
+}
+
+.msg-image:hover {
+  opacity: 0.9;
+}
+
+/* Estilos para el Visualizador de Imagen (Lightbox) */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.lightbox-content {
+  max-width: 90%;
+  max-height: 80vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.lightbox-tools {
+  margin-top: 20px;
+  display: flex;
+  gap: 20px;
+}
+
+.lightbox-btn {
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  text-decoration: none;
+}
