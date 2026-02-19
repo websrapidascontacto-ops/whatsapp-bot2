@@ -190,3 +190,31 @@ closeModal();
 }
 
 loadChats();
+async function searchMessages() {
+    const query = document.getElementById("global-search").value.toLowerCase();
+    const overlay = document.getElementById("search-results-overlay");
+    const list = document.getElementById("search-results-list");
+    if (query.length < 2) { overlay.style.display = "none"; return; }
+    const res = await fetch("/search?q=" + query);
+    const results = await res.json();
+    list.innerHTML = "";
+    overlay.style.display = "flex";
+    results.forEach(res => {
+        const div = document.createElement("div");
+        div.className = "search-result-item";
+        div.innerHTML = `<div style="font-size:11px; color:var(--blue); font-weight:700">${res.chatId}</div>
+                         <div style="font-size:13px">${res.text}</div>`;
+        div.onclick = () => { openChat(res.chatId); closeSearch(); };
+        list.appendChild(div);
+    });
+}
+
+function closeSearch() { document.getElementById("search-results-overlay").style.display = "none"; }
+
+async function deleteCurrentChat() {
+    if (!currentChat) return;
+    if (confirm("🗑️ ¿Borrar conversación?")) {
+        const res = await fetch(`/chats/${currentChat}`, { method: "DELETE" });
+        if (res.ok) { currentChat = null; messagesContainer.innerHTML = ""; loadChats(); }
+    }
+}
