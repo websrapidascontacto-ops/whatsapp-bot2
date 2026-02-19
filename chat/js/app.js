@@ -1,4 +1,6 @@
 let currentChat=null;
+let unreadCounts = {}; // CONTADOR DE NO LEIDOS
+
 const chatList=document.getElementById("chat-list");
 const messagesContainer=document.getElementById("messages");
 const chatContent=document.getElementById("chatContent");
@@ -27,10 +29,16 @@ location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host
 
 ws.onmessage=(event)=>{
 const data=JSON.parse(event.data);
+
 if(data.type==="new_message"){
-if(data.message.chatId===currentChat){
+const chatId = data.message.chatId;
+
+if(chatId===currentChat){
 renderMessage(data.message);
+} else {
+unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
 }
+
 loadChats();
 }
 };
@@ -40,10 +48,21 @@ async function loadChats(){
 const res=await fetch("/chats");
 const chats=await res.json();
 chatList.innerHTML="";
+
 chats.forEach(chat=>{
 const div=document.createElement("div");
 div.className="chat-item";
-div.innerHTML=`<div>${chat._id}</div><small>${chat.lastMessage||""}</small>`;
+
+if(unreadCounts[chat._id]){
+div.classList.add("unread");
+}
+
+div.innerHTML=`
+<div>${chat._id}</div>
+<small>${chat.lastMessage||""}</small>
+${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
+`;
+
 div.onclick=()=>openChat(chat._id);
 chatList.appendChild(div);
 });
@@ -52,15 +71,24 @@ chatList.appendChild(div);
 /* ABRIR CHAT */
 async function openChat(chatId){
 currentChat=chatId;
+
+// Limpiar no leídos
+delete unreadCounts[chatId];
+
 document.getElementById("header-name").innerText=chatId;
 messagesContainer.innerHTML="";
+
 if(window.innerWidth<=768){
 chatListContainer.style.display="none";
 chatContent.classList.add("active-mobile");
 }
+
 const res=await fetch("/messages/"+chatId);
 const msgs=await res.json();
 msgs.forEach(renderMessage);
+
+// Recargar lista para quitar badge
+loadChats();
 }
 
 function goBackMobile(){
@@ -101,26 +129,33 @@ if(!currentChat)return;
 const input=document.getElementById("message-input");
 const text=input.value.trim();
 if(!text)return;
+
 await fetch("/send-message",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify({to:currentChat,text})
 });
+
 input.value="";
 }
 
 let selectedFiles=[];
+
 document.getElementById("file-input").addEventListener("change",(e)=>{
 if(!currentChat){alert("Selecciona un chat primero");return;}
+
 selectedFiles=[...e.target.files];
 if(selectedFiles.length===0)return;
+
 const container=document.getElementById("preview-container");
 container.innerHTML="";
+
 selectedFiles.forEach(file=>{
 const img=document.createElement("img");
 img.src=URL.createObjectURL(file);
 container.appendChild(img);
 });
+
 document.getElementById("image-modal").style.display="flex";
 });
 
@@ -142,6 +177,7 @@ await fetch("/send-media",{method:"POST",body:formData});
 }
 
 const comment=document.getElementById("image-comment").value;
+
 if(comment.trim()!==""){
 await fetch("/send-message",{
 method:"POST",
