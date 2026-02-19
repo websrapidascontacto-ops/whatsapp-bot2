@@ -10,213 +10,219 @@
 <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 
 <style>
-* { box-sizing: border-box; }
+*{box-sizing:border-box}
 
-body {
-margin: 0;
-padding: 0;
-height: 100vh;
-font-family: 'Montserrat', sans-serif;
-background: radial-gradient(circle at top left, #0f172a, #020617 60%);
-color: #e2e8f0;
-display: flex;
-overflow: hidden;
+body{
+margin:0;
+padding:0;
+height:100vh;
+font-family:'Montserrat',sans-serif;
+background:radial-gradient(circle at top left,#0f172a,#020617 60%);
+color:#e2e8f0;
+display:flex;
+overflow:hidden;
 }
 
-/* ===== ESCRITORIO ORIGINAL ===== */
+/* SIDEBAR */
+.sidebar-redes{
+width:90px;
+background:rgba(15,23,42,.85);
+border-right:1px solid rgba(255,255,255,.05);
+display:flex;
+flex-direction:column;
+align-items:center;
+padding-top:30px;
+}
+.red-icon{width:50px;height:50px;margin-bottom:28px;display:flex;align-items:center;justify-content:center}
+.red-icon img{width:28px;height:28px}
 
-.sidebar-redes {
-width: 90px;
-background: rgba(15, 23, 42, 0.85);
-backdrop-filter: blur(18px);
-border-right: 1px solid rgba(255, 255, 255, 0.05);
-display: flex;
-flex-direction: column;
-align-items: center;
-padding-top: 30px;
+/* LISTA */
+.chat-list-container{
+width:380px;
+background:rgba(15,23,42,.95);
+border-right:1px solid rgba(255,255,255,.05);
+display:flex;
+flex-direction:column;
+}
+.list-header{padding:28px;font-weight:700;font-size:22px}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{padding:18px 22px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)}
+
+/* CHAT */
+.chat-content{
+flex:1;
+display:flex;
+flex-direction:column;
+background:linear-gradient(180deg,#0f172a,#0b1220);
+}
+.top-bar{
+padding:20px 30px;
+display:flex;
+align-items:center;
+gap:15px;
+border-bottom:1px solid rgba(255,255,255,.05);
+}
+.mobile-back{display:none;cursor:pointer;font-size:20px}
+.top-pfp{width:48px;height:48px;border-radius:50%}
+
+.messages-area{
+flex:1;
+padding:35px;
+overflow-y:auto;
+display:flex;
+flex-direction:column;
+gap:16px;
 }
 
-.red-icon {
-width: 50px;
-height: 50px;
-margin-bottom: 28px;
-cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
-border-radius: 16px;
-transition: all .25s ease;
+.msg-bubble{
+max-width:60%;
+padding:14px 18px;
+border-radius:18px;
+display:flex;
+flex-direction:column;
+gap:6px;
+font-size:14px;
 }
 
-.red-icon img { width: 28px; height: 28px; }
-
-.chat-list-container {
-width: 380px;
-background: rgba(15, 23, 42, 0.95);
-border-right: 1px solid rgba(255, 255, 255, 0.05);
-display: flex;
-flex-direction: column;
+.msg-received{
+background:rgba(30,41,59,.8);
+align-self:flex-start;
+border-bottom-left-radius:6px;
+}
+.msg-sent{
+background:linear-gradient(135deg,#3b82f6,#06b6d4);
+color:white;
+align-self:flex-end;
+border-bottom-right-radius:6px;
 }
 
-.list-header {
-padding: 28px;
-font-weight: 700;
-font-size: 22px;
-border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+.msg-time{
+font-size:11px;
+opacity:.6;
+text-align:right;
 }
 
-.chat-list { flex: 1; overflow-y: auto; }
-
-.chat-item {
-padding: 18px 22px;
-cursor: pointer;
-border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+.msg-image{
+width:100%;
+max-width:300px;
+border-radius:12px;
+margin-bottom:8px;
 }
 
-.chat-content {
-flex: 1;
-display: flex;
-flex-direction: column;
-background: linear-gradient(180deg, #0f172a, #0b1220);
+.input-area{
+padding:18px 25px;
+display:flex;
+align-items:center;
+gap:14px;
+border-top:1px solid rgba(255,255,255,.05);
+position:relative;
 }
 
-.top-bar {
-padding: 20px 30px;
-display: flex;
-align-items: center;
-gap: 15px;
-background: rgba(15, 23, 42, 0.95);
-border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+.input-area input[type="text"]{
+flex:1;
+background:rgba(30,41,59,.8);
+border:1px solid rgba(255,255,255,.05);
+padding:14px 18px;
+border-radius:16px;
+color:#e2e8f0;
+outline:none;
 }
 
-.mobile-back {
-display: none;
-cursor: pointer;
-font-size: 20px;
+.icon-btn{
+font-size:20px;
+cursor:pointer;
+opacity:.7;
+}
+.icon-btn:hover{opacity:1}
+
+.send-btn{
+background:linear-gradient(135deg,#10b981,#06b6d4);
+width:45px;height:45px;
+border-radius:14px;
+display:flex;align-items:center;justify-content:center;
+cursor:pointer;
+color:white;
 }
 
-.top-pfp {
-width: 48px;
-height: 48px;
-border-radius: 50%;
+/* EMOJI */
+#emoji-picker-container{
+position:absolute;
+bottom:80px;
+left:20px;
+display:none;
+z-index:1000;
 }
 
-.messages-area {
-flex: 1;
-padding: 35px;
-overflow-y: auto;
-display: flex;
-flex-direction: column;
-gap: 16px;
+/* MODAL */
+.modal-overlay{
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,.75);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
 }
-
-.msg-bubble {
-max-width: 60%;
-padding: 14px 18px;
-font-size: 14px;
-border-radius: 18px;
-display: flex;
-flex-direction: column;
-gap: 6px;
+.modal-box{
+background:#0f172a;
+padding:25px;
+border-radius:18px;
+width:500px;
+max-height:80vh;
+display:flex;
+flex-direction:column;
+gap:15px;
 }
-
-.msg-time {
-font-size: 11px;
-opacity: .6;
-text-align: right;
+.preview-grid{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+max-height:300px;
+overflow-y:auto;
 }
-
-.msg-received {
-background: rgba(30, 41, 59, 0.8);
-align-self: flex-start;
-border-bottom-left-radius: 6px;
+.preview-grid img{
+width:100px;height:100px;
+object-fit:cover;
+border-radius:10px;
 }
-
-.msg-sent {
-background: linear-gradient(135deg, #3b82f6, #06b6d4);
-color: #fff;
-align-self: flex-end;
-border-bottom-right-radius: 6px;
+.modal-box textarea{
+background:rgba(30,41,59,.8);
+border:1px solid rgba(255,255,255,.05);
+border-radius:12px;
+padding:10px;
+color:white;
+resize:none;
 }
-
-.msg-image {
-width: 100%;
-max-width: 300px;
-border-radius: 12px;
-margin-bottom: 8px;
+.modal-actions{
+display:flex;
+justify-content:flex-end;
+gap:10px;
 }
+.btn{padding:8px 14px;border-radius:10px;cursor:pointer}
+.btn-cancel{background:#334155}
+.btn-send{background:#10b981}
 
-.input-area {
-padding: 18px 25px;
-display: flex;
-align-items: center;
-gap: 14px;
-background: rgba(15, 23, 42, 0.95);
-border-top: 1px solid rgba(255, 255, 255, 0.05);
-position: relative;
-}
+/* RESPONSIVE */
+@media(max-width:768px){
 
-.input-area input[type="text"] {
-flex: 1;
-background: rgba(30, 41, 59, 0.8);
-border: 1px solid rgba(255, 255, 255, 0.05);
-padding: 14px 18px;
-border-radius: 16px;
-color: #e2e8f0;
-outline: none;
-font-family: 'Montserrat';
-}
+body{flex-direction:column}
 
-.send-btn {
-background: linear-gradient(135deg, #10b981, #06b6d4);
-color: #fff;
-width: 45px;
-height: 45px;
-border-radius: 14px;
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-}
+.sidebar-redes{display:none}
 
-/* ===== RESPONSIVE REAL ===== */
+.chat-list-container{width:100%;height:100%}
 
-@media (max-width: 768px) {
+.chat-content{display:none;width:100%;height:100%}
 
-body {
-flex-direction: column;
-}
+.chat-content.active-mobile{display:flex}
 
-.sidebar-redes {
-display: none;
-}
+.mobile-back{display:block}
 
-.chat-list-container {
-width: 100%;
-height: 100%;
-}
+.messages-area{padding:20px}
 
-.chat-content {
-display: none;
-width: 100%;
-height: 100%;
-}
+.msg-bubble{max-width:85%}
 
-.chat-content.active-mobile {
-display: flex;
-}
-
-.mobile-back {
-display: block;
-}
-
-.messages-area {
-padding: 20px;
-}
-
-.msg-bubble {
-max-width: 85%;
-}
+.modal-box{width:90%}
 
 }
 </style>
@@ -244,6 +250,10 @@ max-width: 85%;
 <div class="messages-area" id="messages"></div>
 
 <div class="input-area">
+<div id="emoji-picker-container"></div>
+<i class="fa-regular fa-face-smile icon-btn" id="emoji-trigger"></i>
+<label for="file-input"><i class="fa-solid fa-paperclip icon-btn"></i></label>
+<input type="file" id="file-input" style="display:none" accept="image/*" multiple>
 <input type="text" id="message-input" placeholder="Escribe un mensaje..." autocomplete="off">
 <div class="send-btn" onclick="sendMessage()">
 <i class="fa-solid fa-paper-plane"></i>
@@ -251,123 +261,175 @@ max-width: 85%;
 </div>
 </div>
 
+<!-- MODAL -->
+<div class="modal-overlay" id="image-modal">
+<div class="modal-box">
+<h3>Enviar imágenes</h3>
+<div class="preview-grid" id="preview-container"></div>
+<textarea id="image-comment" rows="3" placeholder="Añadir comentario (opcional)"></textarea>
+<div class="modal-actions">
+<div class="btn btn-cancel" onclick="closeModal()">Cancelar</div>
+<div class="btn btn-send" onclick="confirmSendImages()">Enviar</div>
+</div>
+</div>
+</div>
+
 <script>
 
-let currentChat = null;
-const chatList = document.getElementById("chat-list");
-const messagesContainer = document.getElementById("messages");
-const chatContent = document.getElementById("chatContent");
-const chatListContainer = document.getElementById("chatListContainer");
+let currentChat=null;
+const chatList=document.getElementById("chat-list");
+const messagesContainer=document.getElementById("messages");
+const chatContent=document.getElementById("chatContent");
+const chatListContainer=document.getElementById("chatListContainer");
 
-/* ENTER PARA ENVIAR */
-document.getElementById("message-input").addEventListener("keypress", function(e){
-  if(e.key === "Enter"){
-    e.preventDefault();
-    sendMessage();
-  }
+/* ENTER ENVÍA */
+document.getElementById("message-input").addEventListener("keypress",e=>{
+if(e.key==="Enter"){e.preventDefault();sendMessage();}
 });
 
+/* EMOJI */
+const picker=new EmojiMart.Picker({onEmojiSelect:e=>{
+document.getElementById("message-input").value+=e.native;
+}});
+document.getElementById("emoji-picker-container").appendChild(picker);
+
+document.getElementById("emoji-trigger").onclick=()=>{
+const c=document.getElementById("emoji-picker-container");
+c.style.display=c.style.display==="none"?"block":"none";
+};
+
 /* WEBSOCKET */
-const ws = new WebSocket(
-  location.protocol === "https:"
-    ? "wss://" + location.host
-    : "ws://" + location.host
+const ws=new WebSocket(
+location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host
 );
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if (data.type === "new_message") {
-    if (data.message.chatId === currentChat) {
-      renderMessage(data.message);
-    }
-    loadChats();
-  }
+ws.onmessage=(event)=>{
+const data=JSON.parse(event.data);
+if(data.type==="new_message"){
+if(data.message.chatId===currentChat){renderMessage(data.message);}
+loadChats();
+}
 };
 
 /* CARGAR CHATS */
-async function loadChats() {
-  const res = await fetch("/chats");
-  const chats = await res.json();
-  chatList.innerHTML = "";
-  chats.forEach(chat => {
-    const div = document.createElement("div");
-    div.className = "chat-item";
-    div.innerHTML = `<div>${chat._id}</div><small>${chat.lastMessage || ""}</small>`;
-    div.onclick = () => openChat(chat._id);
-    chatList.appendChild(div);
-  });
+async function loadChats(){
+const res=await fetch("/chats");
+const chats=await res.json();
+chatList.innerHTML="";
+chats.forEach(chat=>{
+const div=document.createElement("div");
+div.className="chat-item";
+div.innerHTML=`<div>${chat._id}</div><small>${chat.lastMessage||""}</small>`;
+div.onclick=()=>openChat(chat._id);
+chatList.appendChild(div);
+});
 }
 
 /* ABRIR CHAT */
-async function openChat(chatId) {
-  currentChat = chatId;
-  document.getElementById("header-name").innerText = chatId;
-  messagesContainer.innerHTML = "";
-
-  if(window.innerWidth <= 768){
-    chatListContainer.style.display = "none";
-    chatContent.classList.add("active-mobile");
-  }
-
-  const res = await fetch("/messages/" + chatId);
-  const msgs = await res.json();
-  msgs.forEach(renderMessage);
+async function openChat(chatId){
+currentChat=chatId;
+document.getElementById("header-name").innerText=chatId;
+messagesContainer.innerHTML="";
+if(window.innerWidth<=768){
+chatListContainer.style.display="none";
+chatContent.classList.add("active-mobile");
+}
+const res=await fetch("/messages/"+chatId);
+const msgs=await res.json();
+msgs.forEach(renderMessage);
 }
 
 function goBackMobile(){
-  chatContent.classList.remove("active-mobile");
-  chatListContainer.style.display = "flex";
+chatContent.classList.remove("active-mobile");
+chatListContainer.style.display="flex";
 }
 
-/* RENDER MENSAJE CON HORA */
-function renderMessage(msg) {
+/* RENDER */
+function renderMessage(msg){
+const div=document.createElement("div");
+div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
 
-  const div = document.createElement("div");
-  div.className = "msg-bubble " + (msg.from === "me" ? "msg-sent" : "msg-received");
-
-  if (msg.media) {
-    const img = document.createElement("img");
-    img.src = msg.media;
-    img.className = "msg-image";
-    div.appendChild(img);
-  }
-
-  if (msg.text) {
-    const text = document.createElement("div");
-    text.innerText = msg.text;
-    div.appendChild(text);
-  }
-
-  const time = document.createElement("div");
-  time.className = "msg-time";
-  const now = msg.createdAt ? new Date(msg.createdAt) : new Date();
-  time.innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  div.appendChild(time);
-
-  messagesContainer.appendChild(div);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+if(msg.media){
+const img=document.createElement("img");
+img.src=msg.media;
+img.className="msg-image";
+div.appendChild(img);
 }
 
-/* ENVIAR TEXTO */
-async function sendMessage() {
-  if (!currentChat) return;
+if(msg.text){
+const text=document.createElement("div");
+text.innerText=msg.text;
+div.appendChild(text);
+}
 
-  const input = document.getElementById("message-input");
-  const text = input.value.trim();
-  if (!text) return;
+const time=document.createElement("div");
+time.className="msg-time";
+const now=msg.createdAt?new Date(msg.createdAt):new Date();
+time.innerText=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+div.appendChild(time);
 
-  await fetch("/send-message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ to: currentChat, text })
-  });
+messagesContainer.appendChild(div);
+messagesContainer.scrollTop=messagesContainer.scrollHeight;
+}
 
-  input.value = "";
+/* ENVIAR */
+async function sendMessage(){
+if(!currentChat)return;
+const input=document.getElementById("message-input");
+const text=input.value.trim();
+if(!text)return;
+await fetch("/send-message",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({to:currentChat,text})
+});
+input.value="";
+}
+
+/* MULTI IMAGEN */
+let selectedFiles=[];
+document.getElementById("file-input").addEventListener("change",(e)=>{
+if(!currentChat){alert("Selecciona un chat primero");return;}
+selectedFiles=[...e.target.files];
+if(selectedFiles.length===0)return;
+const container=document.getElementById("preview-container");
+container.innerHTML="";
+selectedFiles.forEach(file=>{
+const img=document.createElement("img");
+img.src=URL.createObjectURL(file);
+container.appendChild(img);
+});
+document.getElementById("image-modal").style.display="flex";
+});
+
+function closeModal(){
+document.getElementById("image-modal").style.display="none";
+document.getElementById("image-comment").value="";
+selectedFiles=[];
+document.getElementById("file-input").value="";
+}
+
+async function confirmSendImages(){
+if(!currentChat)return;
+const comment=document.getElementById("image-comment").value;
+for(const file of selectedFiles){
+const formData=new FormData();
+formData.append("file",file);
+formData.append("to",currentChat);
+await fetch("/send-media",{method:"POST",body:formData});
+}
+if(comment.trim()!==""){
+await fetch("/send-message",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({to:currentChat,text:comment})
+});
+}
+closeModal();
 }
 
 loadChats();
 
 </script>
-
 </body>
 </html>
