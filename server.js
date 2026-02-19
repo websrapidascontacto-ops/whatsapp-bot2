@@ -74,25 +74,8 @@ function broadcast(data) {
 }
 
 /* =========================
-   🔥 WEBHOOK WHATSAPP
+   🔥 WEBHOOK WHATSAPP (ARREGLADO)
 ========================= */
-
-app.get("/webhook", (req, res) => {
-  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode && token) {
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      console.log("✅ Webhook verificado");
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
-  }
-});
 
 app.post("/webhook", async (req, res) => {
   const body = req.body;
@@ -104,21 +87,61 @@ app.post("/webhook", async (req, res) => {
 
         if (value.messages) {
           for (const msg of value.messages) {
+
             const sender = msg.from;
-            const text = msg.text?.body || "";
 
-            const saved = await Message.create({
-              chatId: sender,
-              from: sender,
-              text
-            });
+            /* ===== TEXTO ===== */
+            if (msg.type === "text") {
 
-            broadcast({
-              type: "new_message",
-              message: saved
-            });
+              const saved = await Message.create({
+                chatId: sender,
+                from: sender,
+                text: msg.text.body
+              });
 
-            console.log("📩 Mensaje recibido:", text);
+              broadcast({ type: "new_message", message: saved });
+            }
+
+            /* ===== IMAGEN ===== */
+            if (msg.type === "image") {
+
+              const mediaId = msg.image.id;
+
+              // 1️⃣ Obtener URL temporal
+              const mediaRes = await axios.get(
+                `https://graph.facebook.com/v18.0/${mediaId}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+                  }
+                }
+              );
+
+              const mediaUrl = mediaRes.data.url;
+
+              // 2️⃣ Descargar imagen
+              const fileRes = await axios.get(mediaUrl, {
+                responseType: "arraybuffer",
+                headers: {
+                  Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+                }
+              });
+
+              const fileName = Date.now() + ".jpg";
+              const filePath = path.join(uploadsPath, fileName);
+
+              fs.writeFileSync(filePath, fileRes.data);
+
+              // 3️⃣ Guardar en Mongo
+              const saved = await Message.create({
+                chatId: sender,
+                from: sender,
+                media: "/uploads/" + fileName
+              });
+
+              broadcast({ type: "new_message", message: saved });
+            }
+
           }
         }
       }
@@ -190,75 +213,6 @@ app.post("/send-message", async (req, res) => {
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: "Error enviando mensaje" });
-  }
-});
-
-/* =========================
-   🔥 ENVIAR MEDIA REAL A META
-========================= */
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsPath),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
-});
-
-const upload = multer({ storage });
-
-app.post("/send-media", upload.single("file"), async (req, res) => {
-  try {
-    const { to } = req.body;
-    const file = req.file;
-
-    if (!file || !to) {
-      return res.status(400).json({ error: "Faltan datos" });
-    }
-
-    // 1️⃣ Subir media a Meta
-    const form = new FormData();
-    form.append("file", fs.createReadStream(file.path));
-    form.append("messaging_product", "whatsapp");
-
-    const uploadRes = await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
-      form,
-      {
-        headers: {
-          ...form.getHeaders(),
-          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
-        }
-      }
-    );
-
-    // 2️⃣ Enviar mensaje con media ID
-    await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "image",
-        image: { id: uploadRes.data.id }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
-        }
-      }
-    );
-
-    // 3️⃣ Guardar en Mongo
-    const saved = await Message.create({
-      chatId: to,
-      from: "me",
-      media: "/uploads/" + file.filename
-    });
-
-    broadcast({ type: "new_message", message: saved });
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("ERROR META:", err.response?.data || err.message);
-    res.status(500).json({ error: "Error enviando media" });
   }
 });
 
