@@ -190,6 +190,30 @@ app.get("/messages/:chatId", async (req, res) => {
   res.json(messages);
 });
 
+/* --- NUEVO: BUSCAR PALABRAS EN TODOS LOS CHATS --- */
+app.get("/search", async (req, res) => {
+  const query = req.query.q;
+  if (!query) return res.json([]);
+  
+  // Busca texto que contenga la palabra (case-insensitive)
+  const results = await Message.find({
+    text: { $regex: query, $options: "i" }
+  }).limit(20).sort({ timestamp: -1 });
+
+  res.json(results);
+});
+
+/* --- NUEVO: BORRAR CONVERSACIÓN COMPLETA --- */
+app.delete("/chats/:chatId", async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    await Message.deleteMany({ chatId });
+    res.json({ success: true, message: "Conversación eliminada" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al borrar mensajes" });
+  }
+});
+
 /* =========================
    ENVIAR MENSAJE TEXTO
 ========================= */
