@@ -4,7 +4,8 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= ZOOM Y POSICIONAMIENTO ================= */
+/* ================= ZOOM ================= */
+
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -20,25 +21,26 @@ let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; 
+    lastNodeX += 380;
     return pos;
 }
 
-/* ================= LÓGICA DE GUARDADO DE DATOS (IMPORTANTE) ================= */
+/* ================= DATA SYNC (FIX CRÍTICO) ================= */
 
-// Esta función captura lo que escribes en los inputs y lo guarda en el nodo
 window.updateNodeData = function(nodeId, key, value) {
     const node = editor.getNodeFromId(nodeId);
+    if (!node.data) node.data = {};
     node.data[key] = value;
-    // Actualizamos el editor para que sepa que hubo cambios
-    editor.updateNodeValue(nodeId, node.data);
+
+    editor.updateNodeDataFromId(nodeId, node.data);
 };
 
-/* ================= FUNCIONES DE NODOS ================= */
+/* ================= NODOS ================= */
 
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
+
     const close = document.createElement("div");
     close.innerHTML = "✕";
     close.className = "node-close-btn";
@@ -52,19 +54,19 @@ function addCloseButton(nodeId) {
 
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    // Agregamos el nodo con un objeto de datos vacío inicialmente
     const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
 }
 
 function addTriggerNode() {
-    const id = editor.getNextId(); // Obtenemos el ID que tendrá el nodo
+    const id = editor.getNextId();
     createNode("trigger", 0, 1, `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
             <div class="node-body">
-                <input type="text" class="form-control" placeholder="Ej: Hola" 
+                <input type="text" class="form-control"
+                placeholder="Ej: hola"
                 oninput="updateNodeData(${id}, 'val', this.value)">
             </div>
         </div>
@@ -77,8 +79,10 @@ function addIANode() {
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" 
-                oninput="updateNodeData(${id}, 'info', this.value)">Base: S/380. WhatsApp: 991138132.</textarea>
+                <textarea class="form-control" rows="3"
+                oninput="updateNodeData(${id}, 'info', this.value)">
+Base: S/380. WhatsApp: 991138132.
+                </textarea>
             </div>
         </div>
     `);
@@ -90,7 +94,8 @@ function addMessageNode() {
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." 
+                <textarea class="form-control" rows="3"
+                placeholder="Tu respuesta..."
                 oninput="updateNodeData(${id}, 'info', this.value)"></textarea>
             </div>
         </div>
@@ -103,13 +108,18 @@ function addMenuNode() {
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-2" placeholder="Título" 
+                <input type="text" class="form-control mb-2"
+                placeholder="Título"
                 oninput="updateNodeData(${id}, 'info', this.value)">
+
                 <div class="menu-list" id="list-${id}">
-                    <input type="text" class="form-control mb-1" placeholder="Opción 1" 
+                    <input type="text" class="form-control mb-1"
+                    placeholder="Opción 1"
                     oninput="updateNodeData(${id}, 'option1', this.value)">
                 </div>
-                <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(${id})">+ Opción</button>
+
+                <button class="btn btn-outline-primary btn-sm w-100 mt-2"
+                onclick="addOption(${id})">+ Opción</button>
             </div>
         </div>
     `);
@@ -118,37 +128,56 @@ function addMenuNode() {
 window.addOption = function(nodeId) {
     const list = document.getElementById(`list-${nodeId}`);
     const optionCount = list.querySelectorAll("input").length + 1;
-    
-    // Añadimos un nuevo output al nodo para la nueva opción
+
     editor.addNodeOutput(nodeId);
-    
+
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = `Opción ${optionCount}`;
-    input.oninput = (e) => updateNodeData(nodeId, `option${optionCount}`, e.target.value);
-    
+    input.oninput = (e) =>
+        updateNodeData(nodeId, `option${optionCount}`, e.target.value);
+
     list.appendChild(input);
 };
 
-/* ================= GUARDAR Y MINIMAPA ================= */
+/* ================= SAVE FLOW (FIX IMPORTANTE) ================= */
 
 function saveFlow() {
+
+    const nodes = editor.drawflow.drawflow.Home.data;
+
+    Object.keys(nodes).forEach(id => {
+        const node = editor.getNodeFromId(id);
+        editor.updateNodeDataFromId(id, node.data);
+    });
+
     const flowData = editor.export();
-    console.log("Flujo exportado:", flowData);
-    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
+
+    fetch("/api/save-flow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(flowData)
+    });
+
+    alert("✅ Flujo guardado correctamente");
 }
 
-// ... (Resto de funciones de minimap e inicialización iguales)
+/* ================= MINIMAP ================= */
+
 function updateMinimap() {
     const minimap = document.getElementById("minimap");
     minimap.innerHTML = "";
+
     const mapCanvas = document.createElement("div");
     mapCanvas.style.position = "relative";
-    mapCanvas.style.width = "100%"; mapCanvas.style.height = "100%";
+    mapCanvas.style.width = "100%";
+    mapCanvas.style.height = "100%";
+
     minimap.appendChild(mapCanvas);
 
     const scale = 0.1;
+
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
@@ -171,12 +200,4 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
-    document.querySelector(".btn-save").onclick = saveFlow;
-});
-
-window.addEventListener('message', (event) => {
-    if (event.data.type === 'LOAD_FLOW') {
-        editor.import(event.data.data);
-        updateMinimap();
-    }
 });
