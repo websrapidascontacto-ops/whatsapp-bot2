@@ -25,7 +25,7 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (ACTUALIZADO PARA MENÚ) ================= */
+/* ================= GUARDAR (REVISADO PARA MENÚ) ================= */
 function saveFlow() {
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
@@ -33,8 +33,9 @@ function saveFlow() {
         if (nodeElement) {
             if (nodes[id].name === 'menu') {
                 const title = nodeElement.querySelector('input[placeholder="Título"]')?.value;
-                const options = Array.from(nodeElement.querySelectorAll('.menu-list input'))
-                                     .map(input => input.value);
+                // Capturamos todos los inputs de la lista de opciones
+                const optionInputs = nodeElement.querySelectorAll('.menu-list input');
+                const options = Array.from(optionInputs).map(input => input.value);
                 
                 editor.updateNodeDataFromId(id, { 
                     info: title,
@@ -51,10 +52,7 @@ function saveFlow() {
     }
 
     const flowData = editor.export();
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
 /* ================= NODOS ================= */
@@ -109,6 +107,7 @@ function addMessageNode() {
 }
 
 function addMenuNode() {
+    // El menú inicia con 1 salida por la "Opción 1"
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
@@ -126,16 +125,16 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const nodeElement = btn.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const list = btn.parentElement.querySelector(".menu-list");
+    const list = nodeElement.querySelector(".menu-list");
     
-    // Añadir input visual
+    // 1. Crear el input visualmente
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = "Nueva opción";
     list.appendChild(input);
 
-    // Añadir un nuevo punto de salida (output) al nodo en Drawflow
+    // 2. AGREGAR SALIDA FÍSICA AL NODO
     editor.addNodeOutput(nodeId);
 };
 
