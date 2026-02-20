@@ -8,12 +8,7 @@ editor.reroute = true;
 editor.start();
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
-editor.zoom_value = 0.1;
-
-container.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    e.deltaY < 0 ? editor.zoom_in() : editor.zoom_out();
-});
+editor.zoom_value = 0.5; // Ajustado para mejor visibilidad inicial
 
 /* ============================================================
    SISTEMA DE POSICIONAMIENTO AUTOMÁTICO
@@ -29,13 +24,12 @@ function getNextPosition() {
 }
 
 /* ============================================================
-   FUNCIONES DE CREACIÓN DE NODOS (MOTOR)
+   MOTOR DE CREACIÓN DE NODOS
    ============================================================ */
 function createNode(type, inputs, outputs, html, data = {}) {
     const pos = getNextPosition();
     const nodeId = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
     
-    // Botón de cerrar
     const nodeElem = document.getElementById(`node-${nodeId}`);
     const closeBtn = document.createElement("div");
     closeBtn.innerHTML = "×";
@@ -47,18 +41,39 @@ function createNode(type, inputs, outputs, html, data = {}) {
 }
 
 /* ============================================================
-   NODOS SIMPLES
+   NODOS SIMPLES (TRIGGER, MENSAJE, IA)
    ============================================================ */
 window.addTriggerNode = () => {
-    createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label>Palabra Clave:</label><input type="text" class="form-control" df-val placeholder="Ej: hola"></div></div>`);
+    createNode("trigger", 0, 1, `
+        <div class="node-wrapper">
+            <div class="node-header header-trigger">⚡ Trigger</div>
+            <div class="node-body">
+                <label class="small text-muted">Palabra Clave:</label>
+                <input type="text" class="form-control" df-val placeholder="Ej: hola">
+            </div>
+        </div>`);
 };
 
 window.addMessageNode = () => {
-    createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><label>Texto:</label><textarea class="form-control" df-info rows="3"></textarea></div></div>`);
+    createNode("message", 1, 1, `
+        <div class="node-wrapper">
+            <div class="node-header header-message">💬 Mensaje</div>
+            <div class="node-body">
+                <label class="small text-muted">Texto a enviar:</label>
+                <textarea class="form-control" df-info rows="3" placeholder="Escribe tu mensaje..."></textarea>
+            </div>
+        </div>`);
 };
 
 window.addIANode = () => {
-    createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA Chatbot</div><div class="node-body"><label>Contexto:</label><textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea></div></div>`);
+    createNode("ia", 1, 1, `
+        <div class="node-wrapper">
+            <div class="node-header header-ia">🤖 IA Chatbot</div>
+            <div class="node-body">
+                <label class="small text-muted">Instrucciones IA:</label>
+                <textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea>
+            </div>
+        </div>`);
 };
 
 /* ============================================================
@@ -72,7 +87,7 @@ window.addListNode = function() {
             <div class="node-body">
                 <input type="text" class="form-control mb-2" df-list_title placeholder="Título del Menú">
                 <input type="text" class="form-control mb-2" df-button_text placeholder="Texto del Botón">
-                <div id="list-items-${nodeId}" class="menu-options-list">
+                <div id="list-items-${nodeId}">
                     <input type="text" class="form-control mb-1" df-row1 placeholder="Opción 1">
                 </div>
                 <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Añadir Fila</button>
@@ -88,7 +103,7 @@ window.addMenuNode = function() {
             <div class="node-header header-menu">📋 Menú Numérico</div>
             <div class="node-body">
                 <input type="text" class="form-control mb-2" df-info placeholder="Título">
-                <div id="menu-items-${nodeId}" class="menu-options-list">
+                <div id="menu-items-${nodeId}">
                     <input type="text" class="form-control mb-1" df-option1 placeholder="Opción 1">
                 </div>
                 <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="addRow(${nodeId}, 'option')">+ Opción</button>
@@ -97,13 +112,13 @@ window.addMenuNode = function() {
     createNode("menu", 1, 1, html, { info: '', option1: '' });
 };
 
-// Función genérica para añadir filas a Listas o Menús
+// Función unificada para añadir filas
 window.addRow = (nodeId, prefix) => {
     const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
     if(!container) return;
     
     const count = container.querySelectorAll("input").length + 1;
-    if(count > 10) return alert("Máximo 10 opciones permitidas");
+    if(count > 10) return alert("Máximo 10 opciones");
 
     editor.addNodeOutput(nodeId);
     const input = document.createElement("input");
@@ -114,7 +129,7 @@ window.addRow = (nodeId, prefix) => {
 };
 
 /* ============================================================
-   SISTEMA DE GUARDADO Y CARGA
+   GUARDADO
    ============================================================ */
 window.saveFlow = function() {
     const data = editor.export();
