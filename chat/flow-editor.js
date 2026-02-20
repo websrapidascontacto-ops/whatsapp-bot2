@@ -11,26 +11,14 @@ editor.zoom_min = 0.3;
 editor.zoom_value = 0.5;
 
 /* ============================================================
-   SISTEMA DE POSICIONAMIENTO AUTOMÁTICO
-   ============================================================ */
-let lastNodeX = 50;
-let lastNodeY = 150;
-
-function getNextPosition() {
-    const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; 
-    if (lastNodeX > 1400) { lastNodeX = 50; lastNodeY += 450; }
-    return pos;
-}
-
-/* ============================================================
-   MOTOR DE CREACIÓN DE NODOS (ÚNICO)
+   MOTOR DE CREACIÓN DE NODOS
    ============================================================ */
 function createNode(type, inputs, outputs, html, data = {}) {
     const pos = getNextPosition();
+    // En Drawflow, el ID se genera al añadir el nodo
     const nodeId = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
     
-    // Botón de cerrar para todos los nodos
+    // Botón de cerrar (con retraso para asegurar que el DOM exista)
     setTimeout(() => {
         const nodeElem = document.getElementById(`node-${nodeId}`);
         if (nodeElem) {
@@ -40,38 +28,49 @@ function createNode(type, inputs, outputs, html, data = {}) {
             closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
             nodeElem.appendChild(closeBtn);
         }
-    }, 20);
+    }, 50);
+    
     return nodeId;
+}
+
+let lastNodeX = 50;
+let lastNodeY = 150;
+function getNextPosition() {
+    const pos = { x: lastNodeX, y: lastNodeY };
+    lastNodeX += 380; 
+    if (lastNodeX > 1400) { lastNodeX = 50; lastNodeY += 450; }
+    return pos;
 }
 
 /* ============================================================
    NODOS SIMPLES (TRIGGER, MENSAJE, IA)
    ============================================================ */
 window.addTriggerNode = () => {
-    createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label class="small text-muted">Palabra Clave:</label><input type="text" class="form-control" df-val placeholder="Ej: hola"></div></div>`);
+    createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label class="small">Palabra Clave:</label><input type="text" class="form-control" df-val></div></div>`);
 };
 
 window.addMessageNode = () => {
-    createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><label class="small text-muted">Texto:</label><textarea class="form-control" df-info rows="3" placeholder="Mensaje de WhatsApp..."></textarea></div></div>`);
+    createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><label class="small">Texto:</label><textarea class="form-control" df-info rows="3"></textarea></div></div>`);
 };
 
 window.addIANode = () => {
-    createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA Chatbot</div><div class="node-body"><label class="small text-muted">Contexto:</label><textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea></div></div>`);
+    createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA Chatbot</div><div class="node-body"><label class="small">Contexto:</label><textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea></div></div>`);
 };
 
 /* ============================================================
    NODOS DINÁMICOS (LISTA Y MENÚ)
    ============================================================ */
 window.addListNode = function() {
-    const nodeId = editor.getNextId();
+    // IMPORTANTE: Primero obtenemos el ID que tendrá el nodo
+    const nodeId = editor.node_id; 
     const html = `
         <div class="node-wrapper">
             <div class="node-header header-list"><i class="fa-solid fa-list-ul"></i> Lista WhatsApp</div>
             <div class="node-body">
                 <input type="text" class="form-control mb-2" df-list_title placeholder="Título">
-                <input type="text" class="form-control mb-2" df-button_text placeholder="Texto Botón">
+                <input type="text" class="form-control mb-2" df-button_text placeholder="Botón">
                 <div id="list-items-${nodeId}">
-                    <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
+                    <input type="text" class="form-control mb-1" df-row1 placeholder="Opción 1">
                 </div>
                 <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Fila</button>
             </div>
@@ -80,7 +79,7 @@ window.addListNode = function() {
 };
 
 window.addMenuNode = function() {
-    const nodeId = editor.getNextId();
+    const nodeId = editor.node_id;
     const html = `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú Numérico</div>
@@ -110,7 +109,7 @@ window.addRow = (nodeId, prefix) => {
 };
 
 /* ============================================================
-   GUARDADO Y CARGA
+   SISTEMA DE GUARDADO
    ============================================================ */
 window.saveFlow = function() {
     const data = editor.export();
