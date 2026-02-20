@@ -117,7 +117,6 @@ async function processSequence(to, node, allNodes) {
         
         if (mediaPath) {
             const isLocal = mediaPath.startsWith('/uploads/');
-            // Usamos la URL de tu app en Railway para que Meta pueda acceder al archivo
             const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
             const fullUrl = isLocal ? `https://${domain}${mediaPath}` : mediaPath;
 
@@ -165,13 +164,18 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// API PARA EL EDITOR: Guarda la imagen del nodo en el servidor
+// ARREGLADO: Ruta para el editor de flujos con manejo de errores
 app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No hay archivo" });
-    res.json({ url: `/uploads/${req.file.filename}` });
+    try {
+        if (!req.file) return res.status(400).json({ error: "No hay archivo" });
+        console.log("📁 Archivo de nodo recibido:", req.file.filename);
+        res.json({ url: `/uploads/${req.file.filename}` });
+    } catch (err) {
+        res.status(500).json({ error: "Error en la subida" });
+    }
 });
 
-// ENVIAR MEDIA MANUAL (Desde el Chat CRM)
+// ENVIAR MEDIA MANUAL (CRM)
 app.post("/send-media", upload.single("file"), async (req, res) => {
     try {
         const { to } = req.body;
@@ -224,4 +228,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 2 Activo"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 2 Activo y Arreglado"));
