@@ -28,6 +28,7 @@ function getNextPosition() {
 /* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
+    // Enviamos el objeto al padre (index.html)
     window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
@@ -48,7 +49,6 @@ function addCloseButton(nodeId) {
 
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    // Se inicializa el objeto data vacío para evitar errores de lectura
     const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
@@ -59,7 +59,7 @@ function addTriggerNode() {
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
             <div class="node-body">
-                <input type="text" class="form-control" placeholder="Ej: Hola" df-val>
+                <input type="text" class="form-control" placeholder="Ej: hola" df-val>
             </div>
         </div>
     `);
@@ -105,8 +105,7 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
     const optionCount = list.querySelectorAll("input").length + 1;
-    const nodeElement = btn.closest(".drawflow-node");
-    const nodeId = nodeElement.id.replace("node-", "");
+    const nodeId = btn.closest(".drawflow-node").id.replace("node-", "");
     
     const input = document.createElement("input");
     input.type = "text";
@@ -115,16 +114,13 @@ window.addOption = function(btn) {
     const attrName = `option${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // Sincronización manual con el motor de Drawflow para opciones dinámicas
+    // FUERZA EL GUARDADO: Sin esto, Drawflow no registra los inputs nuevos
     input.addEventListener('input', (e) => {
-        if (!editor.drawflow.drawflow.Home.data[nodeId].data) {
-            editor.drawflow.drawflow.Home.data[nodeId].data = {};
-        }
-        editor.drawflow.drawflow.Home.data[nodeId].data[attrName] = e.target.value;
+        editor.updateNodeDataFromId(nodeId, { [attrName]: e.target.value });
     });
 
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Añade el punto de conexión visual
+    editor.addNodeOutput(nodeId);
 };
 
 /* ================= MINIMAPA ================= */
@@ -149,18 +145,14 @@ function updateMinimap() {
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
-        clone.style.width = node.offsetWidth * scale + "px";
-        clone.style.height = node.offsetHeight * scale + "px";
-        clone.style.left = node.offsetLeft * scale + "px";
-        clone.style.top = node.offsetTop * scale + "px";
+        clone.style.width = (node.offsetWidth * scale) + "px";
+        clone.style.height = (node.offsetHeight * scale) + "px";
+        clone.style.left = (node.offsetLeft * scale) + "px";
+        clone.style.top = (node.offsetTop * scale) + "px";
         clone.style.background = "#1e293b";
         clone.style.borderRadius = "4px";
         mapCanvas.appendChild(clone);
     });
-    viewport.style.left = (-editor.precanvas_x * scale) + "px";
-    viewport.style.top = (-editor.precanvas_y * scale) + "px";
-    viewport.style.width = (container.clientWidth * scale) + "px";
-    viewport.style.height = (container.clientHeight * scale) + "px";
 }
 
 editor.on("nodeCreated", updateMinimap);
