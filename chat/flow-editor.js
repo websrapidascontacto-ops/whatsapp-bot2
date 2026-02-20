@@ -9,12 +9,23 @@ let lastNodeY = 150;
 function createNode(type, inputs, outputs, html, data = {}) {
     const nodeId = editor.addNode(type, inputs, outputs, lastNodeX, lastNodeY, type, data, html);
     lastNodeX += 380; if (lastNodeX > 1000) { lastNodeX = 50; lastNodeY += 400; }
+    
+    setTimeout(() => {
+        const nodeElem = document.getElementById(`node-${nodeId}`);
+        if (nodeElem) {
+            const closeBtn = document.createElement("div");
+            closeBtn.innerHTML = "×";
+            closeBtn.className = "node-close-btn";
+            closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
+            nodeElem.appendChild(closeBtn);
+        }
+    }, 100);
     return nodeId;
 }
 
 window.addTriggerNode = () => createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><input type="text" class="form-control" df-val></div></div>`, { val: '' });
-
 window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><textarea class="form-control" df-info></textarea></div></div>`, { info: '' });
+window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
 
 window.addListNode = function() {
     const nodeId = editor.node_id + 1;
@@ -31,16 +42,13 @@ window.addRow = (nodeId, prefix) => {
     input.className = "form-control mb-1";
     input.setAttribute(`df-${prefix}${count}`, "");
     container.appendChild(input);
-    
-    // Actualizar data interna
     const node = editor.getNodeFromId(nodeId);
     if(node) node.data[`${prefix}${count}`] = "";
 };
 
 window.saveFlow = function() {
     const data = editor.export();
-    fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-    .then(() => alert("✅ Flujo Guardado"));
+    fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Guardado"));
 };
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
