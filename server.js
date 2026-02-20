@@ -52,7 +52,6 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model("Message", messageSchema);
 
-// Esquema para manejar las sesiones de menú
 const sessionSchema = new mongoose.Schema({
   chatId: String,
   lastNodeId: String,
@@ -101,20 +100,18 @@ app.post("/webhook", async (req, res) => {
             let incomingText = "";
             let selectionId = "";
 
-            // DETECTAR TIPO DE MENSAJE (Texto normal o Selección de Lista)
             if (msg.type === "text") {
               incomingText = msg.text.body.toLowerCase().trim();
             } else if (msg.type === "interactive") {
-              selectionId = msg.interactive.list_reply?.id; // Ejemplo: "row_1"
+              selectionId = msg.interactive.list_reply?.id;
               incomingText = msg.interactive.list_reply?.title.toLowerCase().trim();
             }
 
             if (incomingText || selectionId) {
-              // Guardar mensaje en DB y broadcast
               const saved = await Message.create({
                 chatId: sender,
                 from: sender,
-                text: incomingText
+                text: incomingText || "Selección de menú"
               });
               broadcast({ type: "new_message", message: saved });
 
@@ -124,7 +121,7 @@ app.post("/webhook", async (req, res) => {
                   const nodes = flow.data.drawflow.Home.data;
                   let nextNode = null;
 
-                  // 1. LÓGICA DE TRIGGER (Si el mensaje activa el inicio)
+                  // 1. BUSCAR POR TRIGGER
                   const triggerNode = Object.values(nodes).find(node => 
                     node.name === 'trigger' && 
                     node.data.val?.toLowerCase().trim() === incomingText
@@ -134,15 +131,16 @@ app.post("/webhook", async (req, res) => {
                     const nextId = triggerNode.outputs.output_1.connections[0]?.node;
                     nextNode = nodes[nextId];
                   } else {
-                    // 2. LÓGICA DE CONTINUACIÓN (Si ya estaba en un menú)
+                    // 2. BUSCAR POR SESIÓN (RESPUESTA A MENÚ)
                     const session = await Session.findOne({ chatId: sender });
                     if (session && nodes[session.lastNodeId]) {
                       const currentNode = nodes[session.lastNodeId];
                       let optionNumber = 0;
 
                       if (selectionId) {
-                        optionNumber = selectionId.split('_')[1]; // de "row_1" saca 1
+                        optionNumber = selectionId.split('_')[1];
                       } else {
+                        // Soporte para si el usuario escribe el número manualmente
                         optionNumber = parseInt(incomingText);
                       }
 
@@ -154,7 +152,7 @@ app.post("/webhook", async (req, res) => {
                     }
                   }
 
-                  // 3. ENVIAR RESPUESTA SEGÚN NODO ENCONTRADO
+                  // 3. ENVIAR RESPUESTA
                   if (nextNode) {
                     let responseData = null;
 
@@ -167,25 +165,27 @@ app.post("/webhook", async (req, res) => {
                       await Session.deleteOne({ chatId: sender });
                     } 
                     else if (nextNode.name === 'menu') {
-                      const options = nextNode.data.options || [];
-                      const rows = options.map((opt, i) => ({
+                      // EXTRAER TÍTULO Y OPCIONES DEL NODO
+                      const menuTitle = nextNode.data.info || "Selecciona una opción:";
+                      const menuOptions = nextNode.data.options || [];
+
+                      const rows = menuOptions.map((opt, i) => ({
                         id: `row_${i + 1}`,
-                        title: opt.substring(0, 24),
+                        title: opt.substring(0, 24) || `Opción ${i + 1}`,
                         description: ""
                       }));
 
-                      // FORMATO DE LISTA PROFESIONAL (Como tu imagen 2)
                       responseData = {
                         messaging_product: "whatsapp",
                         to: sender,
                         type: "interactive",
                         interactive: {
                           type: "list",
-                          header: { type: "text", text: "Opciones Disponibles" },
-                          body: { text: nextNode.data.info || "Por favor selecciona una opción:" },
+                          header: { type: "text", text: "Menú Principal" },
+                          body: { text: menuTitle },
                           footer: { text: "Webs Rápidas 🚀" },
                           action: {
-                            button: "Ver Menú",
+                            button: "Ver opciones",
                             sections: [{ title: "Selecciona una:", rows: rows }]
                           }
                         }
@@ -203,17 +203,17 @@ app.post("/webhook", async (req, res) => {
                         headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
                       });
 
-                      const botText = responseData.interactive ? responseData.interactive.body.text : responseData.text.body;
-                      const botSaved = await Message.create({ chatId: sender, from: "me", text: botText });
+                      const logText = responseData.interactive ? responseData.interactive.body.text : responseData.text.body;
+                      const botSaved = await Message.create({ chatId: sender, from: "me", text: logText });
                       broadcast({ type: "new_message", message: botSaved });
                     }
                   }
                 }
               } catch (err) {
-                console.error("Error en motor de flujos:", err.response?.data || err.message);
+                console.error("Error motor:", err.response?.data || err.message);
               }
             }
-
+            
             /* ===== LÓGICA DE IMAGEN ===== */
             if (msg.type === "image") {
               try {
@@ -249,7 +249,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 /* =========================
-   APIS REST
+   APIS REST (SIN CAMBIOS)
 ========================= */
 app.get("/chats", async (req, res) => {
   const chats = await Message.aggregate([
