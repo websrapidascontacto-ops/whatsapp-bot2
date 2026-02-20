@@ -206,3 +206,14 @@ body {
     box-shadow: none !important;
     border-radius: 8px !important;
 }
+/* Alinea los puntos de salida con los inputs de las opciones */
+#drawflow .drawflow-node.menu .outputs {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 45px; /* Ajusta según la altura de tu cabecera "Menú" */
+}
+
+#drawflow .drawflow-node.menu .output {
+    margin-bottom: 12px; /* Alineación vertical con los inputs */
+}

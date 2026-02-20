@@ -25,7 +25,7 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (REFORZADO) ================= */
+/* ================= GUARDAR ================= */
 function saveFlow() {
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
@@ -106,13 +106,16 @@ function addMessageNode() {
 }
 
 function addMenuNode() {
+    // El menú inicia con 1 salida física para la Opción 1
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
                 <input type="text" class="form-control mb-2" placeholder="Título" style="font-family: 'Montserrat', sans-serif;">
                 <div class="menu-list">
-                    <input type="text" class="form-control mb-1" placeholder="Opción 1" style="font-family: 'Montserrat', sans-serif;">
+                    <div class="option-row mb-1">
+                        <input type="text" class="form-control" placeholder="Opción 1" style="font-family: 'Montserrat', sans-serif;">
+                    </div>
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
             </div>
@@ -125,18 +128,16 @@ window.addOption = function(btn) {
     const nodeId = nodeElement.id.replace('node-', '');
     const list = nodeElement.querySelector(".menu-list");
     
-    // 1. Crear el input visual
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "form-control mb-1";
-    input.placeholder = `Opción ${list.children.length + 1}`;
-    input.style.fontFamily = "'Montserrat', sans-serif";
-    list.appendChild(input);
+    // 1. Añadimos el input visualmente
+    const div = document.createElement("div");
+    div.className = "option-row mb-1";
+    div.innerHTML = `<input type="text" class="form-control" placeholder="Opción ${list.children.length + 1}" style="font-family: 'Montserrat', sans-serif;">`;
+    list.appendChild(div);
 
-    // 2. Agregar la salida física
+    // 2. AGREGAR SALIDA LÓGICA (Puntito blanco a la derecha)
     editor.addNodeOutput(nodeId);
     
-    // 3. Importante: Sincronizar el HTML interno para que Drawflow no pierda los inputs al mover el nodo
+    // 3. Sincronizar el HTML para que Drawflow no pierda los nuevos inputs al mover el nodo
     const currentHtml = nodeElement.querySelector('.drawflow_content_node').innerHTML;
     editor.drawflow.drawflow.Home.data[nodeId].html = currentHtml;
 };
@@ -184,19 +185,20 @@ editor.on("zoom", updateMinimap);
 editor.on("translate", updateMinimap);
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Usar event listener para evitar duplicidad de clicks
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
-    document.querySelector(".btn-save").onclick = saveFlow; // Asegúrate de que el botón de guardado tenga esta clase
+    
+    const saveBtn = document.querySelector(".btn-save");
+    if(saveBtn) saveBtn.onclick = saveFlow;
+
     setTimeout(updateMinimap, 500);
 });
 
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
-        // Al cargar, debemos re-añadir los botones de cerrar a los nodos importados
         Object.keys(editor.drawflow.drawflow.Home.data).forEach(id => {
             addCloseButton(id);
         });
