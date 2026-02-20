@@ -25,17 +25,16 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (REVISADO PARA MENÚ) ================= */
+/* ================= GUARDAR (REFORZADO) ================= */
 function saveFlow() {
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
         const nodeElement = document.getElementById('node-' + id);
         if (nodeElement) {
             if (nodes[id].name === 'menu') {
-                const title = nodeElement.querySelector('input[placeholder="Título"]')?.value;
-                // Capturamos todos los inputs de la lista de opciones
+                const title = nodeElement.querySelector('input[placeholder="Título"]')?.value || "";
                 const optionInputs = nodeElement.querySelectorAll('.menu-list input');
-                const options = Array.from(optionInputs).map(input => input.value);
+                const options = Array.from(optionInputs).map(input => input.value).filter(v => v !== "");
                 
                 editor.updateNodeDataFromId(id, { 
                     info: title,
@@ -107,14 +106,13 @@ function addMessageNode() {
 }
 
 function addMenuNode() {
-    // El menú inicia con 1 salida por la "Opción 1"
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-2" placeholder="Título">
+                <input type="text" class="form-control mb-2" placeholder="Título" style="font-family: 'Montserrat', sans-serif;">
                 <div class="menu-list">
-                    <input type="text" class="form-control mb-1" placeholder="Opción 1">
+                    <input type="text" class="form-control mb-1" placeholder="Opción 1" style="font-family: 'Montserrat', sans-serif;">
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
             </div>
@@ -127,15 +125,20 @@ window.addOption = function(btn) {
     const nodeId = nodeElement.id.replace('node-', '');
     const list = nodeElement.querySelector(".menu-list");
     
-    // 1. Crear el input visualmente
+    // 1. Crear el input visual
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
-    input.placeholder = "Nueva opción";
+    input.placeholder = `Opción ${list.children.length + 1}`;
+    input.style.fontFamily = "'Montserrat', sans-serif";
     list.appendChild(input);
 
-    // 2. AGREGAR SALIDA FÍSICA AL NODO
+    // 2. Agregar la salida física
     editor.addNodeOutput(nodeId);
+    
+    // 3. Importante: Sincronizar el HTML interno para que Drawflow no pierda los inputs al mover el nodo
+    const currentHtml = nodeElement.querySelector('.drawflow_content_node').innerHTML;
+    editor.drawflow.drawflow.Home.data[nodeId].html = currentHtml;
 };
 
 /* ================= MINIMAPA Y EVENTOS ================= */
@@ -181,16 +184,22 @@ editor.on("zoom", updateMinimap);
 editor.on("translate", updateMinimap);
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Usar event listener para evitar duplicidad de clicks
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
+    document.querySelector(".btn-save").onclick = saveFlow; // Asegúrate de que el botón de guardado tenga esta clase
     setTimeout(updateMinimap, 500);
 });
 
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
+        // Al cargar, debemos re-añadir los botones de cerrar a los nodos importados
+        Object.keys(editor.drawflow.drawflow.Home.data).forEach(id => {
+            addCloseButton(id);
+        });
         updateMinimap();
     }
 });
