@@ -291,28 +291,44 @@ function loadFlowsList() {
 }
 
 // ESCUCHAR DATOS DEL EDITOR (Iframe)
-window.addEventListener('message', async function(event) {
+window.addEventListener('message', function(event) {
     if (event.data.type === 'SAVE_FLOW') {
-        const flowJson = event.data.data;
-        console.log("Datos recibidos en CRM:", flowJson);
+        let flowJson = event.data.data;
         
-        try {
-            // ENVIAR A TU API EN RAILWAY
-            const response = await fetch('/api/save-flow', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(flowJson)
-            });
-            
-            if (response.ok) {
-                alert("✅ Flujo guardado correctamente en MongoDB.");
-            } else {
-                alert("❌ Error al guardar en el servidor.");
+        // 1. Extraer los datos de los inputs del iframe manualmente para asegurar que NO viajen vacíos
+        const iframe = document.querySelector('iframe'); // Asegúrate de que este sea tu iframe del editor
+        if(iframe && iframe.contentDocument) {
+            const nodes = flowJson.drawflow.Home.data;
+            for (const id in nodes) {
+                const nodeEl = iframe.contentDocument.getElementById('node-' + id);
+                if (nodeEl) {
+                    const val = nodeEl.querySelector('input, textarea')?.value;
+                    if (val) {
+                        if (nodes[id].name === 'trigger') {
+                            nodes[id].data = { val: val };
+                        } else {
+                            nodes[id].data = { info: val };
+                        }
+                    }
+                }
             }
-        } catch (error) {
-            console.error("Error de conexión:", error);
-            alert("Hubo un error al conectar con Railway.");
         }
+
+        console.log("Datos procesados en CRM:", flowJson);
+
+        // 2. Enviar a Railway (MongoDB)
+        fetch('/api/save-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(flowJson)
+        })
+        .then(res => res.json())
+        .then(res => {
+            if(res.success) {
+                alert("✅ ¡Flujo guardado correctamente! El bot ya puede responder.");
+            }
+        })
+        .catch(err => console.error("Error al guardar:", err));
     }
 });
 
