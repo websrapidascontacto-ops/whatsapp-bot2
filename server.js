@@ -98,18 +98,37 @@ app.post("/webhook", async (req, res) => {
 });
 
 // FUNCIÓN RECURSIVA: Procesa el nodo actual y salta al siguiente si existe conexión
+// ... (Todo el código anterior de server.js se mantiene igual)
+
 async function processSequence(to, node, allNodes) {
     if (!node) return;
 
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
-    // 1. Identificar y enviar contenido del nodo actual
+    // --- LÓGICA DE NODOS ACTUALIZADA ---
     if (node.name === "message" || node.name === "ia") {
         botText = node.data.info || "S/380";
         payload.type = "text";
         payload.text = { body: botText };
-    } else if (node.name === "whatsapp_list") {
+    } 
+    else if (node.name === "media") {
+        // NUEVO: Módulo de Imagen funcional
+        const imageUrl = node.data.media_url;
+        const caption = node.data.caption || "";
+        
+        if (imageUrl) {
+            payload.type = "image";
+            payload.image = { link: imageUrl, caption: caption };
+            botText = `🖼️ Imagen enviada: ${caption}`;
+        } else {
+            // Si el nodo está vacío, mandamos un aviso para no romper el flujo
+            payload.type = "text";
+            payload.text = { body: "⚠️ (Nodo de imagen vacío en el flujo)" };
+            botText = "Error: Nodo media vacío";
+        }
+    }
+    else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
             .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
         payload.type = "interactive";
@@ -121,34 +140,30 @@ async function processSequence(to, node, allNodes) {
         botText = "📋 Menú enviado";
     }
 
-    // 2. Ejecutar envío a Meta
+    // --- ENVÍO Y RECURSIVIDAD ---
     try {
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        // 3. Guardar en historial y avisar al CRM
+        // Guardar registro en el chat
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        // 4. ¿HAY UN SIGUIENTE NODO CONECTADO? (Recursividad)
-        // Buscamos si el nodo actual tiene algo conectado en su salida (output_1)
+        // SALTO AL SIGUIENTE NODO (Secuencia continua)
         if (node.outputs && node.outputs.output_1 && node.outputs.output_1.connections.length > 0) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             const nextNode = allNodes[nextNodeId];
             
-            // Añadimos un pequeño retraso de 1 segundo para que no lleguen pegados
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Llamada recursiva
+            await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 seg entre mensajes
             return await processSequence(to, nextNode, allNodes);
         }
     } catch (err) {
-        console.error("❌ Error enviando nodo secuencial:", err.response?.data || err.message);
+        console.error("❌ Error en flujo secuencial:", err.response?.data || err.message);
     }
 }
 
-/* ========================= RESTO DE APIS (ENVÍO CRM, ETC) ========================= */
+// ... (Resto del server.js sin cambios)/* ========================= RESTO DE APIS (ENVÍO CRM, ETC) ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)

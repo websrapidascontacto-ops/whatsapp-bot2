@@ -52,3 +52,16 @@ window.saveFlow = function() {
 };
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
+window.addMediaNode = () => {
+    const nodeId = editor.node_id + 1;
+    createNode("media", 1, 1, `
+        <div class="node-wrapper">
+            <div class="node-header" style="background: #e67e22; color: white;">🖼️ Imagen / Media</div>
+            <div class="node-body">
+                <label class="small">URL de la Imagen (JPG/PNG):</label>
+                <input type="text" class="form-control mb-2" df-media_url placeholder="https://ejemplo.com/foto.jpg">
+                <label class="small">Pie de foto (Opcional):</label>
+                <input type="text" class="form-control" df-caption placeholder="Ej: Mira nuestra oferta">
+            </div>
+        </div>`, { media_url: '', caption: '' });
+};
