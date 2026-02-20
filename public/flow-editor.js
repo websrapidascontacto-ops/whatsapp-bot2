@@ -171,3 +171,15 @@ function saveFlow() {
     const data = editor.export();
     window.parent.postMessage({ type: 'SAVE_FLOW', data: data }, '*');
 }
+/* ENVIAR DATOS AL PADRE (CRM) */
+function saveFlow() {
+    // Exportamos la data de Drawflow
+    const flowData = editor.export();
+    console.log("Exportando flujo...", flowData);
+    
+    // Enviamos el mensaje al CRM (index.html)
+    window.parent.postMessage({ 
+        type: 'SAVE_FLOW', 
+        data: flowData 
+    }, '*');
+}

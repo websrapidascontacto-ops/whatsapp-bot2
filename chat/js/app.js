@@ -294,8 +294,10 @@ function loadFlowsList() {
 window.addEventListener('message', async function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         const flowJson = event.data.data;
+        console.log("Datos recibidos en CRM:", flowJson);
         
         try {
+            // ENVIAR A TU API EN RAILWAY
             const response = await fetch('/api/save-flow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -303,13 +305,13 @@ window.addEventListener('message', async function(event) {
             });
             
             if (response.ok) {
-                alert("✅ Flujo guardado correctamente en Webs Rápidas.");
+                alert("✅ Flujo guardado correctamente en MongoDB.");
             } else {
                 alert("❌ Error al guardar en el servidor.");
             }
         } catch (error) {
-            console.error("Error:", error);
-            alert("Error de conexión con Railway.");
+            console.error("Error de conexión:", error);
+            alert("Hubo un error al conectar con Railway.");
         }
     }
 });
