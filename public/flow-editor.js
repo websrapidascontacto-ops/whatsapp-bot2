@@ -4,7 +4,7 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= ZOOM ================= */
+/* ================= CONFIGURACIÓN DE ZOOM ================= */
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -21,20 +21,20 @@ let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; // Los nodos se colocan al lado del anterior
+    lastNodeX += 380; // Coloca el nuevo nodo al lado del anterior [Ajuste solicitado]
     return pos;
 }
 
-/* ================= SINCRONIZACIÓN DE DATOS (FIX VACÍO) ================= */
-// Esta función es vital para que el servidor detecte la info
+/* ================= FUNCIÓN DE SINCRONIZACIÓN (SOLUCIÓN AL ERROR VACÍO) ================= */
+// Esta función vincula los inputs HTML con el motor de datos de Drawflow en tiempo real
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const nodeData = editor.getNodeFromId(nodeId).data;
+    const node = editor.getNodeFromId(nodeId);
     
-    // Actualizamos el objeto de datos interno
-    nodeData[key] = input.value;
-    console.log(`✅ Nodo ${nodeId} - ${key}: ${input.value}`);
+    // Actualizamos el objeto data internamente
+    node.data[key] = input.value;
+    console.log(`✅ Datos actualizados en Nodo ${nodeId}: ${key} = "${input.value}"`);
 };
 
 /* ================= GUARDAR FLUJO ================= */
@@ -64,6 +64,7 @@ function addCloseButton(nodeId) {
 
 function addTriggerNode() {
     const pos = getNextPosition();
+    // Añadimos oninput para capturar cada tecla en 'val'
     const html = `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
@@ -75,6 +76,7 @@ function addTriggerNode() {
     `;
     const id = editor.addNode("trigger", 0, 1, pos.x, pos.y, "trigger", { val: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addIANode() {
@@ -90,6 +92,7 @@ function addIANode() {
     `;
     const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Base: S/380. WhatsApp: 991138132." }, html);
     setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addMessageNode() {
@@ -105,6 +108,7 @@ function addMessageNode() {
     `;
     const id = editor.addNode("message", 1, 1, pos.x, pos.y, "message", { info: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addMenuNode() {
@@ -123,6 +127,7 @@ function addMenuNode() {
     `;
     const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 window.addOption = function(btn) {
@@ -135,13 +140,14 @@ window.addOption = function(btn) {
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = "Opción " + count;
+    // Vinculamos la nueva opción dinámicamente con su llave única
     input.oninput = function() { updateNodeData(this, 'option' + count); };
     
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Crea el punto de conexión para la nueva opción
+    editor.addNodeOutput(nodeId); // Crea el punto de conexión visual para la nueva opción
 };
 
-/* ================= MINIMAPA ================= */
+/* ================= LÓGICA DE MINIMAPA ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
@@ -177,6 +183,7 @@ function updateMinimap() {
     viewport.style.height = (container.clientHeight * scale) + "px";
 }
 
+/* ================= EVENTOS DE DRAWFLOW ================= */
 editor.on("nodeCreated", updateMinimap);
 editor.on("nodeRemoved", updateMinimap);
 editor.on("nodeMoved", updateMinimap);
@@ -191,6 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(updateMinimap, 500);
 });
 
+// Cargar flujo desde el CRM
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
