@@ -4,7 +4,9 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= CONFIGURACIÓN BÁSICA ================= */
+/* =========================
+   CONFIGURACIÓN BÁSICA
+========================= */
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -15,7 +17,9 @@ container.addEventListener("wheel", function (e) {
     else editor.zoom_out();
 });
 
-/* ================= POSICIONAMIENTO DINÁMICO ================= */
+/* =========================
+   POSICIONAMIENTO DINÁMICO
+========================= */
 let lastNodeX = 100;
 let lastNodeY = 200;
 
@@ -25,27 +29,34 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= FUNCIÓN CRÍTICA: GUARDAR DATOS AL ESCRIBIR ================= */
+/* =========================
+   SINCRONIZACIÓN DE DATOS
+========================= */
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const node = editor.getNodeFromId(nodeId);
     
-    // Guardamos el valor directamente en el objeto de Drawflow
+    // Guardamos el valor en el objeto interno
     node.data[key] = input.value;
-    console.log(`✅ Datos actualizados en nodo ${nodeId}:`, node.data);
+    console.log(`✅ Datos actualizados nodo ${nodeId}:`, node.data);
 };
 
-/* ================= GUARDAR FLUJO AL CRM ================= */
+/* =========================
+   GUARDAR FLUJO AL CRM
+========================= */
 function saveFlow() {
     const flowData = editor.export();
     window.parent.postMessage({ 
         type: 'SAVE_FLOW', 
         data: flowData 
     }, '*');
+    console.log("🚀 Flujo exportado:", flowData);
 }
 
-/* ================= NODOS ================= */
+/* =========================
+   FUNCIONES DE NODOS
+========================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -84,7 +95,7 @@ function addIANode() {
             </div>
         </div>
     `;
-    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Mi precio base es S/380." }, html);
+    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Mi precio base es S/380. WhatsApp: 991138132. Web: https://www.websrapidas.com" }, html);
     setTimeout(() => addCloseButton(id), 50);
 }
 
@@ -116,6 +127,7 @@ function addMenuNode() {
             </div>
         </div>
     `;
+    // Inicializamos con option1 para que exista desde el inicio
     const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
 }
@@ -123,21 +135,34 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const nodeElement = btn.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const list = btn.parentElement.querySelector(".menu-list");
+    const list = nodeElement.querySelector(".menu-list");
     const count = list.querySelectorAll("input").length + 1;
 
+    // Crear el input físicamente
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = "Opción " + count;
-    input.oninput = function() { updateNodeData(this, 'option' + count); };
+    
+    // Vincular el evento de escritura
+    const key = 'option' + count;
+    input.oninput = function() { updateNodeData(this, key); };
     
     list.appendChild(input);
+    
+    // Crear la salida (punto de conexión) en el nodo
     editor.addNodeOutput(nodeId);
+    
+    // IMPORTANTE: Asegurar que la propiedad existe en el objeto de datos
+    const node = editor.getNodeFromId(nodeId);
+    node.data[key] = ""; 
+    
     updateMinimap();
 };
 
-/* ================= MINIMAPA ================= */
+/* =========================
+   MINIMAPA
+========================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
@@ -178,6 +203,9 @@ editor.on("nodeMoved", updateMinimap);
 editor.on("zoom", updateMinimap);
 editor.on("translate", updateMinimap);
 
+/* =========================
+   EVENTOS INICIALES
+========================= */
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
