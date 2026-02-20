@@ -4,7 +4,8 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= ZOOM ================= */
+/* ================= CONFIGURACIÓN VISUAL ================= */
+// Fuente Montserrat aplicada según preferencia del usuario
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -21,17 +22,18 @@ let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; 
+    lastNodeX += 380; // Coloca el nuevo nodo al lado del anterior
     return pos;
 }
 
 /* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
+    // Enviamos el objeto al padre (index.html)
     window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
-/* ================= NODOS ================= */
+/* ================= UTILIDADES DE NODOS ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -48,11 +50,13 @@ function addCloseButton(nodeId) {
 
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    // Importante: Iniciar con data para que Drawflow lo reconozca
+    // Iniciamos con data vacía pero lista para recibir df- atributos
     const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
 }
+
+/* ================= DEFINICIÓN DE NODOS ================= */
 
 function addTriggerNode() {
     createNode("trigger", 0, 1, `
@@ -90,9 +94,9 @@ function addMessageNode() {
 function addMenuNode() {
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
-            <div class="node-header header-menu">📋 Menú (Lista)</div>
+            <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-2" placeholder="Título del menú" df-info>
+                <input type="text" class="form-control mb-2" placeholder="Título" df-info>
                 <div class="menu-list">
                     <input type="text" class="form-control mb-1" placeholder="Opción 1" df-option1>
                 </div>
@@ -101,6 +105,8 @@ function addMenuNode() {
         </div>
     `);
 }
+
+/* ================= GESTIÓN DE OPCIONES DINÁMICAS ================= */
 
 window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
@@ -112,9 +118,11 @@ window.addOption = function(btn) {
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = `Opción ${optionCount}`;
+    
+    // IMPORTANTE: Establecer el atributo df- para que Drawflow lo reconozca automáticamente
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // Fuerza a Drawflow a registrar el nuevo input
+    // Listener para forzar la actualización de datos en el objeto exportable
     input.addEventListener('input', (e) => {
         const node = editor.getNodeFromId(nodeId);
         node.data[attrName] = e.target.value;
@@ -122,7 +130,7 @@ window.addOption = function(btn) {
     });
 
     list.appendChild(input);
-    editor.addNodeOutput(nodeId);
+    editor.addNodeOutput(nodeId); // Añade salida para conexión visual
 };
 
 /* ================= MINIMAPA ================= */
@@ -163,6 +171,7 @@ editor.on("nodeMoved", updateMinimap);
 editor.on("zoom", updateMinimap);
 editor.on("translate", updateMinimap);
 
+/* ================= INICIALIZACIÓN ================= */
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
