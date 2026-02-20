@@ -46,12 +46,10 @@ function addCloseButton(nodeId) {
     nodeElement.appendChild(close);
 }
 
-// Función mejorada para asegurar que Drawflow registre los inputs
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    // Importante: Iniciar con un objeto data que contenga los campos básicos
-    const initialData = type === 'trigger' ? { val: '' } : { info: '' };
-    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, initialData, html);
+    // Importante: Iniciar con data para que Drawflow lo reconozca
+    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
 }
@@ -116,7 +114,7 @@ window.addOption = function(btn) {
     input.placeholder = `Opción ${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // SINCRONIZACIÓN FORZADA
+    // Fuerza a Drawflow a registrar el nuevo input
     input.addEventListener('input', (e) => {
         const node = editor.getNodeFromId(nodeId);
         node.data[attrName] = e.target.value;
