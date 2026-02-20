@@ -52,16 +52,62 @@ window.saveFlow = function() {
 };
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
+
+/* NUEVO MÓDULO MEDIA ADJUNTA - PUNTO NEMO 2 */
 window.addMediaNode = () => {
     const nodeId = editor.node_id + 1;
     createNode("media", 1, 1, `
         <div class="node-wrapper">
-            <div class="node-header" style="background: #e67e22; color: white;">🖼️ Imagen / Media</div>
+            <div class="node-header" style="background: #e67e22; color: white; font-family: 'Montserrat', sans-serif;">🖼️ Imagen Adjunta</div>
             <div class="node-body">
-                <label class="small">URL de la Imagen (JPG/PNG):</label>
-                <input type="text" class="form-control mb-2" df-media_url placeholder="https://ejemplo.com/foto.jpg">
-                <label class="small">Pie de foto (Opcional):</label>
-                <input type="text" class="form-control" df-caption placeholder="Ej: Mira nuestra oferta">
+                <label class="small" style="font-family: 'Montserrat', sans-serif;">Adjuntar archivo (Imagen):</label>
+                <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, ${nodeId})">
+                
+                <input type="hidden" df-media_url id="path-${nodeId}">
+                
+                <div id="status-${nodeId}" style="font-size:11px; color:gray; margin-bottom:5px; font-family: 'Montserrat';">Esperando archivo...</div>
+
+                <label class="small" style="font-family: 'Montserrat', sans-serif;">Pie de foto:</label>
+                <input type="text" class="form-control" df-caption placeholder="Ej: Mira esta oferta">
             </div>
         </div>`, { media_url: '', caption: '' });
+};
+
+// Función para subir el archivo automáticamente al servidor Railway
+window.uploadNodeFile = async (event, nodeId) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const status = document.getElementById(`status-${nodeId}`);
+    const pathInput = document.getElementById(`path-${nodeId}`);
+    
+    status.innerText = "⏳ Subiendo archivo...";
+    status.style.color = "#e67e22";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const res = await fetch('/api/upload-node-media', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+
+        if (data.url) {
+            // Guardamos la ruta en el valor del nodo Drawflow
+            pathInput.value = data.url;
+            status.innerText = "✅ Subido: " + file.name;
+            status.style.color = "green";
+            
+            // Forzar actualización en los datos internos de Drawflow
+            editor.updateNodeValueById(nodeId, { media_url: data.url });
+        } else {
+            throw new Error("No se recibió URL");
+        }
+    } catch (e) {
+        console.error("Error upload:", e);
+        status.innerText = "❌ Error al subir";
+        status.style.color = "red";
+    }
 };
