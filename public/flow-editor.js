@@ -114,9 +114,11 @@ window.addOption = function(btn) {
     const attrName = `option${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // FUERZA EL GUARDADO: Sin esto, Drawflow no registra los inputs nuevos
+    // SINCRONIZACIÓN MEJORADA: Mantiene los datos existentes (como el título) y añade la nueva opción
     input.addEventListener('input', (e) => {
-        editor.updateNodeDataFromId(nodeId, { [attrName]: e.target.value });
+        const node = editor.getNodeFromId(nodeId);
+        const newData = { ...node.data, [attrName]: e.target.value };
+        editor.updateNodeDataFromId(nodeId, newData);
     });
 
     list.appendChild(input);
