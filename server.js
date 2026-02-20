@@ -64,12 +64,12 @@ function broadcast(data) {
 /* ========================= FUNCIÓN PARA DESCARGAR MEDIOS ========================= */
 async function downloadMedia(mediaId, fileName) {
     try {
-        // 1. Obtener URL de descarga
+        // 1. Obtener URL de descarga desde Meta
         const resUrl = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
         
-        // 2. Descargar el binario
+        // 2. Descargar el binario de la imagen
         const response = await axios.get(resUrl.data.url, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` },
             responseType: 'arraybuffer'
@@ -136,25 +136,26 @@ app.post("/webhook", async (req, res) => {
                                         const out = triggerNode.outputs.output_1.connections;
                                         if (out.length > 0) nextNode = nodes[out[0].node];
                                     } else {
-                                        // Continuar sesión
+                                        // Continuar sesión (Manejo de menús y listas)
                                         const session = await Session.findOne({ chatId: sender });
                                         if (session && nodes[session.lastNodeId]) {
                                             const currentNode = nodes[session.lastNodeId];
                                             
-                                            // Respuesta a Lista
+                                            // Respuesta a Lista o Menú
                                             const foundRowKey = Object.keys(currentNode.data).find(k => 
-                                                k.startsWith('row') && currentNode.data[k].toLowerCase().trim() === incomingText
+                                                (k.startsWith('row') || k.startsWith('option')) && 
+                                                currentNode.data[k].toLowerCase().trim() === incomingText
                                             );
                                             
                                             if (foundRowKey) {
-                                                const rowIdx = foundRowKey.replace('row', '');
+                                                const rowIdx = foundRowKey.replace('row', '').replace('option', '');
                                                 const outList = currentNode.outputs[`output_${rowIdx}`]?.connections;
                                                 if (outList?.length > 0) nextNode = nodes[outList[0].node];
                                             }
                                         }
                                     }
 
-                                    // Enviar Respuesta
+                                    // Enviar Respuesta automática
                                     if (nextNode) {
                                         let payload = { messaging_product: "whatsapp", to: sender };
 
@@ -199,7 +200,7 @@ app.post("/webhook", async (req, res) => {
     res.sendStatus(200);
 });
 
-/* ========================= REST API ========================= */
+/* ========================= REST API PARA EL CRM ========================= */
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } },
@@ -222,6 +223,20 @@ app.post("/api/save-flow", async (req, res) => {
 app.get("/api/get-flow", async (req, res) => {
     const flow = await Flow.findOne({ name: "Main Flow" });
     res.json(flow ? flow.data : null);
+});
+
+// Endpoint manual para enviar mensajes desde el CRM
+app.post("/send-message", async (req, res) => {
+    const { to, text } = req.body;
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp", to, type: "text", text: { body: text }
+        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+
+        const saved = await Message.create({ chatId: to, from: "me", text });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server activo en puerto 3000"));
