@@ -15,31 +15,39 @@ container.addEventListener("wheel", function (e) {
     else editor.zoom_out();
 });
 
-/* ================= POSICIONAMIENTO ================= */
+/* ================= POSICIONAMIENTO DINÁMICO ================= */
 let lastNodeX = 100;
 let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; 
+    lastNodeX += 380; // Los nodos se colocan al lado del anterior
     return pos;
 }
 
-/* ================= FUNCIÓN CLAVE: ACTUALIZAR DATOS ================= */
-// Esta función vincula lo que escribes con el motor de Drawflow
+/* ================= SINCRONIZACIÓN DE DATOS (FIX VACÍO) ================= */
+// Esta función es vital para que el servidor detecte la info
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    editor.updateNodeValue(nodeId, { ...editor.getNodeFromId(nodeId).data, [key]: input.value });
+    const nodeData = editor.getNodeFromId(nodeId).data;
+    
+    // Actualizamos el objeto de datos interno
+    nodeData[key] = input.value;
+    console.log(`✅ Nodo ${nodeId} - ${key}: ${input.value}`);
 };
 
-/* ================= GUARDAR ================= */
+/* ================= GUARDAR FLUJO ================= */
 function saveFlow() {
     const flowData = editor.export();
-    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
+    console.log("Enviando flujo al CRM...");
+    window.parent.postMessage({ 
+        type: 'SAVE_FLOW', 
+        data: flowData 
+    }, '*');
 }
 
-/* ================= NODOS ================= */
+/* ================= CREACIÓN DE NODOS ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -76,7 +84,7 @@ function addIANode() {
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
                 <textarea class="form-control" rows="3" 
-                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132.</textarea>
+                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132. Website: https://www.websrapidas.com</textarea>
             </div>
         </div>
     `;
@@ -130,7 +138,7 @@ window.addOption = function(btn) {
     input.oninput = function() { updateNodeData(this, 'option' + count); };
     
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); 
+    editor.addNodeOutput(nodeId); // Crea el punto de conexión para la nueva opción
 };
 
 /* ================= MINIMAPA ================= */
