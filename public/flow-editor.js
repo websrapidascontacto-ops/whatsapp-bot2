@@ -4,7 +4,7 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= CONFIGURACIÓN DE ZOOM ================= */
+/* ================= ZOOM ================= */
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -15,26 +15,25 @@ container.addEventListener("wheel", function (e) {
     else editor.zoom_out();
 });
 
-/* ================= POSICIONAMIENTO DINÁMICO ================= */
+/* ================= POSICIONAMIENTO ================= */
 let lastNodeX = 100;
 let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; // Coloca el nuevo nodo al lado del anterior [Ajuste solicitado]
+    lastNodeX += 380; // Los nodos se crean uno al lado del otro
     return pos;
 }
 
-/* ================= FUNCIÓN DE SINCRONIZACIÓN (SOLUCIÓN AL ERROR VACÍO) ================= */
-// Esta función vincula los inputs HTML con el motor de datos de Drawflow en tiempo real
+/* ================= SINCRONIZACIÓN DE DATOS (SOLUCIÓN AL ERROR VACÍO) ================= */
+// Esta función vincula lo que escribes con el objeto interno de Drawflow
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const node = editor.getNodeFromId(nodeId);
+    const nodeData = editor.getNodeFromId(nodeId).data;
     
-    // Actualizamos el objeto data internamente
-    node.data[key] = input.value;
-    console.log(`✅ Datos actualizados en Nodo ${nodeId}: ${key} = "${input.value}"`);
+    nodeData[key] = input.value;
+    console.log(`✅ Nodo ${nodeId} actualizado: ${key} = ${input.value}`);
 };
 
 /* ================= GUARDAR FLUJO ================= */
@@ -47,7 +46,7 @@ function saveFlow() {
     }, '*');
 }
 
-/* ================= CREACIÓN DE NODOS ================= */
+/* ================= NODOS Y FUNCIONES ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -64,7 +63,6 @@ function addCloseButton(nodeId) {
 
 function addTriggerNode() {
     const pos = getNextPosition();
-    // Añadimos oninput para capturar cada tecla en 'val'
     const html = `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
@@ -140,14 +138,13 @@ window.addOption = function(btn) {
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = "Opción " + count;
-    // Vinculamos la nueva opción dinámicamente con su llave única
     input.oninput = function() { updateNodeData(this, 'option' + count); };
     
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Crea el punto de conexión visual para la nueva opción
+    editor.addNodeOutput(nodeId); // Añade salida visual en Drawflow
 };
 
-/* ================= LÓGICA DE MINIMAPA ================= */
+/* ================= MINIMAPA ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
@@ -183,7 +180,6 @@ function updateMinimap() {
     viewport.style.height = (container.clientHeight * scale) + "px";
 }
 
-/* ================= EVENTOS DE DRAWFLOW ================= */
 editor.on("nodeCreated", updateMinimap);
 editor.on("nodeRemoved", updateMinimap);
 editor.on("nodeMoved", updateMinimap);
@@ -198,7 +194,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(updateMinimap, 500);
 });
 
-// Cargar flujo desde el CRM
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
