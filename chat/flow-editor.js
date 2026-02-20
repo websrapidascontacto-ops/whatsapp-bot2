@@ -7,7 +7,6 @@ const editor = new Drawflow(container);
 editor.reroute = true;
 editor.start();
 
-// Configuración de Zoom
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -26,8 +25,8 @@ let lastNodeY = 150;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; // Coloca la nueva caja a la derecha
-    if (lastNodeX > 1400) { // Salto de línea si llega al borde
+    lastNodeX += 380; // Coloca la nueva caja al lado de la anterior
+    if (lastNodeX > 1400) {
         lastNodeX = 50;
         lastNodeY += 450;
     }
@@ -62,7 +61,6 @@ function createNode(type, inputs, outputs, html, data = {}) {
     const pos = getNextPosition();
     const nodeId = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
     
-    // Botón de eliminar nodo (Style UX)
     const nodeElem = document.getElementById(`node-${nodeId}`);
     const closeBtn = document.createElement("div");
     closeBtn.innerHTML = "×";
@@ -71,46 +69,21 @@ function createNode(type, inputs, outputs, html, data = {}) {
     nodeElem.appendChild(closeBtn);
 }
 
-// 1. Nodo Trigger
 window.addTriggerNode = function() {
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-trigger">⚡ Trigger</div>
-            <div class="node-body">
-                <label>Palabra Clave:</label>
-                <input type="text" class="form-control" df-val placeholder="Ej: hola">
-            </div>
-        </div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label>Palabra Clave:</label><input type="text" class="form-control" df-val placeholder="Ej: hola"></div></div>`;
     createNode("trigger", 0, 1, html);
 };
 
-// 2. Nodo Mensaje
 window.addMessageNode = function() {
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-message">💬 Mensaje</div>
-            <div class="node-body">
-                <label>Texto:</label>
-                <textarea class="form-control" df-info rows="3"></textarea>
-            </div>
-        </div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><label>Texto:</label><textarea class="form-control" df-info rows="3"></textarea></div></div>`;
     createNode("message", 1, 1, html);
 };
 
-// 3. Nodo IA
 window.addIANode = function() {
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-ia">🤖 IA Chatbot</div>
-            <div class="node-body">
-                <label>Contexto:</label>
-                <textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea>
-            </div>
-        </div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA Chatbot</div><div class="node-body"><label>Contexto:</label><textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea></div></div>`;
     createNode("ia", 1, 1, html);
 };
 
-// 4. Nodo Menú Numérico
 window.addMenuNode = function() {
     const nodeId = editor.getNextId();
     const html = `
@@ -138,7 +111,7 @@ window.addMenuOption = function(nodeId) {
     container.appendChild(input);
 };
 
-// 5. NUEVO: Nodo Lista de WhatsApp
+// --- MÓDULO DE LISTA WHATSAPP (CORREGIDO) ---
 window.addListNode = function() {
     const nodeId = editor.getNextId();
     const html = `
@@ -173,22 +146,19 @@ window.addListRow = function(nodeId) {
 };
 
 /* ============================================================
-   VINCULACIÓN INICIAL
+   VINCULACIÓN INICIAL (Doble seguridad)
    ============================================================ */
 document.addEventListener("DOMContentLoaded", () => {
-    // Vincular botones del header si existen
-    const btnTrigger = document.querySelector(".btn-trigger");
-    if(btnTrigger) btnTrigger.onclick = window.addTriggerNode;
+    const buttons = {
+        ".btn-trigger": window.addTriggerNode,
+        ".btn-ia": window.addIANode,
+        ".btn-message": window.addMessageNode,
+        ".btn-menu": window.addMenuNode,
+        ".btn-list": window.addListNode
+    };
 
-    const btnIA = document.querySelector(".btn-ia");
-    if(btnIA) btnIA.onclick = window.addIANode;
-
-    const btnMsg = document.querySelector(".btn-message");
-    if(btnMsg) btnMsg.onclick = window.addMessageNode;
-
-    const btnMenu = document.querySelector(".btn-menu");
-    if(btnMenu) btnMenu.onclick = window.addMenuNode;
-    
-    const btnList = document.querySelector(".btn-list");
-    if(btnList) btnList.onclick = window.addListNode;
+    for (let selector in buttons) {
+        const btn = document.querySelector(selector);
+        if (btn) btn.onclick = buttons[selector];
+    }
 });
