@@ -25,17 +25,18 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= SINCRONIZACIÓN DE DATOS (FIX VACÍO) ================= */
+/* ================= FUNCIÓN CRÍTICA: GUARDAR DATOS AL ESCRIBIR ================= */
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const node = editor.getNodeFromId(nodeId);
     
+    // Guardamos el valor directamente en el objeto de Drawflow
     node.data[key] = input.value;
-    console.log(`✅ Nodo ${nodeId} actualizado: ${key}`);
+    console.log(`✅ Datos actualizados en nodo ${nodeId}:`, node.data);
 };
 
-/* ================= GUARDAR FLUJO ================= */
+/* ================= GUARDAR FLUJO AL CRM ================= */
 function saveFlow() {
     const flowData = editor.export();
     window.parent.postMessage({ 
@@ -44,7 +45,7 @@ function saveFlow() {
     }, '*');
 }
 
-/* ================= CREACIÓN DE NODOS ================= */
+/* ================= NODOS ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -133,6 +134,7 @@ window.addOption = function(btn) {
     
     list.appendChild(input);
     editor.addNodeOutput(nodeId);
+    updateMinimap();
 };
 
 /* ================= MINIMAPA ================= */
