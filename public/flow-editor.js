@@ -25,17 +25,13 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (VINCULADO AL CRM) ================= */
+/* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
-    console.log("Enviando flujo al CRM...");
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
-/* ================= NODOS Y FUNCIONES ================= */
+/* ================= NODOS ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -73,7 +69,7 @@ function addIANode() {
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132. Montserrat font.</textarea>
+                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
     `);
@@ -84,7 +80,7 @@ function addMessageNode() {
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." df-info></textarea>
+                <textarea class="form-control" rows="3" df-info></textarea>
             </div>
         </div>
     `);
@@ -95,8 +91,7 @@ function addMenuNode() {
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú (Lista)</div>
             <div class="node-body">
-                <label style="font-size: 10px; color: #94a3b8;">Título del Menú:</label>
-                <input type="text" class="form-control mb-2" placeholder="Ej: Ver Servicios" df-info>
+                <input type="text" class="form-control mb-2" placeholder="Título del menú" df-info>
                 <div class="menu-list">
                     <input type="text" class="form-control mb-1" placeholder="Opción 1" df-option1>
                 </div>
@@ -109,8 +104,7 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
     const optionCount = list.querySelectorAll("input").length + 1;
-    const nodeElement = btn.closest(".drawflow-node");
-    const nodeId = nodeElement.id.replace("node-", "");
+    const nodeId = btn.closest(".drawflow-node").id.replace("node-", "");
     
     const input = document.createElement("input");
     input.type = "text";
@@ -119,7 +113,7 @@ window.addOption = function(btn) {
     const attrName = `option${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // Forzar el guardado en el objeto data de Drawflow
+    // IMPORTANTE: Registrar el evento para que Drawflow guarde el texto
     input.addEventListener('input', (e) => {
         editor.drawflow.drawflow.Home.data[nodeId].data[attrName] = e.target.value;
     });
@@ -128,7 +122,7 @@ window.addOption = function(btn) {
     editor.addNodeOutput(nodeId);
 };
 
-/* ================= MINIMAPA Y EVENTOS ================= */
+/* ================= MINIMAPA ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
