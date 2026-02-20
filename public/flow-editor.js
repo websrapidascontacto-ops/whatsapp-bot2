@@ -28,7 +28,6 @@ function getNextPosition() {
 /* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
-    // Enviamos el objeto al padre (index.html)
     window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
@@ -47,9 +46,12 @@ function addCloseButton(nodeId) {
     nodeElement.appendChild(close);
 }
 
+// Función mejorada para asegurar que Drawflow registre los inputs
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
+    // Importante: Iniciar con un objeto data que contenga los campos básicos
+    const initialData = type === 'trigger' ? { val: '' } : { info: '' };
+    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, initialData, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
 }
@@ -106,19 +108,19 @@ window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
     const optionCount = list.querySelectorAll("input").length + 1;
     const nodeId = btn.closest(".drawflow-node").id.replace("node-", "");
+    const attrName = `option${optionCount}`;
     
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = `Opción ${optionCount}`;
-    const attrName = `option${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // SINCRONIZACIÓN MEJORADA: Mantiene los datos existentes (como el título) y añade la nueva opción
+    // SINCRONIZACIÓN FORZADA
     input.addEventListener('input', (e) => {
         const node = editor.getNodeFromId(nodeId);
-        const newData = { ...node.data, [attrName]: e.target.value };
-        editor.updateNodeDataFromId(nodeId, newData);
+        node.data[attrName] = e.target.value;
+        editor.updateNodeDataFromId(nodeId, node.data);
     });
 
     list.appendChild(input);
