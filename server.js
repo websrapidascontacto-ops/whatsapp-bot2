@@ -16,7 +16,6 @@ const wss = new WebSocket.Server({ server });
 /* =========================
    CONFIG
 ========================= */
-
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -37,7 +36,6 @@ app.get("/", (req, res) => {
 /* =========================
    MONGODB
 ========================= */
-
 mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("✅ Mongo conectado"))
 .catch(err => {
@@ -55,9 +53,6 @@ const messageSchema = new mongoose.Schema({
 
 const Message = mongoose.model("Message", messageSchema);
 
-/* =========================
-   MODELO DE FLUJOS (NUEVO)
-========================= */
 const flowSchema = new mongoose.Schema({
   name: { type: String, default: "Main Flow" },
   data: { type: Object, required: true },
@@ -68,9 +63,7 @@ const Flow = mongoose.model("Flow", flowSchema);
 /* =========================
    WEBSOCKET
 ========================= */
-
 let clients = new Set();
-
 wss.on("connection", (ws) => {
   clients.add(ws);
   ws.on("close", () => clients.delete(ws));
@@ -87,7 +80,6 @@ function broadcast(data) {
 /* =========================
    WEBHOOK WHATSAPP
 ========================= */
-
 app.post("/webhook", async (req, res) => {
   const body = req.body;
 
@@ -100,7 +92,7 @@ app.post("/webhook", async (req, res) => {
           for (const msg of value.messages) {
             const sender = msg.from;
 
-            /* ===== TEXTO ===== */
+            /* ===== LÓGICA DE TEXTO + FLUJOS ===== */
             if (msg.type === "text") {
               const incomingText = msg.text.body.toLowerCase().trim();
 
@@ -109,37 +101,43 @@ app.post("/webhook", async (req, res) => {
                 from: sender,
                 text: msg.text.body
               });
-
               broadcast({ type: "new_message", message: saved });
 
-              // --- LÓGICA DE RESPUESTA AUTOMÁTICA (MOTOR DE FLUJOS) ---
               try {
                 const flow = await Flow.findOne({ name: "Main Flow" });
                 if (flow && flow.data && flow.data.drawflow) {
                   const nodes = flow.data.drawflow.Home.data;
 
-                  // 1. Buscar si el texto es un Trigger
+                  // 1. Buscar Trigger
                   const triggerNode = Object.values(nodes).find(node => 
                     node.name === 'trigger' && 
                     node.data.val?.toLowerCase().trim() === incomingText
                   );
 
                   if (triggerNode) {
-                    // 2. Buscar nodo conectado al output del trigger
                     const nextNodeId = triggerNode.outputs.output_1.connections[0]?.node;
                     const nextNode = nodes[nextNodeId];
 
                     if (nextNode) {
                       let responseText = "";
-                      
+
                       if (nextNode.name === 'message') {
                         responseText = nextNode.data.info;
-                      } else if (nextNode.name === 'ia') {
-                        // Respuesta predefinida para nodo IA siguiendo instrucciones del usuario
-                        responseText = "¡Hola! Soy el asistente inteligente de Webs Rápidas 🤖. Te informo que nuestros planes inician desde S/380. ¿Deseas agendar una asesoría?";
+                      } 
+                      else if (nextNode.name === 'ia') {
+                        responseText = "¡Hola! Soy el asistente inteligente de Webs Rápidas 🤖. Nuestros planes inician desde S/380. ¿Deseas más información?";
+                      } 
+                      else if (nextNode.name === 'menu') {
+                        // Construir menú numerado
+                        let menuContent = `*${nextNode.data.info || "Selecciona una opción:"}*\n\n`;
+                        if (nextNode.data.options && nextNode.data.options.length > 0) {
+                          nextNode.data.options.forEach((opt, i) => {
+                            menuContent += `${i + 1}. ${opt}\n`;
+                          });
+                        }
+                        responseText = menuContent;
                       }
 
-                      // 3. Enviar respuesta automática a WhatsApp
                       if (responseText) {
                         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
                           messaging_product: "whatsapp",
@@ -149,7 +147,6 @@ app.post("/webhook", async (req, res) => {
                           headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
                         });
 
-                        // 4. Guardar respuesta del bot en Mongo y avisar al CRM
                         const botSaved = await Message.create({
                           chatId: sender,
                           from: "me",
@@ -165,17 +162,14 @@ app.post("/webhook", async (req, res) => {
               }
             }
 
-            /* ===== IMAGEN ===== */
+            /* ===== LÓGICA DE IMAGEN ===== */
             if (msg.type === "image") {
               try {
                 const mediaId = msg.image.id;
-                const mediaInfo = await axios.get(
-                  `https://graph.facebook.com/v18.0/${mediaId}`,
-                  { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
-                );
-
-                const mediaUrl = mediaInfo.data.url;
-                const mediaFile = await axios.get(mediaUrl, {
+                const mediaInfo = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
+                  headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+                });
+                const mediaFile = await axios.get(mediaInfo.data.url, {
                   responseType: "arraybuffer",
                   headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
                 });
@@ -184,15 +178,14 @@ app.post("/webhook", async (req, res) => {
                 const filePath = path.join(uploadsPath, fileName);
                 fs.writeFileSync(filePath, mediaFile.data);
 
-                const saved = await Message.create({
+                const savedMedia = await Message.create({
                   chatId: sender,
                   from: sender,
                   media: "/uploads/" + fileName
                 });
-
-                broadcast({ type: "new_message", message: saved });
+                broadcast({ type: "new_message", message: savedMedia });
               } catch (err) {
-                console.error("Error descargando imagen:", err.response?.data || err.message);
+                console.error("Error descargando imagen:", err.message);
               }
             }
           }
@@ -204,19 +197,12 @@ app.post("/webhook", async (req, res) => {
 });
 
 /* =========================
-   API LOCAL
+   APIS REST
 ========================= */
-
 app.get("/chats", async (req, res) => {
   const chats = await Message.aggregate([
     { $sort: { timestamp: 1 } },
-    {
-      $group: {
-        _id: "$chatId",
-        lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } },
-        lastTime: { $last: "$timestamp" }
-      }
-    },
+    { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } },
     { $sort: { lastTime: -1 } }
   ]);
   res.json(chats);
@@ -227,142 +213,62 @@ app.get("/messages/:chatId", async (req, res) => {
   res.json(messages);
 });
 
-app.get("/search", async (req, res) => {
-  const query = req.query.q;
-  if (!query) return res.json([]);
-  const results = await Message.find({
-    text: { $regex: query, $options: "i" }
-  }).limit(20).sort({ timestamp: -1 });
-  res.json(results);
-});
-
-app.delete("/chats/:chatId", async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    await Message.deleteMany({ chatId });
-    res.json({ success: true, message: "Conversación eliminada" });
-  } catch (err) {
-    res.status(500).json({ error: "Error al borrar mensajes" });
-  }
-});
-
-/* =========================
-   API DE FLUJOS (NUEVO)
-========================= */
-
 app.post("/api/save-flow", async (req, res) => {
   try {
-    const flowData = req.body;
-    await Flow.findOneAndUpdate(
-      { name: "Main Flow" },
-      { data: flowData, updatedAt: Date.now() },
-      { upsert: true, new: true }
-    );
-    res.json({ success: true, message: "Flujo guardado en MongoDB" });
+    await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body, updatedAt: Date.now() }, { upsert: true });
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: "Error al guardar el flujo" });
+    res.status(500).json({ error: "Error al guardar" });
   }
 });
 
 app.get("/api/get-flow", async (req, res) => {
-  try {
-    const flow = await Flow.findOne({ name: "Main Flow" });
-    res.json(flow ? flow.data : null);
-  } catch (err) {
-    res.status(500).json({ error: "Error al cargar el flujo" });
-  }
+  const flow = await Flow.findOne({ name: "Main Flow" });
+  res.json(flow ? flow.data : null);
 });
-
-/* =========================
-   ENVIAR MENSAJE TEXTO MANUAL
-========================= */
 
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
-    await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        text: { body: text }
-      },
-      { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
-    );
+    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+      messaging_product: "whatsapp", to, text: { body: text }
+    }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
 
-    const saved = await Message.create({
-      chatId: to,
-      from: "me",
-      text
-    });
-
+    const saved = await Message.create({ chatId: to, from: "me", text });
     broadcast({ type: "new_message", message: saved });
     res.json({ success: true });
-  } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: "Error enviando mensaje" });
-  }
+  } catch (err) { res.status(500).json({ error: "Error" }); }
 });
-
-/* =========================
-   ENVIAR IMAGEN MANUAL
-========================= */
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsPath),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
-
 const upload = multer({ storage });
 
 app.post("/send-media", upload.single("file"), async (req, res) => {
   try {
     const { to } = req.body;
     const file = req.file;
-
-    if (!file || !to) return res.status(400).json({ error: "Faltan datos" });
-
     const form = new FormData();
     form.append("file", fs.createReadStream(file.path));
     form.append("messaging_product", "whatsapp");
 
-    const uploadRes = await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
-      form,
-      { headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
-    );
-
-    await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "image",
-        image: { id: uploadRes.data.id }
-      },
-      { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
-    );
-
-    const saved = await Message.create({
-      chatId: to,
-      from: "me",
-      media: "/uploads/" + file.filename
+    const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
     });
 
+    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+      messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
+    }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+
+    const saved = await Message.create({ chatId: to, from: "me", media: "/uploads/" + file.filename });
     broadcast({ type: "new_message", message: saved });
     res.json({ success: true });
-  } catch (err) {
-    console.error("Error enviando imagen:", err.response?.data || err.message);
-    res.status(500).json({ error: "Error enviando imagen" });
-  }
+  } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
-/* =========================
-   PORT
-========================= */
-
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server activo en puerto", PORT);
 });

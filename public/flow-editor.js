@@ -25,26 +25,32 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (CORREGIDO) ================= */
+/* ================= GUARDAR (ACTUALIZADO PARA MENÚ) ================= */
 function saveFlow() {
-    // 1. Extraemos manualmente los valores de los inputs antes de exportar
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
         const nodeElement = document.getElementById('node-' + id);
         if (nodeElement) {
-            const input = nodeElement.querySelector('input, textarea');
-            if (input) {
-                // Si es Trigger guardamos en 'val', si es mensaje en 'info'
-                const key = nodes[id].name === 'trigger' ? 'val' : 'info';
-                editor.updateNodeDataFromId(id, { [key]: input.value });
+            if (nodes[id].name === 'menu') {
+                const title = nodeElement.querySelector('input[placeholder="Título"]')?.value;
+                const options = Array.from(nodeElement.querySelectorAll('.menu-list input'))
+                                     .map(input => input.value);
+                
+                editor.updateNodeDataFromId(id, { 
+                    info: title,
+                    options: options 
+                });
+            } else {
+                const input = nodeElement.querySelector('input, textarea');
+                if (input) {
+                    const key = nodes[id].name === 'trigger' ? 'val' : 'info';
+                    editor.updateNodeDataFromId(id, { [key]: input.value });
+                }
             }
         }
     }
 
-    // 2. Exportamos la data ya con textos
     const flowData = editor.export();
-    
-    // 3. Enviamos al CRM
     window.parent.postMessage({ 
         type: 'SAVE_FLOW', 
         data: flowData 
@@ -102,6 +108,37 @@ function addMessageNode() {
     `);
 }
 
+function addMenuNode() {
+    createNode("menu", 1, 1, `
+        <div class="node-wrapper">
+            <div class="node-header header-menu">📋 Menú</div>
+            <div class="node-body">
+                <input type="text" class="form-control mb-2" placeholder="Título">
+                <div class="menu-list">
+                    <input type="text" class="form-control mb-1" placeholder="Opción 1">
+                </div>
+                <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
+            </div>
+        </div>
+    `);
+}
+
+window.addOption = function(btn) {
+    const nodeElement = btn.closest('.drawflow-node');
+    const nodeId = nodeElement.id.replace('node-', '');
+    const list = btn.parentElement.querySelector(".menu-list");
+    
+    // Añadir input visual
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "form-control mb-1";
+    input.placeholder = "Nueva opción";
+    list.appendChild(input);
+
+    // Añadir un nuevo punto de salida (output) al nodo en Drawflow
+    editor.addNodeOutput(nodeId);
+};
+
 /* ================= MINIMAPA Y EVENTOS ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
@@ -148,6 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
+    document.querySelector(".btn-menu").onclick = addMenuNode;
     setTimeout(updateMinimap, 500);
 });
 
