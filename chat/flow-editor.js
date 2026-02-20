@@ -29,7 +29,7 @@ window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div 
 
 window.addListNode = function() {
     const nodeId = editor.node_id + 1;
-    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title placeholder="Título"><input type="text" class="form-control mb-1" df-button_text placeholder="Botón"><div id="list-items-${nodeId}"><input type="text" class="form-control mb-1" df-row1></div><button class="btn btn-sm btn-success w-100" onclick="addRow(${nodeId}, 'row')">+ Fila</button></div></div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title placeholder="Título"><input type="text" class="form-control mb-1" df-button_text placeholder="Botón"><div id=\"list-items-${nodeId}\"><input type=\"text\" class=\"form-control mb-1\" df-row1></div><button class=\"btn btn-sm btn-success w-100\" onclick=\"addRow(${nodeId}, 'row')\">+ Fila</button></div></div>`;
     createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
@@ -48,7 +48,7 @@ window.addRow = (nodeId, prefix) => {
 
 window.saveFlow = function() {
     const data = editor.export();
-    fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Guardado"));
+    fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Flujo Guardado"));
 };
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });

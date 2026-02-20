@@ -15,7 +15,7 @@ const wss = new WebSocket.Server({ server });
 
 /* ========================= CONFIGURACIÓN ========================= */
 app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 const chatPath = path.join(__dirname, "chat");
 const uploadsPath = path.join(chatPath, "uploads");
@@ -27,12 +27,15 @@ if (!fs.existsSync(uploadsPath)) {
 app.use(express.static(chatPath));
 app.use("/uploads", express.static(uploadsPath));
 
-// Configuración de Multer para recibir imágenes del CRM
+// Solución al error del favicon
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// Configuración de Multer segura
 const storage = multer.diskStorage({
-    destination: uploadsPath,
+    destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
-const upload = multer({ storage });
+const upload = multer({ storage: storage });
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
@@ -54,7 +57,6 @@ function broadcast(data) {
 
 /* ========================= RUTAS CRM ========================= */
 
-// RUTA PARA ENVIAR TEXTO
 app.post("/send-message", async (req, res) => {
     const { to, text } = req.body;
     try {
@@ -68,38 +70,51 @@ app.post("/send-message", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// NUEVA RUTA: PARA ENVIAR IMÁGENES (Solución al error 404)
+// RUTA MEDIA CORREGIDA (Evita el Error 500)
 app.post("/send-media", upload.array("files"), async (req, res) => {
-    const { to } = req.body;
-    const files = req.files;
-
     try {
+        const { to } = req.body;
+        const files = req.files;
+
+        if (!files || files.length === 0) {
+            return res.status(400).json({ error: "No se subieron archivos" });
+        }
+
         for (const file of files) {
             const formData = new FormData();
             formData.append("messaging_product", "whatsapp");
-            formData.append("file", fs.createReadStream(file.path));
+            formData.append("file", fs.createReadStream(file.path), {
+                filename: file.originalname,
+                contentType: file.mimetype,
+            });
             formData.append("type", file.mimetype);
 
             // 1. Subir a Meta
-            const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, formData, {
-                headers: { ...formData.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-            });
+            const uploadRes = await axios.post(
+                `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
+                formData,
+                { headers: { ...formData.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
+            );
 
-            // 2. Enviar mensaje con el ID de la imagen
-            await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "image",
-                image: { id: uploadRes.data.id }
-            }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+            // 2. Enviar a WhatsApp
+            await axios.post(
+                `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+                {
+                    messaging_product: "whatsapp",
+                    to: to,
+                    type: "image",
+                    image: { id: uploadRes.data.id }
+                },
+                { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
+            );
 
-            const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen enviada" });
+            const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen" });
             broadcast({ type: "new_message", message: saved });
         }
         res.json({ success: true });
     } catch (e) {
-        console.error("❌ Error enviando media:", e.response?.data || e.message);
-        res.status(500).json({ error: e.message });
+        console.error("❌ Error en send-media:", e.response?.data || e.message);
+        res.status(500).json({ error: "Error interno al enviar media" });
     }
 });
 
@@ -130,22 +145,26 @@ app.post("/webhook", async (req, res) => {
 });
 
 async function processNode(to, node) {
-    let payload = { messaging_product: "whatsapp", to: to };
-    if (node.name === "message" || node.name === "ia") {
-        payload.type = "text"; payload.text = { body: node.data.info };
-    } else if (node.name === "whatsapp_list") {
-        const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
-        payload.type = "interactive";
-        payload.interactive = {
-            type: "list",
-            body: { text: node.data.list_title || "Selecciona:" },
-            action: { button: node.data.button_text || "Ver", sections: [{ title: "Opciones", rows }] }
-        };
-    }
-    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-    });
+    try {
+        let payload = { messaging_product: "whatsapp", to: to };
+        if (node.name === "message" || node.name === "ia") {
+            payload.type = "text"; payload.text = { body: node.data.info };
+        } else if (node.name === "whatsapp_list") {
+            const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
+                .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
+            payload.type = "interactive";
+            payload.interactive = {
+                type: "list",
+                header: { type: "text", text: "Opciones" },
+                body: { text: node.data.list_title || "Selecciona:" },
+                footer: { text: "Webs Rápidas" },
+                action: { button: node.data.button_text || "Ver", sections: [{ title: "Menú", rows }] }
+            };
+        }
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+    } catch (err) { console.error("❌ Error processNode:", err.response?.data || err.message); }
 }
 
 app.get("/chats", async (req, res) => {
@@ -168,4 +187,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, () => console.log("🚀 Servidor con Media Operativo"));
+server.listen(process.env.PORT || 3000, () => console.log("🚀 Servidor Estable"));
