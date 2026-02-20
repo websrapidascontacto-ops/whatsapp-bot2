@@ -80,3 +80,15 @@ body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--tex
     background-color: var(--bg-main); background-image: radial-gradient(#1e293b 1px, transparent 1px);
     background-size: 25px 25px;
 }
+/* Estilo para las salidas de la lista interactiva */
+.drawflow-node.whatsapp_list .outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 32px; /* Espaciado entre bolitas */
+    padding-top: 185px; /* Ajuste para que bajen al nivel de los inputs */
+}
+
+.drawflow-node.whatsapp_list .output {
+    background: #056162 !important; /* Verde WhatsApp */
+    border: 2px solid #fff;
+}
