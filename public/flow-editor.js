@@ -21,29 +21,26 @@ let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; // Los nodos se crean uno al lado del otro
+    lastNodeX += 380; // Los nodos se colocan automáticamente a la derecha
     return pos;
 }
 
-/* ================= SINCRONIZACIÓN DE DATOS (SOLUCIÓN AL ERROR VACÍO) ================= */
-// Esta función vincula lo que escribes con el objeto interno de Drawflow
+/* ================= SINCRONIZACIÓN (SOLUCIÓN AL ERROR VACÍO) ================= */
+// Esta función es la que "llena" los datos que el servidor necesita
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const nodeData = editor.getNodeFromId(nodeId).data;
+    const node = editor.getNodeFromId(nodeId);
     
-    nodeData[key] = input.value;
+    // Guardamos el valor en el objeto interno de Drawflow
+    node.data[key] = input.value;
     console.log(`✅ Nodo ${nodeId} actualizado: ${key} = ${input.value}`);
 };
 
 /* ================= GUARDAR FLUJO ================= */
 function saveFlow() {
     const flowData = editor.export();
-    console.log("Enviando flujo al CRM...");
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
 /* ================= NODOS Y FUNCIONES ================= */
@@ -63,6 +60,7 @@ function addCloseButton(nodeId) {
 
 function addTriggerNode() {
     const pos = getNextPosition();
+    // Agregamos 'oninput' para capturar el texto mientras escribes
     const html = `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
@@ -74,7 +72,6 @@ function addTriggerNode() {
     `;
     const id = editor.addNode("trigger", 0, 1, pos.x, pos.y, "trigger", { val: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addIANode() {
@@ -84,13 +81,12 @@ function addIANode() {
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
                 <textarea class="form-control" rows="3" 
-                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132. Website: https://www.websrapidas.com</textarea>
+                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
     `;
-    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Base: S/380. WhatsApp: 991138132." }, html);
+    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Base: S/380." }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addMessageNode() {
@@ -106,7 +102,6 @@ function addMessageNode() {
     `;
     const id = editor.addNode("message", 1, 1, pos.x, pos.y, "message", { info: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addMenuNode() {
@@ -125,7 +120,6 @@ function addMenuNode() {
     `;
     const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 window.addOption = function(btn) {
@@ -141,10 +135,11 @@ window.addOption = function(btn) {
     input.oninput = function() { updateNodeData(this, 'option' + count); };
     
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Añade salida visual en Drawflow
+    editor.addNodeOutput(nodeId); // Agrega el punto de conexión para la nueva opción
 };
 
-/* ================= MINIMAPA ================= */
+/* ================= MINIMAPA Y EVENTOS ================= */
+// ... (Aquí sigue tu código original de minimapa) ...
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
@@ -192,11 +187,4 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
     setTimeout(updateMinimap, 500);
-});
-
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'LOAD_FLOW') {
-        editor.import(event.data.data);
-        updateMinimap();
-    }
 });
