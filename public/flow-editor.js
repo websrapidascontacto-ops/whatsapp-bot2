@@ -25,28 +25,21 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= SINCRONIZACIÓN DE DATOS (ARREGLO PARA VACÍO) ================= */
-// Esta función asegura que cada vez que escribas, Drawflow guarde el dato internamente
+/* ================= FUNCIÓN CLAVE: ACTUALIZAR DATOS ================= */
+// Esta función vincula lo que escribes con el motor de Drawflow
 window.updateNodeData = function(input, key) {
     const nodeElement = input.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const node = editor.getNodeFromId(nodeId);
-    
-    node.data[key] = input.value;
-    console.log(`✅ Nodo ${nodeId} actualizado: ${key} = ${input.value}`);
+    editor.updateNodeValue(nodeId, { ...editor.getNodeFromId(nodeId).data, [key]: input.value });
 };
 
-/* ================= GUARDAR (VINCULADO AL CRM) ================= */
+/* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
-    console.log("Enviando flujo al CRM...");
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
-/* ================= NODOS Y FUNCIONES ================= */
+/* ================= NODOS ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -74,7 +67,6 @@ function addTriggerNode() {
     `;
     const id = editor.addNode("trigger", 0, 1, pos.x, pos.y, "trigger", { val: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addIANode() {
@@ -84,13 +76,12 @@ function addIANode() {
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
                 <textarea class="form-control" rows="3" 
-                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132. Website: https://www.websrapidas.com</textarea>
+                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
     `;
     const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Base: S/380. WhatsApp: 991138132." }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addMessageNode() {
@@ -106,7 +97,6 @@ function addMessageNode() {
     `;
     const id = editor.addNode("message", 1, 1, pos.x, pos.y, "message", { info: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 function addMenuNode() {
@@ -125,7 +115,6 @@ function addMenuNode() {
     `;
     const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
     setTimeout(() => addCloseButton(id), 50);
-    updateMinimap();
 }
 
 window.addOption = function(btn) {
@@ -141,7 +130,7 @@ window.addOption = function(btn) {
     input.oninput = function() { updateNodeData(this, 'option' + count); };
     
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Añade salida visual para la nueva opción
+    editor.addNodeOutput(nodeId); 
 };
 
 /* ================= MINIMAPA ================= */
