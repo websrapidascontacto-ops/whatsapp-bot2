@@ -25,7 +25,7 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR ================= */
+/* ================= GUARDAR (REFORZADO) ================= */
 function saveFlow() {
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
@@ -33,9 +33,11 @@ function saveFlow() {
         if (nodeElement) {
             if (nodes[id].name === 'menu') {
                 const title = nodeElement.querySelector('input[placeholder="Título"]')?.value || "";
+                // Capturamos todos los inputs de opciones
                 const optionInputs = nodeElement.querySelectorAll('.menu-list input');
                 const options = Array.from(optionInputs).map(input => input.value).filter(v => v !== "");
                 
+                // Actualizamos los datos del nodo
                 editor.updateNodeDataFromId(id, { 
                     info: title,
                     options: options 
@@ -106,7 +108,6 @@ function addMessageNode() {
 }
 
 function addMenuNode() {
-    // El menú inicia con 1 salida física para la Opción 1
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
@@ -137,9 +138,12 @@ window.addOption = function(btn) {
     // 2. AGREGAR SALIDA LÓGICA (Puntito blanco a la derecha)
     editor.addNodeOutput(nodeId);
     
-    // 3. Sincronizar el HTML para que Drawflow no pierda los nuevos inputs al mover el nodo
+    // 3. IMPORTANTE: Sincronizar HTML y forzar actualización de DATA
     const currentHtml = nodeElement.querySelector('.drawflow_content_node').innerHTML;
     editor.drawflow.drawflow.Home.data[nodeId].html = currentHtml;
+    
+    // Forzamos el guardado de los valores actuales para que no se pierdan al exportar
+    saveFlow(); 
 };
 
 /* ================= MINIMAPA Y EVENTOS ================= */
@@ -190,7 +194,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
     
-    const saveBtn = document.querySelector(".btn-save");
+    const saveBtn = document.querySelector(".btn-save") || document.querySelector(".btn-guardar");
     if(saveBtn) saveBtn.onclick = saveFlow;
 
     setTimeout(updateMinimap, 500);

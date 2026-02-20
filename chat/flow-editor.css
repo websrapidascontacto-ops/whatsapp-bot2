@@ -217,3 +217,21 @@ body {
 #drawflow .drawflow-node.menu .output {
     margin-bottom: 12px; /* Alineación vertical con los inputs */
 }
+/* Estilos para el Nodo de Menú */
+.drawflow-node.menu .outputs {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    padding-top: 55px; /* Espacio para el título y primer input */
+}
+
+.drawflow-node.menu .output {
+    margin-bottom: 25px; /* Alineación con la altura de los inputs */
+    background: #ffffff;
+    border: 2px solid #6366f1;
+}
+
+/* Fuente Montserrat para todo el editor */
+.drawflow-node input, .drawflow-node textarea {
+    font-family: 'Montserrat', sans-serif !important;
+}
