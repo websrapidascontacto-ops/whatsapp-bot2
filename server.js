@@ -46,7 +46,7 @@ const Flow = mongoose.model("Flow", new mongoose.Schema({
     data: Object
 }));
 
-/* ========================= WEBSOCKETS ========================= */
+/* ========================= WEBSOCKETS (CRM) ========================= */
 function broadcast(data) {
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
@@ -73,7 +73,7 @@ app.post("/webhook", async (req, res) => {
         const msg = data.entry[0].changes[0].value.messages[0];
         const sender = msg.from;
         
-        // Extraer texto de mensajes normales o de botones/listas
+        // Extraer texto (soporta texto normal, clics en botones y clics en listas)
         const incomingText = (
             msg.text?.body || 
             msg.interactive?.button_reply?.title || 
@@ -81,9 +81,9 @@ app.post("/webhook", async (req, res) => {
             ""
         ).toLowerCase().trim();
 
-        console.log(`📩 Mensaje de ${sender}: ${incomingText}`);
+        console.log(`📩 Mensaje recibido de ${sender}: ${incomingText}`);
 
-        // Guardar en base de datos para el CRM
+        // Guardar mensaje en el CRM
         const savedMsg = await Message.create({ chatId: sender, from: sender, text: incomingText });
         broadcast({ type: "new_message", message: savedMsg });
 
@@ -92,7 +92,7 @@ app.post("/webhook", async (req, res) => {
             if (flowDoc && flowDoc.data.drawflow.Home.data) {
                 const nodes = flowDoc.data.drawflow.Home.data;
 
-                // 1. Buscar nodo Trigger que coincida
+                // Buscar el nodo Trigger que coincida
                 const triggerNode = Object.values(nodes).find(n => 
                     n.name === "trigger" && n.data.val.toLowerCase().trim() === incomingText
                 );
@@ -106,31 +106,41 @@ app.post("/webhook", async (req, res) => {
                 }
             }
         } catch (e) {
-            console.error("❌ Webhook Flow Error:", e.message);
+            console.error("❌ Error procesando flujo:", e.message);
         }
     }
     res.sendStatus(200);
 });
 
+/* ========================= MOTOR DE RESPUESTAS ========================= */
 async function processNode(to, node, allNodes) {
     let payload = { messaging_product: "whatsapp", to: to };
 
+    // 1. Manejo de Mensajes Simples e IA
     if (node.name === "message" || node.name === "ia") {
         payload.type = "text";
         payload.text = { body: node.data.info };
     } 
+    // 2. Manejo de Listas Interactivas (Corregido)
     else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
+            .filter(k => k.startsWith("row") && node.data[k].trim() !== "")
+            .map((k, i) => ({
+                id: `row_${node.id}_${i}`,
+                title: node.data[k].substring(0, 24) // Límite de Meta
+            }));
+
+        if (rows.length === 0) return;
 
         payload.type = "interactive";
         payload.interactive = {
             type: "list",
+            header: { type: "text", text: "Opciones disponibles" },
             body: { text: node.data.list_title || "Selecciona una opción:" },
+            footer: { text: "Webs Rápidas" },
             action: { 
                 button: node.data.button_text || "Ver Menú", 
-                sections: [{ title: "Opciones", rows }] 
+                sections: [{ title: "Selecciona una", rows }] 
             }
         };
     }
@@ -140,21 +150,25 @@ async function processNode(to, node, allNodes) {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
         
-        // Registrar respuesta del bot en el chat
-        const botText = node.data.info || node.data.list_title || "Mensaje interactivo enviado";
+        // Registrar respuesta del bot en el CRM
+        const botText = node.data.info || node.data.list_title || "Lista enviada";
         const savedBotMsg = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBotMsg });
 
     } catch (err) {
-        console.error("❌ Error enviando mensaje:", err.response?.data || err.message);
+        console.error("❌ Error enviando a Meta:", err.response?.data || err.message);
     }
 }
 
-/* ========================= REST API ========================= */
+/* ========================= API REST (CRM Y EDITOR) ========================= */
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } },
-        { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } },
+        { $group: { 
+            _id: "$chatId", 
+            lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, 
+            lastTime: { $last: "$timestamp" } 
+        } },
         { $sort: { lastTime: -1 } }
     ]);
     res.json(chats);
@@ -190,6 +204,9 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-/* ========================= START SERVER ========================= */
+/* ========================= INICIO DEL SERVIDOR ========================= */
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`🚀 Servidor CRM y Chatbot corriendo en puerto ${PORT}`);
+    console.log(`Base Price: S/380 | WhatsApp: 991138132`);
+});
