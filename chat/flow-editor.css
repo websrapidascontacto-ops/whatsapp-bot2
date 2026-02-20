@@ -7,12 +7,11 @@
     --danger: #ef4444;
     --indigo: #6366f1;
     --whatsapp: #075e54;
-    --media: #e67e22; /* Color para el nodo de imagen */
+    --media: #e67e22;
     --bg-main: #0b0f1a;
     --bg-secondary: #161c2d;
     --border-color: rgba(255, 255, 255, 0.1);
     --text-main: #f1f5f9;
-    --text-muted: #94a3b8;
 }
 
 * { 
@@ -20,22 +19,17 @@
     box-sizing: border-box;
 }
 
-body { 
-    margin: 0; 
-    background: var(--bg-main); 
-    overflow: hidden; 
-    color: var(--text-main); 
-}
+body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--text-main); }
 
 /* ================= HEADER MODERNO ================= */
 .editor-header {
     height: 80px; 
-    background: rgba(22, 28, 45, 0.8);
+    background: rgba(22, 28, 45, 0.9);
     backdrop-filter: blur(10px);
     display: flex; 
     align-items: center; 
     justify-content: space-between;
-    padding: 0 40px; 
+    padding: 0 30px; 
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
     position: fixed; 
     width: 100%; 
@@ -43,59 +37,50 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
-.logo-container {
-    display: flex;
-    align-items: center;
-}
-
 .logo { 
-    height: 45px; 
-    filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.3));
+    height: 50px; 
+    filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));
 }
 
-.header-buttons {
-    display: flex;
-    gap: 10px;
-}
+/* ================= BOTONES CON ICONOS Y COLORES ================= */
+.header-buttons { display: flex; gap: 10px; }
 
 .header-buttons button {
-    border: none; 
-    padding: 10px 20px; 
-    border-radius: 12px; 
-    color: white;
-    font-weight: 600; 
-    font-size: 13px; 
-    cursor: pointer; 
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: none; padding: 10px 16px; border-radius: 12px; color: white;
+    font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.3s;
+    display: flex; align-items: center; gap: 8px; /* Espacio para el icono */
+    text-transform: uppercase;
 }
 
-.header-buttons button:hover {
-    transform: translateY(-2px);
-    filter: brightness(1.2);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+/* Colores Individuales */
+.btn-trigger { background: #f59e0b; }
+.btn-message { background: #2563eb; }
+.btn-ia { background: #10b981; }
+.btn-list { background: #075e54; }
+.btn-media { background: #e67e22; }
+.btn-save { background: #6366f1; border: 2px solid white !important; }
+
+.header-buttons button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+
+/* Inserción de iconos mediante pseudo-elementos si no están en el HTML */
+.btn-trigger::before { content: "⚡"; font-size: 16px; }
+.btn-message::before { content: "💬"; font-size: 16px; }
+.btn-ia::before { content: "🤖"; font-size: 16px; }
+.btn-list::before { content: "📝"; font-size: 16px; }
+.btn-media::before { content: "🖼️"; font-size: 16px; }
+.btn-save::before { content: "💾"; font-size: 16px; }
+
+/* ================= CONEXIONES ANIMADAS (Grosor 5px) ================= */
+.drawflow .connection .main-path {
+    stroke: #6366f1; /* Color índigo brillante */
+    stroke-width: 5px !important;
+    stroke-dasharray: 10; /* Crea el efecto de línea punteada/segmentada */
+    animation: dash 1s linear infinite; /* Animación de movimiento */
 }
 
-.btn-trigger { background: var(--warning); }
-.btn-ia { background: var(--success); }
-.btn-message { background: var(--primary); }
-.btn-menu { background: var(--indigo); }
-.btn-list { background: var(--whatsapp); }
-.btn-media { background: var(--media); } /* Botón naranja para multimedia */
-
-/* ================= DRAWFLOW CANVAS ================= */
-#drawflow {
-    position: absolute; 
-    top: 0; 
-    width: 100%; 
-    height: 100vh;
-    background-color: var(--bg-main); 
-    background-image: 
-        radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 30px 30px;
+@keyframes dash {
+    from { stroke-dashoffset: 20; }
+    to { stroke-dashoffset: 0; }
 }
 
 /* ================= NODOS ESTILIZADOS ================= */
@@ -104,33 +89,16 @@ body {
     border-radius: 20px !important;
     border: 1px solid var(--border-color) !important; 
     width: 320px !important;
-    color: var(--text-main); 
-    padding: 0 !important;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    overflow: visible !important;
-}
-
-.drawflow-node.selected {
-    border: 2px solid var(--primary) !important;
-    box-shadow: 0 0 20px rgba(37, 99, 235, 0.4) !important;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
 }
 
 .node-header { 
-    padding: 15px 20px; 
-    color: white; 
-    font-weight: 700; 
-    border-radius: 20px 20px 0 0; 
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    padding: 15px; border-radius: 20px 20px 0 0; 
+    font-weight: 700; font-size: 14px; 
 }
 
 .header-trigger { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .header-message { background: linear-gradient(135deg, #2563eb, #1e40af); }
-.header-menu { background: linear-gradient(135deg, #6366f1, #4338ca); }
 .header-ia { background: linear-gradient(135deg, #10b981, #059669); }
 .header-list { background: linear-gradient(135deg, #075e54, #128c7e); }
 .header-media { background: linear-gradient(135deg, #e67e22, #d35400); }
@@ -138,84 +106,27 @@ body {
 .node-body { padding: 20px; }
 
 .form-control {
-    font-size: 13px; 
-    border-radius: 10px; 
-    border: 1px solid var(--border-color);
-    padding: 10px 14px; 
-    background: #0b0f1a; 
-    color: white; 
-    width: 100%; 
-    margin-bottom: 8px;
-    transition: border 0.3s;
+    background: #0b0f1a; border: 1px solid var(--border-color);
+    color: white; border-radius: 10px; padding: 10px; width: 100%;
 }
 
-.form-control:focus {
-    border-color: var(--primary);
-    outline: none;
-}
-
-/* BOTONES DE ACCIÓN DENTRO DEL NODO */
-.btn-node-action {
-    background: rgba(255,255,255,0.05);
-    border: 1px dashed var(--border-color);
-    color: var(--text-muted);
-    width: 100%;
-    padding: 8px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    margin-top: 5px;
-}
-
-.btn-node-action:hover {
-    background: rgba(255,255,255,0.1);
-    color: white;
-}
-
-/* ================= CONEXIONES (PUNTOS) ================= */
-.drawflow .connection .main-path {
-    stroke: var(--primary);
-    stroke-width: 3px;
-}
-
+/* PUNTOS DE CONEXIÓN */
 .drawflow-node .input, .drawflow-node .output {
-    width: 14px !important;
-    height: 14px !important;
+    width: 16px !important; height: 16px !important;
     border: 3px solid var(--bg-secondary) !important;
-    box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
+.drawflow-node .output { background: #6366f1 !important; }
 
-.drawflow-node .input { background: #94a3b8 !important; left: -8px !important; }
-.drawflow-node .output { background: var(--primary) !important; right: -8px !important; }
-
-/* AJUSTE PARA LISTAS E INTERACTIVOS */
-.drawflow-node.whatsapp_list .outputs {
-    display: flex;
-    flex-direction: column;
-    gap: 34px; /* Espaciado exacto entre bolitas */
-    padding-top: 178px; /* Calibrado para los inputs de filas */
+#drawflow {
+    position: absolute; top: 0; width: 100%; height: 100vh;
+    background-color: var(--bg-main);
+    background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 30px 30px;
 }
 
 /* BOTÓN CERRAR NODO */
 .node-close-btn {
-    position: absolute; 
-    top: -12px; 
-    right: -12px; 
-    background: var(--danger);
-    color: white; 
-    width: 28px; 
-    height: 28px; 
-    border-radius: 50%;
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    cursor: pointer;
-    font-weight: bold;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    z-index: 5;
-    transition: transform 0.2s;
-}
-
-.node-close-btn:hover {
-    transform: scale(1.1);
+    position: absolute; top: -10px; right: -10px; background: var(--danger);
+    color: white; width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
