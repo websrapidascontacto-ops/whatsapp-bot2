@@ -20,12 +20,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 const chatPath = path.join(__dirname, "chat");
 const uploadsPath = path.join(chatPath, "uploads");
 
-// Asegurar que la carpeta de subidas exista
 if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
 }
 
-// Servir archivos estáticos
 app.use(express.static(chatPath));
 app.use("/uploads", express.static(uploadsPath));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
@@ -37,11 +35,7 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
-    chatId: String,
-    from: String,
-    text: String,
-    media: String,
-    timestamp: { type: Date, default: Date.now }
+    chatId: String, from: String, text: String, media: String, timestamp: { type: Date, default: Date.now }
 }));
 
 const Flow = mongoose.model("Flow", new mongoose.Schema({
@@ -67,66 +61,52 @@ async function downloadMedia(mediaId, fileName) {
         const filePath = path.join(uploadsPath, fileName);
         fs.writeFileSync(filePath, response.data);
         return `/uploads/${fileName}`;
-    } catch (e) {
-        console.error("❌ Error descargando media de Meta:", e.message);
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK (RECIBIR MENSAJES) ========================= */
+/* ========================= WEBHOOK Y LÓGICA SECUENCIAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            let incomingText = "";
-            let mediaUrl = null;
+            let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
 
-            if (msg.type === "text") {
-                incomingText = msg.text.body.trim();
-            } else if (msg.type === "interactive") {
-                incomingText = msg.interactive.list_reply?.title || msg.interactive.button_reply?.title;
-            } else if (msg.type === "image") {
-                const fileName = `${Date.now()}-${sender}.jpg`;
-                mediaUrl = await downloadMedia(msg.image.id, fileName);
-                incomingText = msg.image.caption || "📷 Imagen recibida";
-            }
-
-            if (incomingText || mediaUrl) {
-                const saved = await Message.create({ 
-                    chatId: sender, 
-                    from: sender, 
-                    text: incomingText, 
-                    media: mediaUrl 
-                });
-                broadcast({ type: "new_message", message: saved });
-                
-                // Lógica de respuesta del BOT
-                try {
-                    const flowDoc = await Flow.findOne({ name: "Main Flow" });
-                    if (flowDoc && incomingText) {
-                        const nodes = flowDoc.data.drawflow.Home.data;
-                        const triggerNode = Object.values(nodes).find(n => 
-                            n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                        );
-                        if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                            const nextNode = nodes[triggerNode.outputs.output_1.connections[0].node];
-                            await processBotResponse(sender, nextNode, nodes);
-                        }
+            // Guardar mensaje entrante
+            const saved = await Message.create({ chatId: sender, from: sender, text: incomingText });
+            broadcast({ type: "new_message", message: saved });
+            
+            // Buscar inicio de flujo
+            try {
+                const flowDoc = await Flow.findOne({ name: "Main Flow" });
+                if (flowDoc && incomingText) {
+                    const nodes = flowDoc.data.drawflow.Home.data;
+                    const triggerNode = Object.values(nodes).find(n => 
+                        n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                    );
+                    
+                    if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
+                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
+                        // INICIA LA SECUENCIA RECURSIVA
+                        await processSequence(sender, nodes[firstNextNodeId], nodes);
                     }
-                } catch (err) { console.error("❌ Error Flow:", err.message); }
-            }
+                }
+            } catch (err) { console.error("❌ Error Secuencia:", err.message); }
         }
     }
     res.sendStatus(200);
 });
 
-async function processBotResponse(to, node, allNodes) {
+// FUNCIÓN RECURSIVA: Procesa el nodo actual y salta al siguiente si existe conexión
+async function processSequence(to, node, allNodes) {
+    if (!node) return;
+
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
+    // 1. Identificar y enviar contenido del nodo actual
     if (node.name === "message" || node.name === "ia") {
-        botText = node.data.info || "Base: S/380";
+        botText = node.data.info || "S/380";
         payload.type = "text";
         payload.text = { body: botText };
     } else if (node.name === "whatsapp_list") {
@@ -141,81 +121,73 @@ async function processBotResponse(to, node, allNodes) {
         botText = "📋 Menú enviado";
     }
 
-    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-    });
+    // 2. Ejecutar envío a Meta
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
 
-    const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
-    broadcast({ type: "new_message", message: savedBot });
+        // 3. Guardar en historial y avisar al CRM
+        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
+        broadcast({ type: "new_message", message: savedBot });
+
+        // 4. ¿HAY UN SIGUIENTE NODO CONECTADO? (Recursividad)
+        // Buscamos si el nodo actual tiene algo conectado en su salida (output_1)
+        if (node.outputs && node.outputs.output_1 && node.outputs.output_1.connections.length > 0) {
+            const nextNodeId = node.outputs.output_1.connections[0].node;
+            const nextNode = allNodes[nextNodeId];
+            
+            // Añadimos un pequeño retraso de 1 segundo para que no lleguen pegados
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Llamada recursiva
+            return await processSequence(to, nextNode, allNodes);
+        }
+    } catch (err) {
+        console.error("❌ Error enviando nodo secuencial:", err.response?.data || err.message);
+    }
 }
 
-/* ========================= API CRM (ENVIAR) ========================= */
-
+/* ========================= RESTO DE APIS (ENVÍO CRM, ETC) ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
 const upload = multer({ storage });
 
-// ENVIAR IMÁGENES DESDE EL CRM
 app.post("/send-media", upload.single("file"), async (req, res) => {
     try {
         const { to } = req.body;
         const file = req.file;
-        if (!file) return res.status(400).json({ error: "No hay archivo" });
-
         const form = new FormData();
         form.append("file", fs.createReadStream(file.path));
         form.append("messaging_product", "whatsapp");
-
         const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
             headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
-
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
             messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-        const saved = await Message.create({ 
-            chatId: to, 
-            from: "me", 
-            text: "📷 Imagen enviada", 
-            media: "/uploads/" + file.filename 
-        });
+        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", media: "/uploads/" + file.filename });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
-    } catch (e) {
-        console.error("❌ Error send-media:", e.response?.data || e.message);
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ENVIAR TEXTO DESDE EL CRM
 app.post("/send-message", async (req, res) => {
     const { to, text } = req.body;
     try {
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
             messaging_product: "whatsapp", to, type: "text", text: { body: text }
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
         const saved = await Message.create({ chatId: to, from: "me", text });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ========================= RUTAS DE DATOS ========================= */
-
 app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } },
-        { $group: { 
-            _id: "$chatId", 
-            lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, 
-            lastTime: { $last: "$timestamp" } 
-        }},
-        { $sort: { lastTime: -1 } }
-    ]);
+    const chats = await Message.aggregate([{ $sort: { timestamp: 1 } }, { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, { $sort: { lastTime: -1 } }]);
     res.json(chats);
 });
 
@@ -234,4 +206,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Operativo"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo Secuencial"));
