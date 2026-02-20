@@ -74,15 +74,21 @@ app.post("/webhook", async (req, res) => {
                     if (value.messages) {
                         for (const msg of value.messages) {
                             const sender = msg.from;
+                            let incomingText = "";
 
+                            // Detectar si es texto normal o una selección de lista/botón
                             if (msg.type === "text") {
-                                let incomingText = msg.text.body.toLowerCase().trim();
-                                
-                                // Guardar mensaje del usuario
+                                incomingText = msg.text.body.toLowerCase().trim();
+                            } else if (msg.type === "interactive") {
+                                // Captura el título de la opción seleccionada en la lista
+                                incomingText = msg.interactive.list_reply?.title.toLowerCase().trim() || 
+                                               msg.interactive.button_reply?.title.toLowerCase().trim();
+                            }
+
+                            if (incomingText) {
                                 const saved = await Message.create({ chatId: sender, from: sender, text: incomingText });
                                 broadcast({ type: "new_message", message: saved });
 
-                                // Lógica de Flujo
                                 const flow = await Flow.findOne({ name: "Main Flow" });
                                 if (flow && flow.data && flow.data.drawflow) {
                                     const nodes = flow.data.drawflow.Home.data;
@@ -94,79 +100,89 @@ app.post("/webhook", async (req, res) => {
                                     );
 
                                     if (triggerNode) {
-                                        const outputConnections = triggerNode.outputs.output_1.connections;
-                                        if (outputConnections.length > 0) {
-                                            nextNode = nodes[outputConnections[0].node];
-                                        }
+                                        const out = triggerNode.outputs.output_1.connections;
+                                        if (out.length > 0) nextNode = nodes[out[0].node];
                                     } else {
-                                        // 2. ¿Es respuesta de menú?
+                                        // 2. ¿Es respuesta a un menú o lista previa?
                                         const session = await Session.findOne({ chatId: sender });
                                         if (session && nodes[session.lastNodeId]) {
                                             const currentNode = nodes[session.lastNodeId];
+                                            
+                                            // Lógica para Menú Numérico (output_1, output_2...)
                                             const outputKey = `output_${parseInt(incomingText)}`;
-                                            if (currentNode.outputs[outputKey] && currentNode.outputs[outputKey].connections.length > 0) {
+                                            if (currentNode.outputs[outputKey]?.connections.length > 0) {
                                                 nextNode = nodes[currentNode.outputs[outputKey].connections[0].node];
+                                            } else {
+                                                // Lógica para Lista de WhatsApp (buscamos por coincidencia de texto)
+                                                // Si el texto coincide con alguna 'rowX' del nodo lista
+                                                const foundRowKey = Object.keys(currentNode.data).find(k => 
+                                                    k.startsWith('row') && currentNode.data[k].toLowerCase().trim() === incomingText
+                                                );
+                                                if (foundRowKey) {
+                                                    const rowIdx = foundRowKey.replace('row', '');
+                                                    const outList = currentNode.outputs[`output_${rowIdx}`]?.connections;
+                                                    if (outList && outList.length > 0) nextNode = nodes[outList[0].node];
+                                                }
                                             }
                                         }
                                     }
 
-                                    // 3. Enviar respuesta
+                                    // 3. ENVIAR RESPUESTA SEGÚN TIPO DE NODO
                                     if (nextNode) {
-                                        let responseText = "";
+                                        let payload = { messaging_product: "whatsapp", to: sender };
+
                                         if (nextNode.name === 'message' || nextNode.name === 'ia') {
-                                            responseText = nextNode.data.info || "¡Hola! 👋";
+                                            const txt = nextNode.data.info || "Gracias por contactarnos.";
+                                            payload.type = "text";
+                                            payload.text = { body: txt };
                                             await Session.deleteOne({ chatId: sender });
+
                                         } else if (nextNode.name === 'menu') {
-                                            let titulo = nextNode.data.info || "Selecciona una opción:";
-                                            responseText = `*${titulo}* 📋\n\n`;
-                                            
-                                            const optionsKeys = Object.keys(nextNode.data)
-                                                .filter(k => k.startsWith('option') && nextNode.data[k].trim() !== "")
-                                                .sort((a, b) => parseInt(a.replace('option', '')) - parseInt(b.replace('option', '')));
+                                            let menuTxt = `*${nextNode.data.info || "Menú"}* 📋\n\n`;
+                                            const opts = Object.keys(nextNode.data).filter(k => k.startsWith('option')).sort();
+                                            opts.forEach((k, i) => menuTxt += `${i + 1}️⃣ ${nextNode.data[k]}\n`);
+                                            payload.type = "text";
+                                            payload.text = { body: menuTxt + "\n_Responde con un número_" };
+                                            await Session.findOneAndUpdate({ chatId: sender }, { lastNodeId: nextNode.id }, { upsert: true });
 
-                                            optionsKeys.forEach((key, index) => {
-                                                responseText += `${index + 1}️⃣ ${nextNode.data[key]}\n`;
-                                            });
-                                            responseText += `\n_Responde con el número de tu opción_ 📝`;
+                                        } else if (nextNode.name === 'whatsapp_list') {
+                                            const rows = Object.keys(nextNode.data)
+                                                .filter(k => k.startsWith('row') && nextNode.data[k].trim() !== "")
+                                                .map((k, i) => ({ id: `id_${i}`, title: nextNode.data[k].substring(0, 24) }));
 
+                                            payload.type = "interactive";
+                                            payload.interactive = {
+                                                type: "list",
+                                                header: { type: "text", text: "Webs Rápidas" },
+                                                body: { text: nextNode.data.list_title || "Elige una opción:" },
+                                                footer: { text: "Estamos para ayudarte" },
+                                                action: {
+                                                    button: nextNode.data.button_text || "Ver Opciones",
+                                                    sections: [{ title: "Selecciona una", rows }]
+                                                }
+                                            };
                                             await Session.findOneAndUpdate({ chatId: sender }, { lastNodeId: nextNode.id }, { upsert: true });
                                         }
 
-                                        if (responseText) {
-                                            await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-                                                messaging_product: "whatsapp", to: sender, text: { body: responseText }
-                                            }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-                                            const botSaved = await Message.create({ chatId: sender, from: "me", text: responseText });
+                                        // Envío final a Meta
+                                        if (payload.type) {
+                                            await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, 
+                                                payload, 
+                                                { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
+                                            );
+                                            
+                                            const logText = payload.text?.body || `[Mensaje Interactivo: ${payload.interactive?.type}]`;
+                                            const botSaved = await Message.create({ chatId: sender, from: "me", text: logText });
                                             broadcast({ type: "new_message", message: botSaved });
                                         }
                                     }
                                 }
                             }
-
-                            if (msg.type === "image") {
-                                // Lógica de imagen mantenida
-                                const mediaId = msg.image.id;
-                                const mediaInfo = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-                                    headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                                });
-                                const mediaFile = await axios.get(mediaInfo.data.url, {
-                                    responseType: "arraybuffer",
-                                    headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                                });
-                                const fileName = Date.now() + ".jpg";
-                                const filePath = path.join(uploadsPath, fileName);
-                                fs.writeFileSync(filePath, mediaFile.data);
-                                const savedMedia = await Message.create({ chatId: sender, from: sender, media: "/uploads/" + fileName });
-                                broadcast({ type: "new_message", message: savedMedia });
-                            }
                         }
                     }
                 }
             }
-        } catch (error) {
-            console.error("❌ Error Webhook:", error.message);
-        }
+        } catch (e) { console.error("❌ Error Webhook:", e.message); }
     }
     res.sendStatus(200);
 });
@@ -190,7 +206,7 @@ app.post("/api/save-flow", async (req, res) => {
     try {
         await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Error" }); }
+    } catch (err) { res.status(500).json({ error: "Error al guardar" }); }
 });
 
 app.get("/api/get-flow", async (req, res) => {
@@ -235,7 +251,7 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
         const saved = await Message.create({ chatId: to, from: "me", media: "/uploads/" + file.filename });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Error" }); }
+    } catch (err) { res.status(500).json({ error: "Error media" }); }
 });
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server activo en puerto 3000"));
