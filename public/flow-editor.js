@@ -25,30 +25,32 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (CORREGIDO Y UNIFICADO) ================= */
+/* ================= GUARDAR (ESTA ES LA PARTE QUE ARREGLA EL PROBLEMA) ================= */
 function saveFlow() {
-    // 1. Antes de exportar, capturamos los valores de los inputs/textareas de cada nodo
+    // 1. Antes de exportar, entramos a cada nodo y extraemos el texto de los inputs
     const nodes = editor.drawflow.drawflow.Home.data;
     for (const id in nodes) {
         const nodeElement = document.getElementById('node-' + id);
         if (nodeElement) {
             const input = nodeElement.querySelector('input, textarea');
             if (input) {
-                // Guardamos el texto en el objeto interno según el tipo de nodo
+                // Si es un Trigger, guardamos en 'val'
                 if (nodes[id].name === 'trigger') {
                     editor.updateNodeDataFromId(id, { val: input.value });
-                } else {
+                } 
+                // Si es Mensaje o IA, guardamos en 'info'
+                else {
                     editor.updateNodeDataFromId(id, { info: input.value });
                 }
             }
         }
     }
 
-    // 2. Exportamos la data actualizada
+    // 2. Exportamos los datos ya con los textos incluidos
     const flowData = editor.export();
-    console.log("Exportando flujo con datos...", flowData);
+    console.log("Exportando flujo con textos...", flowData);
     
-    // 3. Enviamos al CRM (index.html)
+    // 3. Enviamos al CRM
     window.parent.postMessage({ 
         type: 'SAVE_FLOW', 
         data: flowData 
@@ -150,10 +152,10 @@ function updateMinimap() {
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
-        clone.style.width = node.offsetWidth * scale + "px";
-        clone.style.height = node.offsetHeight * scale + "px";
-        clone.style.left = node.offsetLeft * scale + "px";
-        clone.style.top = node.offsetTop * scale + "px";
+        clone.style.width = (node.offsetWidth * scale) + "px";
+        clone.style.height = (node.offsetHeight * scale) + "px";
+        clone.style.left = (node.offsetLeft * scale) + "px";
+        clone.style.top = (node.offsetTop * scale) + "px";
         clone.style.background = "#1e293b";
         clone.style.borderRadius = "4px";
         mapCanvas.appendChild(clone);
@@ -178,7 +180,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(updateMinimap, 500);
 });
 
-// Cargar flujo cuando el CRM lo solicite
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
