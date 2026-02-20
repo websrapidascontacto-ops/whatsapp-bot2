@@ -5,7 +5,6 @@ editor.reroute = false;
 editor.start();
 
 /* ================= CONFIGURACIÓN VISUAL ================= */
-// Fuente Montserrat aplicada según preferencia del usuario
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -22,14 +21,13 @@ let lastNodeY = 200;
 
 function getNextPosition() {
     const pos = { x: lastNodeX, y: lastNodeY };
-    lastNodeX += 380; // Coloca el nuevo nodo al lado del anterior
+    lastNodeX += 380; 
     return pos;
 }
 
 /* ================= GUARDAR ================= */
 function saveFlow() {
     const flowData = editor.export();
-    // Enviamos el objeto al padre (index.html)
     window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
 }
 
@@ -48,11 +46,30 @@ function addCloseButton(nodeId) {
     nodeElement.appendChild(close);
 }
 
-function createNode(type, inputs, outputs, html) {
+// Función para forzar que Drawflow escuche los inputs
+function attachInputs(nodeId) {
+    const nodeElement = document.getElementById(`node-${nodeId}`);
+    const inputs = nodeElement.querySelectorAll('input, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('input', (e) => {
+            const attr = e.target.getAttribute('df-info') !== null ? 'info' : 
+                         e.target.getAttribute('df-val') !== null ? 'val' : 
+                         e.target.attributes[0].name.replace('df-', '');
+            
+            const nodeData = editor.getNodeFromId(nodeId).data;
+            nodeData[attr] = e.target.value;
+            editor.updateNodeDataFromId(nodeId, nodeData);
+        });
+    });
+}
+
+function createNode(type, inputs, outputs, html, data = {}) {
     const pos = getNextPosition();
-    // Iniciamos con data vacía pero lista para recibir df- atributos
-    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
-    setTimeout(() => addCloseButton(id), 50);
+    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
+    setTimeout(() => {
+        addCloseButton(id);
+        attachInputs(id);
+    }, 50);
     updateMinimap();
 }
 
@@ -66,7 +83,7 @@ function addTriggerNode() {
                 <input type="text" class="form-control" placeholder="Ej: hola" df-val>
             </div>
         </div>
-    `);
+    `, { val: '' });
 }
 
 function addIANode() {
@@ -77,7 +94,7 @@ function addIANode() {
                 <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
-    `);
+    `, { info: 'Base: S/380. WhatsApp: 991138132.' });
 }
 
 function addMessageNode() {
@@ -88,7 +105,7 @@ function addMessageNode() {
                 <textarea class="form-control" rows="3" df-info></textarea>
             </div>
         </div>
-    `);
+    `, { info: '' });
 }
 
 function addMenuNode() {
@@ -103,7 +120,7 @@ function addMenuNode() {
                 <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
             </div>
         </div>
-    `);
+    `, { info: '', option1: '' });
 }
 
 /* ================= GESTIÓN DE OPCIONES DINÁMICAS ================= */
@@ -118,11 +135,8 @@ window.addOption = function(btn) {
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = `Opción ${optionCount}`;
-    
-    // IMPORTANTE: Establecer el atributo df- para que Drawflow lo reconozca automáticamente
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // Listener para forzar la actualización de datos en el objeto exportable
     input.addEventListener('input', (e) => {
         const node = editor.getNodeFromId(nodeId);
         node.data[attrName] = e.target.value;
@@ -130,7 +144,7 @@ window.addOption = function(btn) {
     });
 
     list.appendChild(input);
-    editor.addNodeOutput(nodeId); // Añade salida para conexión visual
+    editor.addNodeOutput(nodeId);
 };
 
 /* ================= MINIMAPA ================= */
