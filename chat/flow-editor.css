@@ -112,7 +112,7 @@ body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--tex
 
 /* PUNTOS DE CONEXIÓN */
 .drawflow-node .input, .drawflow-node .output {
-    width: 16px !important; height: 16px !important;
+    width: 20px !important; height: 20px !important;
     border: 3px solid var(--bg-secondary) !important;
 }
 .drawflow-node .output { background: #6366f1 !important; }
