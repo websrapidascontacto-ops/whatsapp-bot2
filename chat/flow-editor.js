@@ -36,7 +36,7 @@ function createNode(type, inputs, outputs, html, data = {}) {
             closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
             nodeElem.appendChild(closeBtn);
         }
-    }, 50);
+    }, 100);
     return nodeId;
 }
 
@@ -44,7 +44,7 @@ function createNode(type, inputs, outputs, html, data = {}) {
    FUNCIONES DE NODOS
    ============================================================ */
 window.addTriggerNode = () => {
-    createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label class="small">Palabra Clave:</label><input type="text" class="form-control" df-val placeholder="Ej: hola"></div></div>`, { val: '' });
+    createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><label class="small">Palabra Clave:</label><input type="text" class="form-control" df-val></div></div>`, { val: '' });
 };
 
 window.addMessageNode = () => {
@@ -56,65 +56,44 @@ window.addIANode = () => {
 };
 
 window.addMenuNode = function() {
-    const nodeId = editor.node_id;
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-menu">📋 Menú Numérico</div>
-            <div class="node-body">
-                <input type="text" class="form-control mb-2" df-info placeholder="Título del Menú">
-                <div id="menu-items-${nodeId}">
-                    <input type="text" class="form-control mb-1" df-option1 placeholder="Opción 1">
-                </div>
-                <button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="addRow(${nodeId}, 'option')">+ Opción</button>
-            </div>
-        </div>`;
+    const nodeId = editor.node_id; 
+    const html = `<div class="node-wrapper"><div class="node-header header-menu">📋 Menú Numérico</div><div class="node-body"><input type="text" class="form-control mb-2" df-info placeholder="Título"><div id="menu-items-${nodeId}"><input type="text" class="form-control mb-1" df-option1></div><button class="btn btn-sm btn-outline-primary w-100 mt-2" onclick="addRow(${nodeId}, 'option')">+ Opción</button></div></div>`;
     createNode("menu", 1, 1, html, { info: '', option1: '' });
 };
 
 window.addListNode = function() {
     const nodeId = editor.node_id;
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-list">📝 Lista WhatsApp</div>
-            <div class="node-body">
-                <input type="text" class="form-control mb-2" df-list_title placeholder="Título de la Lista">
-                <input type="text" class="form-control mb-2" df-button_text placeholder="Texto del Botón">
-                <div id="list-items-${nodeId}">
-                    <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
-                </div>
-                <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Fila</button>
-            </div>
-        </div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista WhatsApp</div><div class="node-body"><input type="text" class="form-control mb-2" df-list_title placeholder="Título"><input type="text" class="form-control mb-2" df-button_text placeholder="Botón"><div id="list-items-${nodeId}"><input type="text" class="form-control mb-1" df-row1></div><button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Fila</button></div></div>`;
     createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
 window.addRow = (nodeId, prefix) => {
+    const nodeData = editor.getNodeFromId(nodeId);
+    if(!nodeData) return; // Evita el error de "undefined"
+
     const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
-    if(!container) return;
-    
     const count = container.querySelectorAll("input").length + 1;
-    if(count > 10) return alert("Máximo 10 opciones");
+    if(count > 10) return alert("Máximo 10 filas");
 
     editor.addNodeOutput(nodeId);
-    
     const input = document.createElement("input");
     input.className = "form-control mb-1";
-    input.placeholder = (prefix === 'row' ? "Fila " : "Opción ") + count;
     input.setAttribute(`df-${prefix}${count}`, "");
     container.appendChild(input);
     
-    // Sincronizar data interna para evitar que el JSON se guarde sin estas propiedades
-    const node = editor.getNodeFromId(nodeId);
-    node.data[`${prefix}${count}`] = "";
+    // Forzamos que Drawflow reconozca la nueva propiedad
+    editor.updateNodeDataFromId(nodeId, { ...nodeData.data, [`${prefix}${count}`]: "" });
 };
 
 window.saveFlow = function() {
     const data = editor.export();
-    window.parent.postMessage({ type: 'SAVE_FLOW', data }, '*');
+    fetch('/api/save-flow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(() => alert("✅ Flujo Guardado"));
 };
 
 window.addEventListener('message', (e) => {
-    if (e.data.type === 'LOAD_FLOW' && e.data.data) {
-        editor.import(e.data.data);
-    }
+    if (e.data.type === 'LOAD_FLOW' && e.data.data) { editor.import(e.data.data); }
 });

@@ -3,87 +3,40 @@ const http = require("http");
 const mongoose = require("mongoose");
 const WebSocket = require("ws");
 const path = require("path");
-const multer = require("multer");
 const fs = require("fs");
 const axios = require("axios");
-const FormData = require("form-data");
 require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-/* ========================= CONFIGURACIÓN ========================= */
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const chatPath = path.join(__dirname, "chat");
-const uploadsPath = path.join(chatPath, "uploads");
-
-if (!fs.existsSync(uploadsPath)) {
-    fs.mkdirSync(uploadsPath, { recursive: true });
-}
-
 app.use(express.static(chatPath));
-app.use("/uploads", express.static(uploadsPath));
+app.use("/uploads", express.static(path.join(chatPath, "uploads")));
 
-app.get("/", (req, res) => res.redirect("/chat/index.html"));
-
-/* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Mongo conectado"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
-const Message = mongoose.model("Message", new mongoose.Schema({
-    chatId: String,
-    from: String,
-    text: String,
-    timestamp: { type: Date, default: Date.now }
-}));
+const Flow = mongoose.model("Flow", new mongoose.Schema({ name: String, data: Object }));
+const Message = mongoose.model("Message", new mongoose.Schema({ chatId: String, from: String, text: String, timestamp: { type: Date, default: Date.now } }));
 
-const Flow = mongoose.model("Flow", new mongoose.Schema({
-    name: String,
-    data: Object
-}));
-
-/* ========================= WEBSOCKETS (CRM) ========================= */
 function broadcast(data) {
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(data));
-        }
-    });
+    wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
 }
 
 /* ========================= WEBHOOK WHATSAPP ========================= */
-app.get("/webhook", (req, res) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
-        res.status(200).send(challenge);
-    } else {
-        res.sendStatus(403);
-    }
-});
-
 app.post("/webhook", async (req, res) => {
     const data = req.body;
     if (data.object === "whatsapp_business_account" && data.entry?.[0].changes?.[0].value.messages?.[0]) {
         const msg = data.entry[0].changes[0].value.messages[0];
         const sender = msg.from;
-        
-        // Extraer texto (soporta texto normal, clics en botones y clics en listas)
-        const incomingText = (
-            msg.text?.body || 
-            msg.interactive?.button_reply?.title || 
-            msg.interactive?.list_reply?.title || 
-            ""
-        ).toLowerCase().trim();
+        const incomingText = (msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || "").toLowerCase().trim();
 
-        console.log(`📩 Mensaje recibido de ${sender}: ${incomingText}`);
-
-        // Guardar mensaje en el CRM
         const savedMsg = await Message.create({ chatId: sender, from: sender, text: incomingText });
         broadcast({ type: "new_message", message: savedMsg });
 
@@ -91,11 +44,7 @@ app.post("/webhook", async (req, res) => {
             const flowDoc = await Flow.findOne({ name: "Main Flow" });
             if (flowDoc && flowDoc.data.drawflow.Home.data) {
                 const nodes = flowDoc.data.drawflow.Home.data;
-
-                // Buscar el nodo Trigger que coincida
-                const triggerNode = Object.values(nodes).find(n => 
-                    n.name === "trigger" && n.data.val.toLowerCase().trim() === incomingText
-                );
+                const triggerNode = Object.values(nodes).find(n => n.name === "trigger" && n.data.val.toLowerCase().trim() === incomingText);
 
                 if (triggerNode) {
                     const conn = triggerNode.outputs.output_1.connections[0];
@@ -105,43 +54,30 @@ app.post("/webhook", async (req, res) => {
                     }
                 }
             }
-        } catch (e) {
-            console.error("❌ Error procesando flujo:", e.message);
-        }
+        } catch (e) { console.error("❌ Error Webhook:", e.message); }
     }
     res.sendStatus(200);
 });
 
-/* ========================= MOTOR DE RESPUESTAS ========================= */
 async function processNode(to, node, allNodes) {
     let payload = { messaging_product: "whatsapp", to: to };
 
-    // 1. Manejo de Mensajes Simples e IA
     if (node.name === "message" || node.name === "ia") {
         payload.type = "text";
         payload.text = { body: node.data.info };
     } 
-    // 2. Manejo de Listas Interactivas (Corregido)
     else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k].trim() !== "")
-            .map((k, i) => ({
-                id: `row_${node.id}_${i}`,
-                title: node.data[k].substring(0, 24) // Límite de Meta
-            }));
-
-        if (rows.length === 0) return;
+            .filter(k => k.startsWith("row") && node.data[k])
+            .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
 
         payload.type = "interactive";
         payload.interactive = {
             type: "list",
-            header: { type: "text", text: "Opciones disponibles" },
-            body: { text: node.data.list_title || "Selecciona una opción:" },
+            header: { type: "text", text: "Opciones" },
+            body: { text: node.data.list_title || "Selecciona una:" },
             footer: { text: "Webs Rápidas" },
-            action: { 
-                button: node.data.button_text || "Ver Menú", 
-                sections: [{ title: "Selecciona una", rows }] 
-            }
+            action: { button: node.data.button_text || "Ver", sections: [{ title: "Menú", rows }] }
         };
     }
 
@@ -149,28 +85,23 @@ async function processNode(to, node, allNodes) {
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
-        
-        // Registrar respuesta del bot en el CRM
-        const botText = node.data.info || node.data.list_title || "Lista enviada";
-        const savedBotMsg = await Message.create({ chatId: to, from: "me", text: botText });
-        broadcast({ type: "new_message", message: savedBotMsg });
-
-    } catch (err) {
-        console.error("❌ Error enviando a Meta:", err.response?.data || err.message);
-    }
+        broadcast({ type: "new_message", message: { chatId: to, from: "me", text: "Bot respondió" } });
+    } catch (err) { console.error("❌ Error API Meta:", err.response?.data || err.message); }
 }
 
-/* ========================= API REST (CRM Y EDITOR) ========================= */
+/* ========================= API REST ========================= */
+app.post("/api/save-flow", async (req, res) => {
+    await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
+    res.json({ success: true });
+});
+
+app.get("/api/get-flow", async (req, res) => {
+    const flow = await Flow.findOne({ name: "Main Flow" });
+    res.json(flow ? flow.data : null);
+});
+
 app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } },
-        { $group: { 
-            _id: "$chatId", 
-            lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, 
-            lastTime: { $last: "$timestamp" } 
-        } },
-        { $sort: { lastTime: -1 } }
-    ]);
+    const chats = await Message.aggregate([{ $sort: { timestamp: 1 } }, { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, { $sort: { lastTime: -1 } }]);
     res.json(chats);
 });
 
@@ -179,34 +110,4 @@ app.get("/messages/:chatId", async (req, res) => {
     res.json(messages);
 });
 
-app.post("/send-message", async (req, res) => {
-    const { to, text } = req.body;
-    try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "text", text: { body: text }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-        const saved = await Message.create({ chatId: to, from: "me", text });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/save-flow", async (req, res) => {
-    try {
-        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get("/api/get-flow", async (req, res) => {
-    const flow = await Flow.findOne({ name: "Main Flow" });
-    res.json(flow ? flow.data : null);
-});
-
-/* ========================= INICIO DEL SERVIDOR ========================= */
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 Servidor CRM y Chatbot corriendo en puerto ${PORT}`);
-    console.log(`Base Price: S/380 | WhatsApp: 991138132`);
-});
+server.listen(process.env.PORT || 3000, () => console.log("🚀 Servidor en puerto 3000"));
