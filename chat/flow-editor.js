@@ -8,7 +8,7 @@ editor.reroute = true;
 editor.start();
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
-editor.zoom_value = 0.5; // Ajustado para mejor visibilidad inicial
+editor.zoom_value = 0.5;
 
 /* ============================================================
    SISTEMA DE POSICIONAMIENTO AUTOMÁTICO
@@ -24,25 +24,31 @@ function getNextPosition() {
 }
 
 /* ============================================================
-   MOTOR DE CREACIÓN DE NODOS
+   MOTOR DE CREACIÓN DE NODOS (CORE)
    ============================================================ */
 function createNode(type, inputs, outputs, html, data = {}) {
     const pos = getNextPosition();
     const nodeId = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
     
-    const nodeElem = document.getElementById(`node-${nodeId}`);
-    const closeBtn = document.createElement("div");
-    closeBtn.innerHTML = "×";
-    closeBtn.className = "node-close-btn";
-    closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
-    nodeElem.appendChild(closeBtn);
+    // Botón de cerrar dinámico
+    setTimeout(() => {
+        const nodeElem = document.getElementById(`node-${nodeId}`);
+        if (nodeElem) {
+            const closeBtn = document.createElement("div");
+            closeBtn.innerHTML = "×";
+            closeBtn.className = "node-close-btn";
+            closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
+            nodeElem.appendChild(closeBtn);
+        }
+    }, 10);
     
     return nodeId;
 }
 
 /* ============================================================
-   NODOS SIMPLES (TRIGGER, MENSAJE, IA)
+   FUNCIONES DE LOS BOTONES (ASIGNADAS A WINDOW)
    ============================================================ */
+
 window.addTriggerNode = () => {
     createNode("trigger", 0, 1, `
         <div class="node-wrapper">
@@ -59,8 +65,8 @@ window.addMessageNode = () => {
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
             <div class="node-body">
-                <label class="small text-muted">Texto a enviar:</label>
-                <textarea class="form-control" df-info rows="3" placeholder="Escribe tu mensaje..."></textarea>
+                <label class="small text-muted">Texto del mensaje:</label>
+                <textarea class="form-control" df-info rows="3" placeholder="Escribe aquí..."></textarea>
             </div>
         </div>`);
 };
@@ -70,30 +76,10 @@ window.addIANode = () => {
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <label class="small text-muted">Instrucciones IA:</label>
+                <label class="small text-muted">Contexto:</label>
                 <textarea class="form-control" df-info rows="3">Base: S/380. WhatsApp: 991138132</textarea>
             </div>
         </div>`);
-};
-
-/* ============================================================
-   NODOS DINÁMICOS (LISTA Y MENÚ)
-   ============================================================ */
-window.addListNode = function() {
-    const nodeId = editor.getNextId();
-    const html = `
-        <div class="node-wrapper">
-            <div class="node-header header-list"><i class="fa-solid fa-list-ul"></i> Lista WhatsApp</div>
-            <div class="node-body">
-                <input type="text" class="form-control mb-2" df-list_title placeholder="Título del Menú">
-                <input type="text" class="form-control mb-2" df-button_text placeholder="Texto del Botón">
-                <div id="list-items-${nodeId}">
-                    <input type="text" class="form-control mb-1" df-row1 placeholder="Opción 1">
-                </div>
-                <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Añadir Fila</button>
-            </div>
-        </div>`;
-    createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
 window.addMenuNode = function() {
@@ -112,11 +98,26 @@ window.addMenuNode = function() {
     createNode("menu", 1, 1, html, { info: '', option1: '' });
 };
 
-// Función unificada para añadir filas
+window.addListNode = function() {
+    const nodeId = editor.getNextId();
+    const html = `
+        <div class="node-wrapper">
+            <div class="node-header header-list"><i class="fa-solid fa-list-ul"></i> Lista WhatsApp</div>
+            <div class="node-body">
+                <input type="text" class="form-control mb-2" df-list_title placeholder="Título">
+                <input type="text" class="form-control mb-2" df-button_text placeholder="Texto Botón">
+                <div id="list-items-${nodeId}">
+                    <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
+                </div>
+                <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="addRow(${nodeId}, 'row')">+ Fila</button>
+            </div>
+        </div>`;
+    createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
+};
+
 window.addRow = (nodeId, prefix) => {
     const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
     if(!container) return;
-    
     const count = container.querySelectorAll("input").length + 1;
     if(count > 10) return alert("Máximo 10 opciones");
 
@@ -129,7 +130,7 @@ window.addRow = (nodeId, prefix) => {
 };
 
 /* ============================================================
-   GUARDADO
+   SISTEMA DE GUARDADO
    ============================================================ */
 window.saveFlow = function() {
     const data = editor.export();
