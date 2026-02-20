@@ -12,10 +12,20 @@
 <body>
 
 <div class="sidebar-redes">
-    <div class="red-icon whatsapp"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"></div>
-    <div class="red-icon instagram"><img src="https://upload.wikimedia.org/wikipedia/commons/e/e7/Instagram_logo_2016.svg"></div>
-</div>
+    <div class="red-icon whatsapp" title="WhatsApp">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg">
+    </div>
 
+    <hr class="sidebar-divider">
+
+    <div class="red-icon flow-btn create" title="Crear Flujo" onclick="openFlowEditor()">
+        <i class="fa-solid fa-plus" style="color: var(--green);"></i>
+    </div>
+    
+    <div class="red-icon flow-btn load" title="Cargar Flujos" onclick="loadFlowsList()">
+        <i class="fa-solid fa-folder-open" style="color: var(--blue);"></i>
+    </div>
+</div>
 <div class="chat-list-container" id="chatListContainer">
     <div class="list-header">
         Mensajes
@@ -78,7 +88,15 @@
         </a>
     </div>
 </div>
-
+<div id="flow-editor-overlay" style="display:none; position:fixed; top:0; left:70px; width:calc(100% - 70px); height:100%; background:var(--bg-main); z-index:9999;">
+    <div class="editor-header" style="height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid var(--border);">
+        <h3 style="font-size:16px; margin:0;">Configuración de Flujos 🤖</h3>
+        <button onclick="closeFlowEditor()" style="background:var(--danger); border:none; color:white; padding:5px 15px; border-radius:8px; cursor:pointer;">
+            <i class="fa-solid fa-xmark"></i> Cerrar
+        </button>
+    </div>
+    <iframe id="flow-iframe" src="flow-editor.html" style="width:100%; height:calc(100% - 60px); border:none;"></iframe>
+</div>
 <script src="js/app.js"></script>
 </body>
 </html>

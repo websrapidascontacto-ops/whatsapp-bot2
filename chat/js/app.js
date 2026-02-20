@@ -249,3 +249,63 @@ async function deleteCurrentChat() {
         if (res.ok) { currentChat = null; messagesContainer.innerHTML = ""; loadChats(); }
     }
 }
+/* ============================= */
+/* GESTIÓN DEL EDITOR DE FLUJOS  */
+/* ============================= */
+
+function openFlowEditor() {
+    const overlay = document.getElementById('flow-editor-overlay');
+    overlay.style.display = 'block';
+    console.log("Abriendo editor de flujos para Webs Rápidas... 🚀");
+}
+
+function closeFlowEditor() {
+    if(confirm("¿Estás seguro de cerrar? Asegúrate de haber guardado tu flujo.")) {
+        document.getElementById('flow-editor-overlay').style.display = 'none';
+    }
+}
+
+// Función para el botón de "Cargar Flujos"
+function loadFlowsList() {
+    alert("Cargando lista de flujos guardados... Base: S/380");
+    // Aquí podrías abrir un pequeño modal con la lista de archivos JSON guardados
+}
+/* ================================================= */
+/* INTEGRACIÓN CON EDITOR DE FLUJOS (Webs Rápidas)  */
+/* ================================================= */
+
+function openFlowEditor() {
+    const overlay = document.getElementById('flow-editor-overlay');
+    if(overlay) {
+        overlay.style.display = 'block';
+        console.log("Editor de flujos abierto. Montserrat activado.");
+    }
+}
+
+function closeFlowEditor() {
+    document.getElementById('flow-editor-overlay').style.display = 'none';
+}
+
+function loadFlowsList() {
+    alert("Cargando flujos guardados... Base S/380. WhatsApp: 991138132");
+}
+
+// ESCUCHAR DATOS DEL EDITOR (Iframe)
+window.addEventListener('message', function(event) {
+    // Validamos que el mensaje sea para guardar el flujo
+    if (event.data.type === 'SAVE_FLOW') {
+        const flowJson = event.data.data;
+        console.log("Datos recibidos en CRM:", flowJson);
+        
+        // Notificación visual amigable ✨
+        alert("✅ Flujo capturado con éxito en el CRM. Listo para enviar a Railway.");
+        
+        // Aquí puedes hacer tu fetch:
+        /*
+        fetch('/api/save', {
+            method: 'POST',
+            body: JSON.stringify(flowJson)
+        }).then(res => alert("Guardado en Servidor"));
+        */
+    }
+});

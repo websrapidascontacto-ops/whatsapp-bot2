@@ -411,3 +411,37 @@ body {
   cursor: pointer;
   text-decoration: none;
 }
+/* ============================= */
+/* AJUSTES BARRA LATERAL (FLUJOS) */
+/* ============================= */
+
+/* Línea divisoria sutil */
+.sidebar-divider {
+  width: 40px;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 5px 0;
+}
+
+/* Estilo específico para iconos FontAwesome en la sidebar */
+.red-icon i {
+  font-size: 18px;
+  transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.red-icon:hover i {
+  transform: scale(1.2);
+}
+
+/* Tooltip simple por CSS o usando el atributo title del HTML */
+.flow-btn {
+  position: relative;
+}
+
+.flow-btn.create:hover {
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+}
+
+.flow-btn.load:hover {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
