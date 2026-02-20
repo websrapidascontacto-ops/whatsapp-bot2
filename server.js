@@ -100,7 +100,6 @@ app.post("/webhook", async (req, res) => {
             let incomingText = "";
             let selectionId = "";
 
-            // DETECCIÓN DE TIPO DE MENSAJE
             if (msg.type === "text") {
               incomingText = msg.text.body.toLowerCase().trim();
             } else if (msg.type === "interactive") {
@@ -108,7 +107,6 @@ app.post("/webhook", async (req, res) => {
               incomingText = msg.interactive.list_reply?.title.toLowerCase().trim();
             }
 
-            // PROCESAR TEXTO O SELECCIÓN DE MENÚ
             if (incomingText || selectionId) {
               const saved = await Message.create({
                 chatId: sender,
@@ -137,6 +135,7 @@ app.post("/webhook", async (req, res) => {
                     const session = await Session.findOne({ chatId: sender });
                     if (session && nodes[session.lastNodeId]) {
                       const currentNode = nodes[session.lastNodeId];
+                      // Si es respuesta a un menú de texto, el texto entrante es el número
                       let optionNumber = selectionId ? selectionId.split('_')[1] : parseInt(incomingText);
 
                       const outputKey = `output_${optionNumber}`;
@@ -156,30 +155,30 @@ app.post("/webhook", async (req, res) => {
                       await Session.deleteOne({ chatId: sender });
                     } 
                     else if (nextNode.name === 'menu') {
-                      // Extraer opciones dinámicas (option1, option2...)
-                      const options = Object.keys(nextNode.data)
-                        .filter(k => k.startsWith('option') && nextNode.data[k])
-                        .map(k => ({
-                          id: `row_${k.replace('option', '')}`,
-                          title: nextNode.data[k].substring(0, 24)
-                        }));
+                      // REFORMA A TEXTO PLANO
+                      const tituloMenu = nextNode.data.info || "Selecciona una opción:";
+                      let cuerpoMensaje = `*${tituloMenu}*\n\n`;
 
-                      if (options.length > 0) {
+                      const keys = Object.keys(nextNode.data)
+                        .filter(k => k.startsWith('option') && nextNode.data[k])
+                        .sort((a, b) => {
+                            return parseInt(a.replace('option', '')) - parseInt(b.replace('option', ''));
+                        });
+
+                      if (keys.length > 0) {
+                        keys.forEach((key, index) => {
+                          cuerpoMensaje += `*${index + 1}.* ${nextNode.data[key]}\n`;
+                        });
+
+                        cuerpoMensaje += `\n_Responde con el número de tu opción_`;
+
                         responseData = {
                           messaging_product: "whatsapp",
                           to: sender,
-                          type: "interactive",
-                          interactive: {
-                            type: "list",
-                            header: { type: "text", text: "Opciones" },
-                            body: { text: nextNode.data.info || "Selecciona una opción:" },
-                            footer: { text: "Webs Rápidas 🚀" },
-                            action: {
-                              button: "Ver lista",
-                              sections: [{ title: "Servicios", rows: options }]
-                            }
-                          }
+                          type: "text",
+                          text: { body: cuerpoMensaje }
                         };
+
                         await Session.findOneAndUpdate({ chatId: sender }, { lastNodeId: nextNode.id }, { upsert: true });
                       }
                     }
@@ -188,7 +187,7 @@ app.post("/webhook", async (req, res) => {
                       await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, responseData, {
                         headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
                       });
-                      const logText = responseData.interactive ? responseData.interactive.body.text : responseData.text.body;
+                      const logText = responseData.text.body;
                       const botSaved = await Message.create({ chatId: sender, from: "me", text: logText });
                       broadcast({ type: "new_message", message: botSaved });
                     }
@@ -197,7 +196,6 @@ app.post("/webhook", async (req, res) => {
               } catch (err) { console.error("Error en flujo:", err.message); }
             }
 
-            // PROCESAR IMÁGENES RECIBIDAS (RESTAURADO)
             if (msg.type === "image") {
               try {
                 const mediaId = msg.image.id;
@@ -230,7 +228,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 /* =========================
-   ENDPOINTS REST (MANEJO MANUAL Y CRM)
+   ENDPOINTS REST
 ========================= */
 app.get("/chats", async (req, res) => {
   const chats = await Message.aggregate([
@@ -258,7 +256,6 @@ app.get("/api/get-flow", async (req, res) => {
   res.json(flow ? flow.data : null);
 });
 
-// ENVÍO MANUAL DESDE EL CHAT
 app.post("/send-message", async (req, res) => {
   const { to, text } = req.body;
   try {
@@ -272,7 +269,6 @@ app.post("/send-message", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Error" }); }
 });
 
-// ENVÍO DE MEDIA DESDE EL CHAT (RESTAURADO)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsPath),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
