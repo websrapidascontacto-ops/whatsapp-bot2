@@ -103,6 +103,7 @@ app.post("/webhook", async (req, res) => {
             if (msg.type === "text") {
               incomingText = msg.text.body.toLowerCase().trim();
             } else if (msg.type === "interactive") {
+              // Captura el ID de la fila seleccionada en el menú
               selectionId = msg.interactive.list_reply?.id;
               incomingText = msg.interactive.list_reply?.title.toLowerCase().trim();
             }
@@ -121,7 +122,7 @@ app.post("/webhook", async (req, res) => {
                   const nodes = flow.data.drawflow.Home.data;
                   let nextNode = null;
 
-                  // 1. BUSCAR POR TRIGGER
+                  // 1. BUSCAR POR TRIGGER (INICIO)
                   const triggerNode = Object.values(nodes).find(node => 
                     node.name === 'trigger' && 
                     node.data.val?.toLowerCase().trim() === incomingText
@@ -135,6 +136,8 @@ app.post("/webhook", async (req, res) => {
                     const session = await Session.findOne({ chatId: sender });
                     if (session && nodes[session.lastNodeId]) {
                       const currentNode = nodes[session.lastNodeId];
+                      
+                      // Si es interactivo, el ID es 'row_X', extraemos el número
                       let optionNumber = selectionId ? selectionId.split('_')[1] : parseInt(incomingText);
 
                       const outputKey = `output_${optionNumber}`;
@@ -145,7 +148,7 @@ app.post("/webhook", async (req, res) => {
                     }
                   }
 
-                  // 3. ENVIAR RESPUESTA
+                  // 3. ENVIAR RESPUESTA SEGÚN EL NODO
                   if (nextNode) {
                     let responseData = null;
 
@@ -154,42 +157,40 @@ app.post("/webhook", async (req, res) => {
                       await Session.deleteOne({ chatId: sender });
                     } 
                     else if (nextNode.name === 'ia') {
-                      responseData = { messaging_product: "whatsapp", to: sender, text: { body: "¡Hola! Soy tu asistente inteligente 🤖. Nuestros planes inician en S/380." } };
+                      // Respuesta IA usando los datos de Webs Rápidas
+                      responseData = { messaging_product: "whatsapp", to: sender, text: { body: "¡Hola! Soy tu asistente de Webs Rápidas 🤖. Nuestros planes inician en S/380. ¿En qué puedo ayudarte?" } };
                       await Session.deleteOne({ chatId: sender });
                     } 
                     else if (nextNode.name === 'menu') {
-                      // --- LÓGICA DE EXTRACCIÓN DINÁMICA DE OPCIONES ---
                       const rawData = nextNode.data;
                       const menuTitle = rawData.info || "Selecciona una opción:";
                       
-                      // Extraemos todas las llaves que no sean 'info' y tengan contenido
+                      // Extrae dinámicamente df-option1, df-option2, etc.
                       const options = Object.keys(rawData)
-                        .filter(key => key !== 'info' && rawData[key] && rawData[key].trim() !== "")
-                        .map(key => rawData[key]);
+                        .filter(key => key.startsWith('option') && rawData[key] && rawData[key].trim() !== "")
+                        .map((key) => ({
+                          id: `row_${key.replace('option', '')}`,
+                          title: rawData[key].substring(0, 24)
+                        }));
 
-                      const rows = options.map((opt, i) => ({
-                        id: `row_${i + 1}`,
-                        title: opt.substring(0, 24),
-                        description: ""
-                      }));
-
-                      if (rows.length > 0) {
+                      if (options.length > 0) {
                         responseData = {
                           messaging_product: "whatsapp",
                           to: sender,
                           type: "interactive",
                           interactive: {
                             type: "list",
-                            header: { type: "text", text: "Menú Principal" },
+                            header: { type: "text", text: "Menú de Servicios" },
                             body: { text: menuTitle },
                             footer: { text: "Webs Rápidas 🚀" },
                             action: {
                               button: "Ver opciones",
-                              sections: [{ title: "Selecciona una:", rows: rows }]
+                              sections: [{ title: "Elija una:", rows: options }]
                             }
                           }
                         };
 
+                        // Guardamos el nodo actual para saber qué respondió el usuario después
                         await Session.findOneAndUpdate(
                           { chatId: sender },
                           { lastNodeId: nextNode.id, updatedAt: Date.now() },
@@ -213,33 +214,6 @@ app.post("/webhook", async (req, res) => {
                 }
               } catch (err) {
                 console.error("Error motor:", err.response?.data || err.message);
-              }
-            }
-            
-            /* ===== LÓGICA DE IMAGEN ===== */
-            if (msg.type === "image") {
-              try {
-                const mediaId = msg.image.id;
-                const mediaInfo = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-                  headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                });
-                const mediaFile = await axios.get(mediaInfo.data.url, {
-                  responseType: "arraybuffer",
-                  headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                });
-
-                const fileName = Date.now() + ".jpg";
-                const filePath = path.join(uploadsPath, fileName);
-                fs.writeFileSync(filePath, mediaFile.data);
-
-                const savedMedia = await Message.create({
-                  chatId: sender,
-                  from: sender,
-                  media: "/uploads/" + fileName
-                });
-                broadcast({ type: "new_message", message: savedMedia });
-              } catch (err) {
-                console.error("Error descargando imagen:", err.message);
               }
             }
           }
@@ -281,48 +255,7 @@ app.get("/api/get-flow", async (req, res) => {
   res.json(flow ? flow.data : null);
 });
 
-app.post("/send-message", async (req, res) => {
-  const { to, text } = req.body;
-  try {
-    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-      messaging_product: "whatsapp", to, text: { body: text }
-    }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-    const saved = await Message.create({ chatId: to, from: "me", text });
-    broadcast({ type: "new_message", message: saved });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: "Error" }); }
-});
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsPath),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
-});
-const upload = multer({ storage });
-
-app.post("/send-media", upload.single("file"), async (req, res) => {
-  try {
-    const { to } = req.body;
-    const file = req.file;
-    const form = new FormData();
-    form.append("file", fs.createReadStream(file.path));
-    form.append("messaging_product", "whatsapp");
-
-    const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-      headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-    });
-
-    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-      messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
-    }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-    const saved = await Message.create({ chatId: to, from: "me", media: "/uploads/" + file.filename });
-    broadcast({ type: "new_message", message: saved });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: "Error" }); }
-});
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 Server activo en puerto", PORT);
+  console.log("🚀 Server de Webs Rápidas activo en puerto", PORT);
 });

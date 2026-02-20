@@ -25,38 +25,17 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (REFORZADO) ================= */
+/* ================= GUARDAR (VINCULADO AL CRM) ================= */
 function saveFlow() {
-    const nodes = editor.drawflow.drawflow.Home.data;
-    for (const id in nodes) {
-        const nodeElement = document.getElementById('node-' + id);
-        if (nodeElement) {
-            if (nodes[id].name === 'menu') {
-                const title = nodeElement.querySelector('input[placeholder="Título"]')?.value || "";
-                // Capturamos todos los inputs de opciones
-                const optionInputs = nodeElement.querySelectorAll('.menu-list input');
-                const options = Array.from(optionInputs).map(input => input.value).filter(v => v !== "");
-                
-                // Actualizamos los datos del nodo
-                editor.updateNodeDataFromId(id, { 
-                    info: title,
-                    options: options 
-                });
-            } else {
-                const input = nodeElement.querySelector('input, textarea');
-                if (input) {
-                    const key = nodes[id].name === 'trigger' ? 'val' : 'info';
-                    editor.updateNodeDataFromId(id, { [key]: input.value });
-                }
-            }
-        }
-    }
-
     const flowData = editor.export();
-    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
+    console.log("Enviando flujo al CRM...");
+    window.parent.postMessage({ 
+        type: 'SAVE_FLOW', 
+        data: flowData 
+    }, '*');
 }
 
-/* ================= NODOS ================= */
+/* ================= NODOS Y FUNCIONES ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -82,7 +61,9 @@ function addTriggerNode() {
     createNode("trigger", 0, 1, `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
-            <div class="node-body"><input type="text" class="form-control" placeholder="Ej: hola"></div>
+            <div class="node-body">
+                <input type="text" class="form-control" placeholder="Ej: Hola" df-val>
+            </div>
         </div>
     `);
 }
@@ -92,7 +73,7 @@ function addIANode() {
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3">Base: S/380. WhatsApp: 991138132.</textarea>
+                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
     `);
@@ -102,7 +83,9 @@ function addMessageNode() {
     createNode("message", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
-            <div class="node-body"><textarea class="form-control" rows="3" placeholder="Tu respuesta..."></textarea></div>
+            <div class="node-body">
+                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." df-info></textarea>
+            </div>
         </div>
     `);
 }
@@ -110,13 +93,12 @@ function addMessageNode() {
 function addMenuNode() {
     createNode("menu", 1, 1, `
         <div class="node-wrapper">
-            <div class="node-header header-menu">📋 Menú</div>
+            <div class="node-header header-menu">📋 Menú (Lista)</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-2" placeholder="Título" style="font-family: 'Montserrat', sans-serif;">
+                <label style="font-size: 10px; color: #94a3b8;">Título del Menú:</label>
+                <input type="text" class="form-control mb-2" placeholder="Ej: Ver Servicios" df-info>
                 <div class="menu-list">
-                    <div class="option-row mb-1">
-                        <input type="text" class="form-control" placeholder="Opción 1" style="font-family: 'Montserrat', sans-serif;">
-                    </div>
+                    <input type="text" class="form-control mb-1" placeholder="Opción 1" df-option1>
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
             </div>
@@ -125,28 +107,24 @@ function addMenuNode() {
 }
 
 window.addOption = function(btn) {
-    const nodeElement = btn.closest('.drawflow-node');
-    const nodeId = nodeElement.id.replace('node-', '');
-    const list = nodeElement.querySelector(".menu-list");
+    const list = btn.parentElement.querySelector(".menu-list");
+    const optionCount = list.querySelectorAll("input").length + 1;
     
-    // 1. Añadimos el input visualmente
-    const div = document.createElement("div");
-    div.className = "option-row mb-1";
-    div.innerHTML = `<input type="text" class="form-control" placeholder="Opción ${list.children.length + 1}" style="font-family: 'Montserrat', sans-serif;">`;
-    list.appendChild(div);
+    // Crear input con atributo df- para que Drawflow guarde el texto
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "form-control mb-1";
+    input.placeholder = `Opción ${optionCount}`;
+    input.setAttribute(`df-option${optionCount}`, ""); 
+    list.appendChild(input);
 
-    // 2. AGREGAR SALIDA LÓGICA (Puntito blanco a la derecha)
+    // Añadir salida física al nodo
+    const nodeElement = btn.closest(".drawflow-node");
+    const nodeId = nodeElement.id.replace("node-", "");
     editor.addNodeOutput(nodeId);
-    
-    // 3. IMPORTANTE: Sincronizar HTML y forzar actualización de DATA
-    const currentHtml = nodeElement.querySelector('.drawflow_content_node').innerHTML;
-    editor.drawflow.drawflow.Home.data[nodeId].html = currentHtml;
-    
-    // Forzamos el guardado de los valores actuales para que no se pierdan al exportar
-    saveFlow(); 
 };
 
-/* ================= MINIMAPA Y EVENTOS ================= */
+/* ================= MINIMAPA ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
@@ -168,10 +146,10 @@ function updateMinimap() {
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
-        clone.style.width = (node.offsetWidth * scale) + "px";
-        clone.style.height = (node.offsetHeight * scale) + "px";
-        clone.style.left = (node.offsetLeft * scale) + "px";
-        clone.style.top = (node.offsetTop * scale) + "px";
+        clone.style.width = node.offsetWidth * scale + "px";
+        clone.style.height = node.offsetHeight * scale + "px";
+        clone.style.left = node.offsetLeft * scale + "px";
+        clone.style.top = node.offsetTop * scale + "px";
         clone.style.background = "#1e293b";
         clone.style.borderRadius = "4px";
         mapCanvas.appendChild(clone);
@@ -193,19 +171,12 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
-    
-    const saveBtn = document.querySelector(".btn-save") || document.querySelector(".btn-guardar");
-    if(saveBtn) saveBtn.onclick = saveFlow;
-
     setTimeout(updateMinimap, 500);
 });
 
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
-        Object.keys(editor.drawflow.drawflow.Home.data).forEach(id => {
-            addCloseButton(id);
-        });
         updateMinimap();
     }
 });

@@ -64,10 +64,6 @@ body {
     transform: translateY(-2px);
 }
 
-.header-buttons button:active {
-    transform: scale(0.95);
-}
-
 .btn-trigger { background: var(--warning); }
 .btn-ia { background: var(--success); }
 .btn-message { background: var(--primary); }
@@ -140,6 +136,35 @@ body {
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
 }
 
+/* ================= LÓGICA DE MENÚ (ALINEACIÓN) ================= */
+
+/* Alinea los puntos de salida con los inputs de las opciones */
+#drawflow .drawflow-node.menu .outputs {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 98px; /* Salto inicial para saltar el título */
+}
+
+#drawflow .drawflow-node.menu .output {
+    margin-bottom: 21px; /* Espacio exacto entre inputs de opciones */
+    background: #ffffff;
+    border: 2px solid var(--indigo);
+}
+
+.menu-list input {
+    border-left: 3px solid var(--indigo);
+    margin-top: 5px;
+}
+
+.btn-outline-primary {
+    border: 1px solid var(--indigo) !important;
+    color: var(--indigo) !important;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 10px;
+}
+
 /* ================= BOTÓN ELIMINAR ================= */
 
 .node-close-btn {
@@ -179,9 +204,7 @@ body {
     to { stroke-dashoffset: 0; }
 }
 
-/* ================================================= */
-/* ================= MINI MAPA ===================== */
-/* ================================================= */
+/* ================= MINI MAPA ================= */
 
 #minimap {
     position: fixed;
@@ -199,39 +222,5 @@ body {
 
 #minimap-content {
     transform-origin: top left;
-    pointer-events: none; /* Solo visual */
-}
-
-#minimap .drawflow-node {
-    box-shadow: none !important;
-    border-radius: 8px !important;
-}
-/* Alinea los puntos de salida con los inputs de las opciones */
-#drawflow .drawflow-node.menu .outputs {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    padding-top: 45px; /* Ajusta según la altura de tu cabecera "Menú" */
-}
-
-#drawflow .drawflow-node.menu .output {
-    margin-bottom: 12px; /* Alineación vertical con los inputs */
-}
-/* Estilos para el Nodo de Menú */
-.drawflow-node.menu .outputs {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    padding-top: 55px; /* Espacio para el título y primer input */
-}
-
-.drawflow-node.menu .output {
-    margin-bottom: 25px; /* Alineación con la altura de los inputs */
-    background: #ffffff;
-    border: 2px solid #6366f1;
-}
-
-/* Fuente Montserrat para todo el editor */
-.drawflow-node input, .drawflow-node textarea {
-    font-family: 'Montserrat', sans-serif !important;
+    pointer-events: none;
 }
