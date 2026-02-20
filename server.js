@@ -50,8 +50,15 @@ const messageSchema = new mongoose.Schema({
   media: String,
   timestamp: { type: Date, default: Date.now }
 });
-
 const Message = mongoose.model("Message", messageSchema);
+
+// Esquema para manejar las sesiones de menú
+const sessionSchema = new mongoose.Schema({
+  chatId: String,
+  lastNodeId: String,
+  updatedAt: { type: Date, default: Date.now, expires: 3600 } 
+});
+const Session = mongoose.model("Session", sessionSchema);
 
 const flowSchema = new mongoose.Schema({
   name: { type: String, default: "Main Flow" },
@@ -91,15 +98,23 @@ app.post("/webhook", async (req, res) => {
         if (value.messages) {
           for (const msg of value.messages) {
             const sender = msg.from;
+            let incomingText = "";
+            let selectionId = "";
 
-            /* ===== LÓGICA DE TEXTO + FLUJOS ===== */
+            // DETECTAR TIPO DE MENSAJE (Texto normal o Selección de Lista)
             if (msg.type === "text") {
-              const incomingText = msg.text.body.toLowerCase().trim();
+              incomingText = msg.text.body.toLowerCase().trim();
+            } else if (msg.type === "interactive") {
+              selectionId = msg.interactive.list_reply?.id; // Ejemplo: "row_1"
+              incomingText = msg.interactive.list_reply?.title.toLowerCase().trim();
+            }
 
+            if (incomingText || selectionId) {
+              // Guardar mensaje en DB y broadcast
               const saved = await Message.create({
                 chatId: sender,
                 from: sender,
-                text: msg.text.body
+                text: incomingText
               });
               broadcast({ type: "new_message", message: saved });
 
@@ -107,58 +122,95 @@ app.post("/webhook", async (req, res) => {
                 const flow = await Flow.findOne({ name: "Main Flow" });
                 if (flow && flow.data && flow.data.drawflow) {
                   const nodes = flow.data.drawflow.Home.data;
+                  let nextNode = null;
 
-                  // 1. Buscar Trigger
+                  // 1. LÓGICA DE TRIGGER (Si el mensaje activa el inicio)
                   const triggerNode = Object.values(nodes).find(node => 
                     node.name === 'trigger' && 
                     node.data.val?.toLowerCase().trim() === incomingText
                   );
 
                   if (triggerNode) {
-                    const nextNodeId = triggerNode.outputs.output_1.connections[0]?.node;
-                    const nextNode = nodes[nextNodeId];
+                    const nextId = triggerNode.outputs.output_1.connections[0]?.node;
+                    nextNode = nodes[nextId];
+                  } else {
+                    // 2. LÓGICA DE CONTINUACIÓN (Si ya estaba en un menú)
+                    const session = await Session.findOne({ chatId: sender });
+                    if (session && nodes[session.lastNodeId]) {
+                      const currentNode = nodes[session.lastNodeId];
+                      let optionNumber = 0;
 
-                    if (nextNode) {
-                      let responseText = "";
+                      if (selectionId) {
+                        optionNumber = selectionId.split('_')[1]; // de "row_1" saca 1
+                      } else {
+                        optionNumber = parseInt(incomingText);
+                      }
 
-                      if (nextNode.name === 'message') {
-                        responseText = nextNode.data.info;
-                      } 
-                      else if (nextNode.name === 'ia') {
-                        responseText = "¡Hola! Soy el asistente inteligente de Webs Rápidas 🤖. Nuestros planes inician desde S/380. ¿Deseas más información?";
-                      } 
-                      else if (nextNode.name === 'menu') {
-                        // Construir menú numerado
-                        let menuContent = `*${nextNode.data.info || "Selecciona una opción:"}*\n\n`;
-                        if (nextNode.data.options && nextNode.data.options.length > 0) {
-                          nextNode.data.options.forEach((opt, i) => {
-                            menuContent += `${i + 1}. ${opt}\n`;
-                          });
+                      const outputKey = `output_${optionNumber}`;
+                      if (currentNode.outputs[outputKey]) {
+                        const nextId = currentNode.outputs[outputKey].connections[0]?.node;
+                        nextNode = nodes[nextId];
+                      }
+                    }
+                  }
+
+                  // 3. ENVIAR RESPUESTA SEGÚN NODO ENCONTRADO
+                  if (nextNode) {
+                    let responseData = null;
+
+                    if (nextNode.name === 'message') {
+                      responseData = { messaging_product: "whatsapp", to: sender, text: { body: nextNode.data.info } };
+                      await Session.deleteOne({ chatId: sender });
+                    } 
+                    else if (nextNode.name === 'ia') {
+                      responseData = { messaging_product: "whatsapp", to: sender, text: { body: "¡Hola! Soy tu asistente inteligente 🤖. Nuestros planes inician en S/380." } };
+                      await Session.deleteOne({ chatId: sender });
+                    } 
+                    else if (nextNode.name === 'menu') {
+                      const options = nextNode.data.options || [];
+                      const rows = options.map((opt, i) => ({
+                        id: `row_${i + 1}`,
+                        title: opt.substring(0, 24),
+                        description: ""
+                      }));
+
+                      // FORMATO DE LISTA PROFESIONAL (Como tu imagen 2)
+                      responseData = {
+                        messaging_product: "whatsapp",
+                        to: sender,
+                        type: "interactive",
+                        interactive: {
+                          type: "list",
+                          header: { type: "text", text: "Opciones Disponibles" },
+                          body: { text: nextNode.data.info || "Por favor selecciona una opción:" },
+                          footer: { text: "Webs Rápidas 🚀" },
+                          action: {
+                            button: "Ver Menú",
+                            sections: [{ title: "Selecciona una:", rows: rows }]
+                          }
                         }
-                        responseText = menuContent;
-                      }
+                      };
 
-                      if (responseText) {
-                        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-                          messaging_product: "whatsapp",
-                          to: sender,
-                          text: { body: responseText }
-                        }, {
-                          headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                        });
+                      await Session.findOneAndUpdate(
+                        { chatId: sender },
+                        { lastNodeId: nextNode.id, updatedAt: Date.now() },
+                        { upsert: true }
+                      );
+                    }
 
-                        const botSaved = await Message.create({
-                          chatId: sender,
-                          from: "me",
-                          text: responseText
-                        });
-                        broadcast({ type: "new_message", message: botSaved });
-                      }
+                    if (responseData) {
+                      await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, responseData, {
+                        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+                      });
+
+                      const botText = responseData.interactive ? responseData.interactive.body.text : responseData.text.body;
+                      const botSaved = await Message.create({ chatId: sender, from: "me", text: botText });
+                      broadcast({ type: "new_message", message: botSaved });
                     }
                   }
                 }
               } catch (err) {
-                console.error("Error en motor de flujos:", err);
+                console.error("Error en motor de flujos:", err.response?.data || err.message);
               }
             }
 
