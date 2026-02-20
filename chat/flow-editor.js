@@ -73,7 +73,7 @@ window.addMediaNode = () => {
         </div>`, { media_url: '', caption: '' });
 };
 
-// Función para subir el archivo automáticamente al servidor Railway
+// Función corregida para evitar el error de updateNodeValueById
 window.uploadNodeFile = async (event, nodeId) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -95,13 +95,15 @@ window.uploadNodeFile = async (event, nodeId) => {
         const data = await res.json();
 
         if (data.url) {
-            // Guardamos la ruta en el valor del nodo Drawflow
+            // 1. Guardamos la ruta en el input oculto del nodo
             pathInput.value = data.url;
             status.innerText = "✅ Subido: " + file.name;
             status.style.color = "green";
             
-            // Forzar actualización en los datos internos de Drawflow
-            editor.updateNodeValueById(nodeId, { media_url: data.url });
+            // 2. Actualización directa de datos en Drawflow para evitar el TypeError
+            editor.drawflow.drawflow.Home.data[nodeId].data.media_url = data.url;
+            console.log("💾 Datos del nodo " + nodeId + " actualizados con la imagen local.");
+            
         } else {
             throw new Error("No se recibió URL");
         }
