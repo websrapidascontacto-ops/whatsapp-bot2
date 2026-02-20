@@ -25,11 +25,30 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR (VINCULADO AL CRM) ================= */
+/* ================= GUARDAR (CORREGIDO Y UNIFICADO) ================= */
 function saveFlow() {
+    // 1. Antes de exportar, capturamos los valores de los inputs/textareas de cada nodo
+    const nodes = editor.drawflow.drawflow.Home.data;
+    for (const id in nodes) {
+        const nodeElement = document.getElementById('node-' + id);
+        if (nodeElement) {
+            const input = nodeElement.querySelector('input, textarea');
+            if (input) {
+                // Guardamos el texto en el objeto interno según el tipo de nodo
+                if (nodes[id].name === 'trigger') {
+                    editor.updateNodeDataFromId(id, { val: input.value });
+                } else {
+                    editor.updateNodeDataFromId(id, { info: input.value });
+                }
+            }
+        }
+    }
+
+    // 2. Exportamos la data actualizada
     const flowData = editor.export();
-    console.log("Enviando flujo al CRM...");
-    // Enviamos el objeto al padre (index.html)
+    console.log("Exportando flujo con datos...", flowData);
+    
+    // 3. Enviamos al CRM (index.html)
     window.parent.postMessage({ 
         type: 'SAVE_FLOW', 
         data: flowData 
@@ -62,7 +81,7 @@ function addTriggerNode() {
     createNode("trigger", 0, 1, `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
-            <div class="node-body"><input type="text" class="form-control" placeholder="Ej: Hola"></div>
+            <div class="node-body"><input type="text" class="form-control" placeholder="Ej: hola"></div>
         </div>
     `);
 }
@@ -158,28 +177,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-menu").onclick = addMenuNode;
     setTimeout(updateMinimap, 500);
 });
-// Escuchar cuando el CRM envíe un flujo para cargar
+
+// Cargar flujo cuando el CRM lo solicite
 window.addEventListener('message', function(event) {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
         updateMinimap();
     }
 });
-
-// Asegúrate de que el botón guardar en flow-editor.html llame a esta función:
-function saveFlow() {
-    const data = editor.export();
-    window.parent.postMessage({ type: 'SAVE_FLOW', data: data }, '*');
-}
-/* ENVIAR DATOS AL PADRE (CRM) */
-function saveFlow() {
-    // Exportamos la data de Drawflow
-    const flowData = editor.export();
-    console.log("Exportando flujo...", flowData);
-    
-    // Enviamos el mensaje al CRM (index.html)
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
-}
