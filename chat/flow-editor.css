@@ -1,1 +1,82 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap'); :root { --primary: #2563eb; --primary-dark: #1e40af; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --indigo: #6366f1; --bg-main: #0f172a; --bg-secondary: #1e293b; --bg-card: #1e293b; --border-color: #334155; --text-main: #f1f5f9; --text-muted: #94a3b8; } * { font-family: 'Montserrat', sans-serif !important; } body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--text-main); } /* ================= HEADER ================= */ .editor-header { height: 70px; background: var(--bg-secondary); display: flex; align-items: center; justify-content: space-between; padding: 0 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); position: fixed; width: 100%; z-index: 1000; border-bottom: 1px solid var(--border-color); } .logo { height: 40px; } .header-buttons button { border: none; padding: 10px 18px; border-radius: 10px; color: white; font-weight: 600; font-size: 13px; margin-left: 8px; cursor: pointer; transition: all 0.2s ease; } .header-buttons button:hover { opacity: 0.9; transform: translateY(-2px); } .btn-trigger { background: var(--warning); } .btn-ia { background: var(--success); } .btn-message { background: var(--primary); } .btn-menu { background: var(--indigo); } /* ================= CANVAS ================= */ #drawflow { position: absolute; top: 70px; width: 100%; height: calc(100vh - 70px); background-color: var(--bg-main); background-image: radial-gradient(#1e293b 1px, transparent 1px); background-size: 25px 25px; } /* ================= NODOS ================= */ .drawflow-node { background: var(--bg-card) !important; border-radius: 16px !important; border: 1px solid var(--border-color) !important; box-shadow: 0 15px 30px rgba(0,0,0,0.4) !important; width: 300px !important; padding: 0 !important; color: var(--text-main); backdrop-filter: blur(6px); } .node-header { padding: 12px 15px; color: white; font-weight: 700; border-radius: 16px 16px 0 0; font-size: 13px; display: flex; align-items: center; gap: 8px; } .header-trigger { background: linear-gradient(135deg, #f59e0b, #d97706); } .header-message { background: linear-gradient(135deg, #2563eb, #1e40af); } .header-menu { background: linear-gradient(135deg, #6366f1, #4338ca); } .header-ia { background: linear-gradient(135deg, #10b981, #059669); } .node-body { padding: 15px; } /* ================= INPUTS ================= */ .form-control { font-size: 13px; border-radius: 8px; border: 1px solid var(--border-color); padding: 8px 12px; background: #0f172a; color: var(--text-main); width: 100%; } .form-control::placeholder { color: var(--text-muted); } .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3); } /* ================= LÓGICA DE MENÚ (ALINEACIÓN) ================= */ /* Alinea los puntos de salida con los inputs de las opciones */ #drawflow .drawflow-node.menu .outputs { display: flex; flex-direction: column; justify-content: flex-start; padding-top: 98px; /* Salto inicial para saltar el título */ } #drawflow .drawflow-node.menu .output { margin-bottom: 21px; /* Espacio exacto entre inputs de opciones */ background: #ffffff; border: 2px solid var(--indigo); } .menu-list input { border-left: 3px solid var(--indigo); margin-top: 5px; } .btn-outline-primary { border: 1px solid var(--indigo) !important; color: var(--indigo) !important; font-size: 11px; font-weight: 600; margin-top: 10px; } /* ================= BOTÓN ELIMINAR ================= */ .node-close-btn { position: absolute; top: -10px; right: -10px; background: var(--danger); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 11px; z-index: 100; border: 2px solid var(--bg-main); transition: transform 0.2s; } .node-close-btn:hover { transform: scale(1.1); } /* ================= CONEXIONES ================= */ .drawflow .connection .main-path { stroke: var(--primary) !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: dash 1s linear infinite; } @keyframes dash { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } } /* ================= MINI MAPA ================= */ #minimap { position: fixed; bottom: 20px; right: 20px; width: 220px; height: 150px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; z-index: 2000; box-shadow: 0 10px 25px rgba(0,0,0,0.5); } #minimap-content { transform-origin: top left; pointer-events: none; }
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary: #2563eb;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --indigo: #6366f1;
+    --whatsapp: #056162;
+    --bg-main: #0f172a;
+    --bg-secondary: #1e293b;
+    --border-color: #334155;
+    --text-main: #f1f5f9;
+}
+
+* { font-family: 'Montserrat', sans-serif !important; }
+
+body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--text-main); }
+
+/* ================= HEADER ================= */
+.editor-header {
+    height: 70px; background: var(--bg-secondary);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    position: fixed; width: 100%; z-index: 1000; border-bottom: 1px solid var(--border-color);
+}
+.logo { height: 40px; }
+
+.header-buttons button {
+    border: none; padding: 10px 18px; border-radius: 10px; color: white;
+    font-weight: 600; font-size: 13px; margin-left: 8px; cursor: pointer; transition: 0.2s;
+}
+
+.btn-trigger { background: var(--warning); }
+.btn-ia { background: var(--success); }
+.btn-message { background: var(--primary); }
+.btn-menu { background: var(--indigo); }
+.btn-list { background: var(--whatsapp); }
+
+/* ================= NODOS ================= */
+.drawflow-node {
+    background: var(--bg-secondary) !important; border-radius: 16px !important;
+    border: 1px solid var(--border-color) !important; width: 300px !important;
+    color: var(--text-main); padding: 0 !important;
+}
+
+.node-header { padding: 12px 15px; color: white; font-weight: 700; border-radius: 16px 16px 0 0; font-size: 13px; }
+
+.header-trigger { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.header-message { background: linear-gradient(135deg, #2563eb, #1e40af); }
+.header-menu { background: linear-gradient(135deg, #6366f1, #4338ca); }
+.header-ia { background: linear-gradient(135deg, #10b981, #059669); }
+.header-list { background: linear-gradient(135deg, #056162, #033f40); }
+
+.node-body { padding: 15px; }
+
+.form-control {
+    font-size: 13px; border-radius: 8px; border: 1px solid var(--border-color);
+    padding: 8px 12px; background: #0f172a; color: white; width: 100%; margin-bottom: 5px;
+}
+
+/* ALINEACIÓN DE PUNTOS DE SALIDA PARA MENÚS Y LISTAS */
+.drawflow-node.menu .outputs, .drawflow-node.whatsapp_list .outputs {
+    display: flex; flex-direction: column; padding-top: 145px; /* Ajuste para que bajen hasta las filas */
+}
+
+.drawflow-node.menu .output, .drawflow-node.whatsapp_list .output {
+    margin-bottom: 25px; /* Espacio entre bolitas de conexión */
+    background: #fff; border: 2px solid var(--primary);
+}
+
+.node-close-btn {
+    position: absolute; top: -10px; right: -10px; background: var(--danger);
+    color: white; width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+
+#drawflow {
+    position: absolute; top: 70px; width: 100%; height: calc(100vh - 70px);
+    background-color: var(--bg-main); background-image: radial-gradient(#1e293b 1px, transparent 1px);
+    background-size: 25px 25px;
+}
