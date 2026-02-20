@@ -26,11 +26,9 @@ if (!fs.existsSync(uploadsPath)) {
 
 app.use(express.static(chatPath));
 app.use("/uploads", express.static(uploadsPath));
-
-// Solución al error del favicon
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Configuración de Multer segura
+// Configuración de Multer flexible
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -55,32 +53,22 @@ function broadcast(data) {
     wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
 }
 
-/* ========================= RUTAS CRM ========================= */
+/* ========================= RUTA MEDIA (SOLUCIÓN AL ERROR) ========================= */
 
-app.post("/send-message", async (req, res) => {
-    const { to, text } = req.body;
-    try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "text", text: { body: text }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-        const saved = await Message.create({ chatId: to, from: "me", text });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// RUTA MEDIA CORREGIDA (Evita el Error 500)
-app.post("/send-media", upload.array("files"), async (req, res) => {
+// Usamos .any() para que no importe si el campo se llama "files", "image" o "file"
+app.post("/send-media", upload.any(), async (req, res) => {
     try {
         const { to } = req.body;
         const files = req.files;
 
         if (!files || files.length === 0) {
+            console.error("❌ No se recibieron archivos en el request");
             return res.status(400).json({ error: "No se subieron archivos" });
         }
 
         for (const file of files) {
+            console.log(`🚀 Procesando archivo: ${file.filename}`);
+            
             const formData = new FormData();
             formData.append("messaging_product", "whatsapp");
             formData.append("file", fs.createReadStream(file.path), {
@@ -113,59 +101,23 @@ app.post("/send-media", upload.array("files"), async (req, res) => {
         }
         res.json({ success: true });
     } catch (e) {
-        console.error("❌ Error en send-media:", e.response?.data || e.message);
-        res.status(500).json({ error: "Error interno al enviar media" });
+        console.error("❌ Error detallado en Meta:", e.response?.data || e.message);
+        res.status(500).json({ error: "Error al subir o enviar a WhatsApp" });
     }
 });
 
-/* ========================= WEBHOOK Y FLUJOS ========================= */
-app.post("/webhook", async (req, res) => {
-    const data = req.body;
-    if (data.object === "whatsapp_business_account" && data.entry?.[0].changes?.[0].value.messages?.[0]) {
-        const msg = data.entry[0].changes[0].value.messages[0];
-        const sender = msg.from;
-        const incomingText = (msg.text?.body || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || "").toLowerCase().trim();
-
-        const savedMsg = await Message.create({ chatId: sender, from: sender, text: incomingText });
-        broadcast({ type: "new_message", message: savedMsg });
-
-        try {
-            const flowDoc = await Flow.findOne({ name: "Main Flow" });
-            if (flowDoc && flowDoc.data.drawflow.Home.data) {
-                const nodes = flowDoc.data.drawflow.Home.data;
-                const triggerNode = Object.values(nodes).find(n => n.name === "trigger" && n.data.val.toLowerCase().trim() === incomingText);
-                if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                    const nextNode = nodes[triggerNode.outputs.output_1.connections[0].node];
-                    await processNode(sender, nextNode);
-                }
-            }
-        } catch (e) { console.error("❌ Flow Error:", e.message); }
-    }
-    res.sendStatus(200);
-});
-
-async function processNode(to, node) {
+/* ========================= RESTO DE RUTAS ========================= */
+app.post("/send-message", async (req, res) => {
+    const { to, text } = req.body;
     try {
-        let payload = { messaging_product: "whatsapp", to: to };
-        if (node.name === "message" || node.name === "ia") {
-            payload.type = "text"; payload.text = { body: node.data.info };
-        } else if (node.name === "whatsapp_list") {
-            const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
-                .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
-            payload.type = "interactive";
-            payload.interactive = {
-                type: "list",
-                header: { type: "text", text: "Opciones" },
-                body: { text: node.data.list_title || "Selecciona:" },
-                footer: { text: "Webs Rápidas" },
-                action: { button: node.data.button_text || "Ver", sections: [{ title: "Menú", rows }] }
-            };
-        }
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-    } catch (err) { console.error("❌ Error processNode:", err.response?.data || err.message); }
-}
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp", to, type: "text", text: { body: text }
+        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+        const saved = await Message.create({ chatId: to, from: "me", text });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([{ $sort: { timestamp: 1 } }, { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, { $sort: { lastTime: -1 } }]);
