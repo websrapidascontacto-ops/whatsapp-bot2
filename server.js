@@ -98,20 +98,16 @@ app.post("/webhook", async (req, res) => {
           for (const msg of value.messages) {
             const sender = msg.from;
             let incomingText = "";
-            let selectionId = "";
 
             if (msg.type === "text") {
               incomingText = msg.text.body.toLowerCase().trim();
-            } else if (msg.type === "interactive") {
-              selectionId = msg.interactive.list_reply?.id;
-              incomingText = msg.interactive.list_reply?.title.toLowerCase().trim();
             }
 
-            if (incomingText || selectionId) {
+            if (incomingText) {
               const saved = await Message.create({
                 chatId: sender,
                 from: sender,
-                text: incomingText || "Selección de menú"
+                text: incomingText
               });
               broadcast({ type: "new_message", message: saved });
 
@@ -131,14 +127,13 @@ app.post("/webhook", async (req, res) => {
                     const nextId = triggerNode.outputs.output_1.connections[0]?.node;
                     nextNode = nodes[nextId];
                   } else {
-                    // 2. BUSCAR POR SESIÓN (CONTINUACIÓN DE FLUJO)
+                    // 2. BUSCAR POR SESIÓN (RESPUESTA NUMÉRICA)
                     const session = await Session.findOne({ chatId: sender });
                     if (session && nodes[session.lastNodeId]) {
                       const currentNode = nodes[session.lastNodeId];
-                      // Si es respuesta a un menú de texto, el texto entrante es el número
-                      let optionNumber = selectionId ? selectionId.split('_')[1] : parseInt(incomingText);
+                      const optionIndex = parseInt(incomingText);
+                      const outputKey = `output_${optionIndex}`;
 
-                      const outputKey = `output_${optionNumber}`;
                       if (currentNode.outputs[outputKey]) {
                         const nextId = currentNode.outputs[outputKey].connections[0]?.node;
                         nextNode = nodes[nextId];
@@ -146,49 +141,36 @@ app.post("/webhook", async (req, res) => {
                     }
                   }
 
-                  // 3. ENVIAR RESPUESTA
+                  // 3. ENVIAR RESPUESTA (MODO TEXTO PARA TODO)
                   if (nextNode) {
-                    let responseData = null;
+                    let textToSend = "";
 
                     if (nextNode.name === 'message' || nextNode.name === 'ia') {
-                      responseData = { messaging_product: "whatsapp", to: sender, text: { body: nextNode.data.info || "¡Hola!" } };
+                      textToSend = nextNode.data.info || "¡Hola!";
                       await Session.deleteOne({ chatId: sender });
                     } 
                     else if (nextNode.name === 'menu') {
-                      // REFORMA A TEXTO PLANO
-                      const tituloMenu = nextNode.data.info || "Selecciona una opción:";
-                      let cuerpoMensaje = `*${tituloMenu}*\n\n`;
-
+                      textToSend = `*${nextNode.data.info || "Selecciona una opción:"}*\n\n`;
                       const keys = Object.keys(nextNode.data)
                         .filter(k => k.startsWith('option') && nextNode.data[k])
-                        .sort((a, b) => {
-                            return parseInt(a.replace('option', '')) - parseInt(b.replace('option', ''));
-                        });
+                        .sort((a,b) => parseInt(a.replace('option','')) - parseInt(b.replace('option','')));
 
-                      if (keys.length > 0) {
-                        keys.forEach((key, index) => {
-                          cuerpoMensaje += `*${index + 1}.* ${nextNode.data[key]}\n`;
-                        });
+                      keys.forEach((k, i) => {
+                        textToSend += `*${i+1}.* ${nextNode.data[k]}\n`;
+                      });
+                      textToSend += `\n_Responde con un número_`;
 
-                        cuerpoMensaje += `\n_Responde con el número de tu opción_`;
-
-                        responseData = {
-                          messaging_product: "whatsapp",
-                          to: sender,
-                          type: "text",
-                          text: { body: cuerpoMensaje }
-                        };
-
-                        await Session.findOneAndUpdate({ chatId: sender }, { lastNodeId: nextNode.id }, { upsert: true });
-                      }
+                      await Session.findOneAndUpdate({ chatId: sender }, { lastNodeId: nextNode.id }, { upsert: true });
                     }
 
-                    if (responseData) {
-                      await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, responseData, {
-                        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-                      });
-                      const logText = responseData.text.body;
-                      const botSaved = await Message.create({ chatId: sender, from: "me", text: logText });
+                    if (textToSend) {
+                      await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+                        messaging_product: "whatsapp",
+                        to: sender,
+                        text: { body: textToSend }
+                      }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+
+                      const botSaved = await Message.create({ chatId: sender, from: "me", text: textToSend });
                       broadcast({ type: "new_message", message: botSaved });
                     }
                   }
@@ -196,6 +178,7 @@ app.post("/webhook", async (req, res) => {
               } catch (err) { console.error("Error en flujo:", err.message); }
             }
 
+            // PROCESAR IMÁGENES RECIBIDAS (NO TOCADO)
             if (msg.type === "image") {
               try {
                 const mediaId = msg.image.id;
@@ -228,7 +211,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 /* =========================
-   ENDPOINTS REST
+   ENDPOINTS REST (MANTENIDO)
 ========================= */
 app.get("/chats", async (req, res) => {
   const chats = await Message.aggregate([
