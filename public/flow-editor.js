@@ -48,6 +48,7 @@ function addCloseButton(nodeId) {
 
 function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
+    // Se inicializa el objeto data vacío para evitar errores de lectura
     const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
     setTimeout(() => addCloseButton(id), 50);
     updateMinimap();
@@ -104,7 +105,8 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
     const optionCount = list.querySelectorAll("input").length + 1;
-    const nodeId = btn.closest(".drawflow-node").id.replace("node-", "");
+    const nodeElement = btn.closest(".drawflow-node");
+    const nodeId = nodeElement.id.replace("node-", "");
     
     const input = document.createElement("input");
     input.type = "text";
@@ -113,13 +115,16 @@ window.addOption = function(btn) {
     const attrName = `option${optionCount}`;
     input.setAttribute(`df-${attrName}`, ""); 
 
-    // IMPORTANTE: Registrar el evento para que Drawflow guarde el texto
+    // Sincronización manual con el motor de Drawflow para opciones dinámicas
     input.addEventListener('input', (e) => {
+        if (!editor.drawflow.drawflow.Home.data[nodeId].data) {
+            editor.drawflow.drawflow.Home.data[nodeId].data = {};
+        }
         editor.drawflow.drawflow.Home.data[nodeId].data[attrName] = e.target.value;
     });
 
     list.appendChild(input);
-    editor.addNodeOutput(nodeId);
+    editor.addNodeOutput(nodeId); // Añade el punto de conexión visual
 };
 
 /* ================= MINIMAPA ================= */
