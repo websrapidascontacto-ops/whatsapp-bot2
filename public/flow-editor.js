@@ -4,22 +4,17 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* =========================
-   CONFIGURACIÓN BÁSICA
-========================= */
+/* ================= ZOOM Y POSICIONAMIENTO ================= */
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
 
-container.addEventListener("wheel", function (e) {
+container.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (e.deltaY < 0) editor.zoom_in();
     else editor.zoom_out();
 });
 
-/* =========================
-   POSICIONAMIENTO DINÁMICO
-========================= */
 let lastNodeX = 100;
 let lastNodeY = 200;
 
@@ -29,34 +24,18 @@ function getNextPosition() {
     return pos;
 }
 
-/* =========================
-   SINCRONIZACIÓN DE DATOS
-========================= */
-window.updateNodeData = function(input, key) {
-    const nodeElement = input.closest('.drawflow-node');
-    const nodeId = nodeElement.id.replace('node-', '');
+/* ================= LÓGICA DE GUARDADO DE DATOS (IMPORTANTE) ================= */
+
+// Esta función captura lo que escribes en los inputs y lo guarda en el nodo
+window.updateNodeData = function(nodeId, key, value) {
     const node = editor.getNodeFromId(nodeId);
-    
-    // Guardamos el valor en el objeto interno
-    node.data[key] = input.value;
-    console.log(`✅ Datos actualizados nodo ${nodeId}:`, node.data);
+    node.data[key] = value;
+    // Actualizamos el editor para que sepa que hubo cambios
+    editor.updateNodeValue(nodeId, node.data);
 };
 
-/* =========================
-   GUARDAR FLUJO AL CRM
-========================= */
-function saveFlow() {
-    const flowData = editor.export();
-    window.parent.postMessage({ 
-        type: 'SAVE_FLOW', 
-        data: flowData 
-    }, '*');
-    console.log("🚀 Flujo exportado:", flowData);
-}
+/* ================= FUNCIONES DE NODOS ================= */
 
-/* =========================
-   FUNCIONES DE NODOS
-========================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -71,150 +50,131 @@ function addCloseButton(nodeId) {
     nodeElement.appendChild(close);
 }
 
-function addTriggerNode() {
+function createNode(type, inputs, outputs, html) {
     const pos = getNextPosition();
-    const html = `
+    // Agregamos el nodo con un objeto de datos vacío inicialmente
+    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, {}, html);
+    setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
+}
+
+function addTriggerNode() {
+    const id = editor.getNextId(); // Obtenemos el ID que tendrá el nodo
+    createNode("trigger", 0, 1, `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
             <div class="node-body">
-                <input type="text" class="form-control" placeholder="Ej: Hola" oninput="updateNodeData(this, 'val')">
+                <input type="text" class="form-control" placeholder="Ej: Hola" 
+                oninput="updateNodeData(${id}, 'val', this.value)">
             </div>
         </div>
-    `;
-    const id = editor.addNode("trigger", 0, 1, pos.x, pos.y, "trigger", { val: "" }, html);
-    setTimeout(() => addCloseButton(id), 50);
+    `);
 }
 
 function addIANode() {
-    const pos = getNextPosition();
-    const html = `
+    const id = editor.getNextId();
+    createNode("ia", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" oninput="updateNodeData(this, 'info')">Mi precio base es S/380. WhatsApp: 991138132. Web: https://www.websrapidas.com</textarea>
+                <textarea class="form-control" rows="3" 
+                oninput="updateNodeData(${id}, 'info', this.value)">Base: S/380. WhatsApp: 991138132.</textarea>
             </div>
         </div>
-    `;
-    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Mi precio base es S/380. WhatsApp: 991138132. Web: https://www.websrapidas.com" }, html);
-    setTimeout(() => addCloseButton(id), 50);
+    `);
 }
 
 function addMessageNode() {
-    const pos = getNextPosition();
-    const html = `
+    const id = editor.getNextId();
+    createNode("message", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." oninput="updateNodeData(this, 'info')"></textarea>
+                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." 
+                oninput="updateNodeData(${id}, 'info', this.value)"></textarea>
             </div>
         </div>
-    `;
-    const id = editor.addNode("message", 1, 1, pos.x, pos.y, "message", { info: "" }, html);
-    setTimeout(() => addCloseButton(id), 50);
+    `);
 }
 
 function addMenuNode() {
-    const pos = getNextPosition();
-    const html = `
+    const id = editor.getNextId();
+    createNode("menu", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
-                <textarea class="form-control mb-2" rows="2" placeholder="Título del menú..." oninput="updateNodeData(this, 'info')"></textarea>
-                <div class="menu-list">
-                    <input type="text" class="form-control mb-1" placeholder="Opción 1" oninput="updateNodeData(this, 'option1')">
+                <input type="text" class="form-control mb-2" placeholder="Título" 
+                oninput="updateNodeData(${id}, 'info', this.value)">
+                <div class="menu-list" id="list-${id}">
+                    <input type="text" class="form-control mb-1" placeholder="Opción 1" 
+                    oninput="updateNodeData(${id}, 'option1', this.value)">
                 </div>
-                <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
+                <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(${id})">+ Opción</button>
             </div>
         </div>
-    `;
-    // Inicializamos con option1 para que exista desde el inicio
-    const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
-    setTimeout(() => addCloseButton(id), 50);
+    `);
 }
 
-window.addOption = function(btn) {
-    const nodeElement = btn.closest('.drawflow-node');
-    const nodeId = nodeElement.id.replace('node-', '');
-    const list = nodeElement.querySelector(".menu-list");
-    const count = list.querySelectorAll("input").length + 1;
-
-    // Crear el input físicamente
+window.addOption = function(nodeId) {
+    const list = document.getElementById(`list-${nodeId}`);
+    const optionCount = list.querySelectorAll("input").length + 1;
+    
+    // Añadimos un nuevo output al nodo para la nueva opción
+    editor.addNodeOutput(nodeId);
+    
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
-    input.placeholder = "Opción " + count;
-    
-    // Vincular el evento de escritura
-    const key = 'option' + count;
-    input.oninput = function() { updateNodeData(this, key); };
+    input.placeholder = `Opción ${optionCount}`;
+    input.oninput = (e) => updateNodeData(nodeId, `option${optionCount}`, e.target.value);
     
     list.appendChild(input);
-    
-    // Crear la salida (punto de conexión) en el nodo
-    editor.addNodeOutput(nodeId);
-    
-    // IMPORTANTE: Asegurar que la propiedad existe en el objeto de datos
-    const node = editor.getNodeFromId(nodeId);
-    node.data[key] = ""; 
-    
-    updateMinimap();
 };
 
-/* =========================
-   MINIMAPA
-========================= */
-const minimap = document.getElementById("minimap");
-const mapCanvas = document.createElement("div");
-mapCanvas.style.position = "relative";
-mapCanvas.style.width = "100%";
-mapCanvas.style.height = "100%";
-minimap.appendChild(mapCanvas);
-const viewport = document.createElement("div");
-viewport.style.position = "absolute";
-viewport.style.border = "2px solid #2563eb";
-viewport.style.background = "rgba(37,99,235,0.2)";
-viewport.style.pointerEvents = "none";
-mapCanvas.appendChild(viewport);
+/* ================= GUARDAR Y MINIMAPA ================= */
 
+function saveFlow() {
+    const flowData = editor.export();
+    console.log("Flujo exportado:", flowData);
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
+}
+
+// ... (Resto de funciones de minimap e inicialización iguales)
 function updateMinimap() {
-    mapCanvas.innerHTML = "";
-    mapCanvas.appendChild(viewport);
+    const minimap = document.getElementById("minimap");
+    minimap.innerHTML = "";
+    const mapCanvas = document.createElement("div");
+    mapCanvas.style.position = "relative";
+    mapCanvas.style.width = "100%"; mapCanvas.style.height = "100%";
+    minimap.appendChild(mapCanvas);
+
     const scale = 0.1;
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
-        clone.style.width = (node.offsetWidth * scale) + "px";
-        clone.style.height = (node.offsetHeight * scale) + "px";
-        clone.style.left = (node.offsetLeft * scale) + "px";
-        clone.style.top = (node.offsetTop * scale) + "px";
-        clone.style.background = "#1e293b";
+        clone.style.width = node.offsetWidth * scale + "px";
+        clone.style.height = node.offsetHeight * scale + "px";
+        clone.style.left = node.offsetLeft * scale + "px";
+        clone.style.top = node.offsetTop * scale + "px";
+        clone.style.background = "#2563eb";
         clone.style.borderRadius = "4px";
         mapCanvas.appendChild(clone);
     });
-    viewport.style.left = (-editor.precanvas_x * scale) + "px";
-    viewport.style.top = (-editor.precanvas_y * scale) + "px";
-    viewport.style.width = (container.clientWidth * scale) + "px";
-    viewport.style.height = (container.clientHeight * scale) + "px";
 }
 
 editor.on("nodeCreated", updateMinimap);
 editor.on("nodeRemoved", updateMinimap);
 editor.on("nodeMoved", updateMinimap);
-editor.on("zoom", updateMinimap);
-editor.on("translate", updateMinimap);
 
-/* =========================
-   EVENTOS INICIALES
-========================= */
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
     document.querySelector(".btn-message").onclick = addMessageNode;
     document.querySelector(".btn-menu").onclick = addMenuNode;
-    setTimeout(updateMinimap, 500);
+    document.querySelector(".btn-save").onclick = saveFlow;
 });
 
-window.addEventListener('message', function(event) {
+window.addEventListener('message', (event) => {
     if (event.data.type === 'LOAD_FLOW') {
         editor.import(event.data.data);
         updateMinimap();
