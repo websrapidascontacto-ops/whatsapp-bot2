@@ -291,21 +291,43 @@ function loadFlowsList() {
 }
 
 // ESCUCHAR DATOS DEL EDITOR (Iframe)
-window.addEventListener('message', function(event) {
-    // Validamos que el mensaje sea para guardar el flujo
+window.addEventListener('message', async function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         const flowJson = event.data.data;
-        console.log("Datos recibidos en CRM:", flowJson);
         
-        // Notificación visual amigable ✨
-        alert("✅ Flujo capturado con éxito en el CRM. Listo para enviar a Railway.");
-        
-        // Aquí puedes hacer tu fetch:
-        /*
-        fetch('/api/save', {
-            method: 'POST',
-            body: JSON.stringify(flowJson)
-        }).then(res => alert("Guardado en Servidor"));
-        */
+        try {
+            const response = await fetch('/api/save-flow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(flowJson)
+            });
+            
+            if (response.ok) {
+                alert("✅ Flujo guardado correctamente en Webs Rápidas.");
+            } else {
+                alert("❌ Error al guardar en el servidor.");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            alert("Error de conexión con Railway.");
+        }
     }
 });
+
+// Función para cargar flujos (ahora funcional)
+async function loadFlowsList() {
+    try {
+        const response = await fetch('/api/get-flow');
+        const data = await response.json();
+        if (data) {
+            // Enviamos el flujo cargado al iframe del editor
+            const iframe = document.getElementById('flow-iframe');
+            iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
+            alert("📂 Flujo cargado. Precio base: S/380");
+        } else {
+            alert("No hay flujos guardados aún.");
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}

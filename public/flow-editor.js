@@ -158,3 +158,16 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-menu").onclick = addMenuNode;
     setTimeout(updateMinimap, 500);
 });
+// Escuchar cuando el CRM envíe un flujo para cargar
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'LOAD_FLOW') {
+        editor.import(event.data.data);
+        updateMinimap();
+    }
+});
+
+// Asegúrate de que el botón guardar en flow-editor.html llame a esta función:
+function saveFlow() {
+    const data = editor.export();
+    window.parent.postMessage({ type: 'SAVE_FLOW', data: data }, '*');
+}

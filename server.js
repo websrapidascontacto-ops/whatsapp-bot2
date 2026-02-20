@@ -334,3 +334,41 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server activo en puerto", PORT);
 });
+/* =========================
+   MODELO DE FLUJOS (NUEVO)
+========================= */
+const flowSchema = new mongoose.Schema({
+  name: { type: String, default: "Main Flow" },
+  data: { type: Object, required: true },
+  updatedAt: { type: Date, default: Date.now }
+});
+const Flow = mongoose.model("Flow", flowSchema);
+
+/* =========================
+   API DE FLUJOS (NUEVO)
+========================= */
+
+// Guardar el flujo desde el editor
+app.post("/api/save-flow", async (req, res) => {
+  try {
+    const flowData = req.body;
+    const updatedFlow = await Flow.findOneAndUpdate(
+      { name: "Main Flow" },
+      { data: flowData, updatedAt: Date.now() },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: "Flujo guardado en MongoDB" });
+  } catch (err) {
+    res.status(500).json({ error: "Error al guardar el flujo" });
+  }
+});
+
+// Cargar el flujo al abrir el editor
+app.get("/api/get-flow", async (req, res) => {
+  try {
+    const flow = await Flow.findOne({ name: "Main Flow" });
+    res.json(flow ? flow.data : null);
+  } catch (err) {
+    res.status(500).json({ error: "Error al cargar el flujo" });
+  }
+});
