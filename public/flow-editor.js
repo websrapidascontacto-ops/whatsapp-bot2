@@ -4,7 +4,7 @@ const editor = new Drawflow(container);
 editor.reroute = false;
 editor.start();
 
-/* ================= CONFIGURACIÓN VISUAL ================= */
+/* ================= ZOOM ================= */
 editor.zoom_max = 2;
 editor.zoom_min = 0.3;
 editor.zoom_value = 0.1;
@@ -25,13 +25,28 @@ function getNextPosition() {
     return pos;
 }
 
-/* ================= GUARDAR ================= */
+/* ================= SINCRONIZACIÓN DE DATOS (ARREGLO PARA VACÍO) ================= */
+// Esta función asegura que cada vez que escribas, Drawflow guarde el dato internamente
+window.updateNodeData = function(input, key) {
+    const nodeElement = input.closest('.drawflow-node');
+    const nodeId = nodeElement.id.replace('node-', '');
+    const node = editor.getNodeFromId(nodeId);
+    
+    node.data[key] = input.value;
+    console.log(`✅ Nodo ${nodeId} actualizado: ${key} = ${input.value}`);
+};
+
+/* ================= GUARDAR (VINCULADO AL CRM) ================= */
 function saveFlow() {
     const flowData = editor.export();
-    window.parent.postMessage({ type: 'SAVE_FLOW', data: flowData }, '*');
+    console.log("Enviando flujo al CRM...");
+    window.parent.postMessage({ 
+        type: 'SAVE_FLOW', 
+        data: flowData 
+    }, '*');
 }
 
-/* ================= UTILIDADES DE NODOS ================= */
+/* ================= NODOS Y FUNCIONES ================= */
 function addCloseButton(nodeId) {
     const nodeElement = document.getElementById(`node-${nodeId}`);
     if (!nodeElement) return;
@@ -46,105 +61,87 @@ function addCloseButton(nodeId) {
     nodeElement.appendChild(close);
 }
 
-// Función para forzar que Drawflow escuche los inputs
-function attachInputs(nodeId) {
-    const nodeElement = document.getElementById(`node-${nodeId}`);
-    const inputs = nodeElement.querySelectorAll('input, textarea');
-    inputs.forEach(input => {
-        input.addEventListener('input', (e) => {
-            const attr = e.target.getAttribute('df-info') !== null ? 'info' : 
-                         e.target.getAttribute('df-val') !== null ? 'val' : 
-                         e.target.attributes[0].name.replace('df-', '');
-            
-            const nodeData = editor.getNodeFromId(nodeId).data;
-            nodeData[attr] = e.target.value;
-            editor.updateNodeDataFromId(nodeId, nodeData);
-        });
-    });
-}
-
-function createNode(type, inputs, outputs, html, data = {}) {
-    const pos = getNextPosition();
-    const id = editor.addNode(type, inputs, outputs, pos.x, pos.y, type, data, html);
-    setTimeout(() => {
-        addCloseButton(id);
-        attachInputs(id);
-    }, 50);
-    updateMinimap();
-}
-
-/* ================= DEFINICIÓN DE NODOS ================= */
-
 function addTriggerNode() {
-    createNode("trigger", 0, 1, `
+    const pos = getNextPosition();
+    const html = `
         <div class="node-wrapper">
             <div class="node-header header-trigger">⚡ Trigger</div>
             <div class="node-body">
-                <input type="text" class="form-control" placeholder="Ej: hola" df-val>
+                <input type="text" class="form-control" placeholder="Ej: Hola" 
+                oninput="updateNodeData(this, 'val')">
             </div>
         </div>
-    `, { val: '' });
+    `;
+    const id = editor.addNode("trigger", 0, 1, pos.x, pos.y, "trigger", { val: "" }, html);
+    setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addIANode() {
-    createNode("ia", 1, 1, `
+    const pos = getNextPosition();
+    const html = `
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132.</textarea>
+                <textarea class="form-control" rows="3" 
+                oninput="updateNodeData(this, 'info')">Base: S/380. WhatsApp: 991138132. Website: https://www.websrapidas.com</textarea>
             </div>
         </div>
-    `, { info: 'Base: S/380. WhatsApp: 991138132.' });
+    `;
+    const id = editor.addNode("ia", 1, 1, pos.x, pos.y, "ia", { info: "Base: S/380. WhatsApp: 991138132." }, html);
+    setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addMessageNode() {
-    createNode("message", 1, 1, `
+    const pos = getNextPosition();
+    const html = `
         <div class="node-wrapper">
             <div class="node-header header-message">💬 Mensaje</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" df-info></textarea>
+                <textarea class="form-control" rows="3" placeholder="Tu respuesta..." 
+                oninput="updateNodeData(this, 'info')"></textarea>
             </div>
         </div>
-    `, { info: '' });
+    `;
+    const id = editor.addNode("message", 1, 1, pos.x, pos.y, "message", { info: "" }, html);
+    setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
 function addMenuNode() {
-    createNode("menu", 1, 1, `
+    const pos = getNextPosition();
+    const html = `
         <div class="node-wrapper">
             <div class="node-header header-menu">📋 Menú</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-2" placeholder="Título" df-info>
+                <input type="text" class="form-control mb-2" placeholder="Título" oninput="updateNodeData(this, 'info')">
                 <div class="menu-list">
-                    <input type="text" class="form-control mb-1" placeholder="Opción 1" df-option1>
+                    <input type="text" class="form-control mb-1" placeholder="Opción 1" oninput="updateNodeData(this, 'option1')">
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="addOption(this)">+ Opción</button>
             </div>
         </div>
-    `, { info: '', option1: '' });
+    `;
+    const id = editor.addNode("menu", 1, 1, pos.x, pos.y, "menu", { info: "", option1: "" }, html);
+    setTimeout(() => addCloseButton(id), 50);
+    updateMinimap();
 }
 
-/* ================= GESTIÓN DE OPCIONES DINÁMICAS ================= */
-
 window.addOption = function(btn) {
+    const nodeElement = btn.closest('.drawflow-node');
+    const nodeId = nodeElement.id.replace('node-', '');
     const list = btn.parentElement.querySelector(".menu-list");
-    const optionCount = list.querySelectorAll("input").length + 1;
-    const nodeId = btn.closest(".drawflow-node").id.replace("node-", "");
-    const attrName = `option${optionCount}`;
-    
+    const count = list.querySelectorAll("input").length + 1;
+
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
-    input.placeholder = `Opción ${optionCount}`;
-    input.setAttribute(`df-${attrName}`, ""); 
-
-    input.addEventListener('input', (e) => {
-        const node = editor.getNodeFromId(nodeId);
-        node.data[attrName] = e.target.value;
-        editor.updateNodeDataFromId(nodeId, node.data);
-    });
-
+    input.placeholder = "Opción " + count;
+    input.oninput = function() { updateNodeData(this, 'option' + count); };
+    
     list.appendChild(input);
-    editor.addNodeOutput(nodeId);
+    editor.addNodeOutput(nodeId); // Añade salida visual para la nueva opción
 };
 
 /* ================= MINIMAPA ================= */
@@ -169,14 +166,18 @@ function updateMinimap() {
     container.querySelectorAll(".drawflow-node").forEach(node => {
         const clone = document.createElement("div");
         clone.style.position = "absolute";
-        clone.style.width = (node.offsetWidth * scale) + "px";
-        clone.style.height = (node.offsetHeight * scale) + "px";
-        clone.style.left = (node.offsetLeft * scale) + "px";
-        clone.style.top = (node.offsetTop * scale) + "px";
+        clone.style.width = node.offsetWidth * scale + "px";
+        clone.style.height = node.offsetHeight * scale + "px";
+        clone.style.left = node.offsetLeft * scale + "px";
+        clone.style.top = node.offsetTop * scale + "px";
         clone.style.background = "#1e293b";
         clone.style.borderRadius = "4px";
         mapCanvas.appendChild(clone);
     });
+    viewport.style.left = (-editor.precanvas_x * scale) + "px";
+    viewport.style.top = (-editor.precanvas_y * scale) + "px";
+    viewport.style.width = (container.clientWidth * scale) + "px";
+    viewport.style.height = (container.clientHeight * scale) + "px";
 }
 
 editor.on("nodeCreated", updateMinimap);
@@ -185,7 +186,6 @@ editor.on("nodeMoved", updateMinimap);
 editor.on("zoom", updateMinimap);
 editor.on("translate", updateMinimap);
 
-/* ================= INICIALIZACIÓN ================= */
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".btn-trigger").onclick = addTriggerNode;
     document.querySelector(".btn-ia").onclick = addIANode;
