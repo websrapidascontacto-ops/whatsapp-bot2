@@ -73,7 +73,7 @@ function addIANode() {
         <div class="node-wrapper">
             <div class="node-header header-ia">🤖 IA Chatbot</div>
             <div class="node-body">
-                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132.</textarea>
+                <textarea class="form-control" rows="3" df-info>Base: S/380. WhatsApp: 991138132. Montserrat font.</textarea>
             </div>
         </div>
     `);
@@ -109,22 +109,26 @@ function addMenuNode() {
 window.addOption = function(btn) {
     const list = btn.parentElement.querySelector(".menu-list");
     const optionCount = list.querySelectorAll("input").length + 1;
+    const nodeElement = btn.closest(".drawflow-node");
+    const nodeId = nodeElement.id.replace("node-", "");
     
-    // Crear input con atributo df- para que Drawflow guarde el texto
     const input = document.createElement("input");
     input.type = "text";
     input.className = "form-control mb-1";
     input.placeholder = `Opción ${optionCount}`;
-    input.setAttribute(`df-option${optionCount}`, ""); 
-    list.appendChild(input);
+    const attrName = `option${optionCount}`;
+    input.setAttribute(`df-${attrName}`, ""); 
 
-    // Añadir salida física al nodo
-    const nodeElement = btn.closest(".drawflow-node");
-    const nodeId = nodeElement.id.replace("node-", "");
+    // Forzar el guardado en el objeto data de Drawflow
+    input.addEventListener('input', (e) => {
+        editor.drawflow.drawflow.Home.data[nodeId].data[attrName] = e.target.value;
+    });
+
+    list.appendChild(input);
     editor.addNodeOutput(nodeId);
 };
 
-/* ================= MINIMAPA ================= */
+/* ================= MINIMAPA Y EVENTOS ================= */
 const minimap = document.getElementById("minimap");
 const mapCanvas = document.createElement("div");
 mapCanvas.style.position = "relative";
