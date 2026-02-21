@@ -51,36 +51,42 @@ window.addListNode = function() {
 };
 
 /* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS */
+/* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS - CORREGIDA */
 window.addRowDynamic = function(button) {
-    // 1. Encontrar el nodo raíz donde se hizo clic
     const nodeElement = button.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const container = nodeElement.querySelector('.items-container');
     
-    // 2. Obtener datos del nodo en el editor
-    const nodeData = editor.drawflow.drawflow.Home.data[nodeId];
+    // Acceso directo al objeto data del nodo
+    const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
-    // 3. Contar filas actuales y crear nueva clave
+    // Contar inputs para generar la clave (row1, row2...)
     const count = container.querySelectorAll("input").length + 1;
     const key = `row${count}`;
 
-    // 4. Añadir salida física (el punto de conexión)
+    // 1. Añadir salida física (punto de conexión)
     editor.addNodeOutput(nodeId);
 
-    // 5. Crear el input visualmente
+    // 2. Crear el input visualmente
     const input = document.createElement("input");
     input.className = "form-control mb-1";
+    input.style.fontFamily = "Montserrat, sans-serif"; // Mantener tu estilo
     input.placeholder = `Fila ${count}`;
     input.setAttribute(`df-${key}`, "");
+    
+    // 3. VÍNCULO MANUAL: Cada vez que escribas, guardamos en el JSON interno
+    input.addEventListener('input', (e) => {
+        nodeData[key] = e.target.value;
+    });
+
     container.appendChild(input);
 
-    // 6. Sincronizar con el JSON interno
-    nodeData.data[key] = "";
+    // 4. Inicializar la clave en el JSON para que no viaje null
+    nodeData[key] = "";
     
-    // 7. Refrescar para que Drawflow reconozca el nuevo input
+    // 5. Refrescar el nodo
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
-
 window.saveFlow = function() {
     const data = editor.export();
     fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Flujo Guardado"));
