@@ -82,7 +82,6 @@ body {
     white-space: nowrap;
 }
 
-/* ARREGLO PARA QUE LOS ICONOS SE VEAN */
 .header-buttons button i {
     font-family: "Font Awesome 6 Free", "Font Awesome 6 Solid" !important;
     font-weight: 900;
@@ -107,7 +106,6 @@ body {
     margin-left: 15px;
 }
 
-/* EFECTO HOVER CON RESPLANDOR (GLOW) */
 .header-buttons button:hover {
     transform: translateY(-3px);
     filter: brightness(1.2);
@@ -116,7 +114,7 @@ body {
 
 .btn-save:hover { background: var(--indigo); }
 
-/* ================= CONEXIONES ANIMADAS (GROSOR 5PX) ================= */
+/* ================= CONEXIONES ANIMADAS ================= */
 .drawflow .connection .main-path {
     stroke: #6366f1; 
     stroke-width: 5px !important;
@@ -182,6 +180,7 @@ body {
     position: relative;
     transition: all 0.3s;
     cursor: crosshair;
+    z-index: 5;
 }
 
 .drawflow-node .output {
@@ -239,11 +238,17 @@ body {
     justify-content: center; 
     cursor: pointer;
     font-weight: bold;
+    z-index: 10;
 }
 
+/* ================= ALINEACIÓN DE SALIDAS PARA LISTAS (LOGICA DE FLUJO) ================= */
 .drawflow-node.whatsapp_list .outputs {
     display: flex;
     flex-direction: column;
-    gap: 34px; 
-    padding-top: 178px; 
+    gap: 24px !important; /* Espacio calibrado con los inputs de fila */
+    padding-top: 146px !important; /* Salto exacto sobre el título y botón de agregar */
+}
+
+.drawflow-node.whatsapp_list .output {
+    margin-top: 6px; /* Centrado vertical con el input */
 }
