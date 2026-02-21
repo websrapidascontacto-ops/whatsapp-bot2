@@ -64,12 +64,13 @@ async function downloadMedia(mediaId, fileName) {
     } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK PRINCIPAL ========================= */
+/* ========================= WEBHOOK PRINCIPAL (CORREGIDO) ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
+            // Captura texto, respuesta de lista o respuesta de botón
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -86,29 +87,29 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // --- 1. PRIORIDAD: LÓGICA DE CONTINUACIÓN POR LISTA ---
+                    // --- 1. PRIORIDAD: CONTINUACIÓN DE LISTA (Punto Nemo Fix) ---
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
-                        return Object.values(n.data).some(val => val && val.trim().toLowerCase() === incomingText.toLowerCase());
+                        return Object.values(n.data).some(v => v && v.toString().toLowerCase() === incomingText.toLowerCase());
                     });
 
                     if (activeListNode) {
                         const rowKey = Object.keys(activeListNode.data).find(k => 
-                            activeListNode.data[k] && activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
+                            activeListNode.data[k] && activeListNode.data[k].toString().toLowerCase() === incomingText.toLowerCase()
                         );
-                        
                         if (rowKey) {
-                            const outputNum = rowKey.replace('row', 'output_'); 
-                            const connection = activeListNode.outputs[outputNum]?.connections[0];
-                            if (connection) {
-                                const nextNodeId = connection.node;
-                                await processSequence(sender, nodes[nextNodeId], nodes);
-                                return res.sendStatus(200); // FINALIZA: Evita bucles
+                            // Extrae el número de la fila (ej: "row1" -> "1")
+                            const outNum = rowKey.replace(/\D/g, ""); 
+                            const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
+                            if (conn) {
+                                console.log(`🔗 Saltando al nodo: ${conn.node} desde la opción: ${incomingText}`);
+                                await processSequence(sender, nodes[conn.node], nodes);
+                                return res.sendStatus(200); // Detiene aquí para evitar el trigger inicial
                             }
                         }
                     }
 
-                    // --- 2. SECUNDARIO: LÓGICA DE TRIGGER ---
+                    // --- 2. TRIGGER INICIAL (Si no es respuesta de lista) ---
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
@@ -119,7 +120,9 @@ app.post("/webhook", async (req, res) => {
                         return res.sendStatus(200);
                     }
                 }
-            } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
+            } catch (err) { 
+                console.error("❌ Error Webhook Logic:", err.message); 
+            }
         }
     }
     res.sendStatus(200);
