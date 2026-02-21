@@ -5,9 +5,18 @@ editor.reroute = true;
 /* === CONFIGURACIÓN DE ZOOM HACIA EL MOUSE === */
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
-editor.zoom_wheel_speed = 0.05; // Velocidad del scroll
-editor.zoom_last_value = 1;      // Permite rastrear el punto de origen
+editor.zoom_wheel_speed = 0.05; // Velocidad del zoom
+editor.zoom_last_value = 1;      // Referencia para el punto de origen
 
+editor.start();
+
+/* FORZAR ZOOM EN POSICIÓN DEL MOUSE */
+container.addEventListener('wheel', function(e) {
+    if (e.ctrlKey === false) {
+        // Esta función interna de Drawflow calcula la posición del mouse automáticamente
+        editor.zoom_on_mousewheel(e);
+    }
+}, { passive: false });
 editor.start();
 
 // Esta lógica fuerza al editor a centrar el zoom donde esté el mouse
