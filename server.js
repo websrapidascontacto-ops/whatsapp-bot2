@@ -98,15 +98,14 @@ app.post("/webhook", async (req, res) => {
                     }
 
                     // 2. LÓGICA DE CONTINUACIÓN POR LISTA
-                    // Buscamos si el texto recibido coincide con alguna fila de un nodo whatsapp_list
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
-                        return Object.values(n.data).some(val => val.trim().toLowerCase() === incomingText.toLowerCase());
+                        return Object.values(n.data).some(val => val && val.trim().toLowerCase() === incomingText.toLowerCase());
                     });
 
                     if (activeListNode) {
                         const rowKey = Object.keys(activeListNode.data).find(k => 
-                            activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
+                            activeListNode.data[k] && activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
                         );
                         
                         if (rowKey) {
@@ -115,7 +114,9 @@ app.post("/webhook", async (req, res) => {
                             
                             if (connection) {
                                 const nextNodeId = connection.node;
-                                return await processSequence(sender, nodes[nextNodeId], nodes);
+                                // PROCESA EL SIGUIENTE Y CORTA LA EJECUCIÓN
+                                await processSequence(sender, nodes[nextNodeId], nodes);
+                                return res.sendStatus(200); 
                             }
                         }
                     }
