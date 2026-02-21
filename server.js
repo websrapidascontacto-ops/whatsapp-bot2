@@ -109,11 +109,17 @@ app.post("/webhook", async (req, res) => {
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
                     
-                    if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                        await processSequence(sender, nodes[triggerNode.outputs.output_1.connections[0].node], nodes);
-                        return res.sendStatus(200);
+                    if (triggerNode) {
+                        const firstConn = triggerNode.outputs?.output_1?.connections?.[0];
+                        if (firstConn) {
+                            const nextNode = nodes[firstConn.node];
+                            console.log("🚀 Trigger activado. Saltando a nodo:", nextNode.name);
+                            
+                            // Llamamos a la secuencia para el nodo conectado al trigger
+                            await processSequence(sender, nextNode, nodes);
+                            return res.sendStatus(200);
+                        }
                     }
-                }
             } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
         }
     }
