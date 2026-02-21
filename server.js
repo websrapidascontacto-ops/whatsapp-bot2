@@ -31,7 +31,7 @@ app.get("/", (req, res) => res.redirect("/index.html"));
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado"))
+    .then(() => console.log("✅ Mongo conectado - Punto Nemo Arreglado"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
@@ -64,12 +64,13 @@ async function downloadMedia(mediaId, fileName) {
     } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK Y LÓGICA SECUENCIAL ========================= */
+/* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
+            // Captura texto de mensajes normales o de respuestas interactivas (Listas/Botones)
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -85,27 +86,54 @@ app.post("/webhook", async (req, res) => {
                 const flowDoc = await Flow.findOne({ name: "Main Flow" });
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
+
+                    // 1. LÓGICA DE TRIGGER (INICIO DE FLUJO)
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
                     
                     if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
                         const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
-                        await processSequence(sender, nodes[firstNextNodeId], nodes);
+                        return await processSequence(sender, nodes[firstNextNodeId], nodes);
+                    }
+
+                    // 2. LÓGICA DE CONTINUACIÓN POR LISTA
+                    // Buscamos si el texto recibido coincide con alguna fila de un nodo whatsapp_list
+                    const activeListNode = Object.values(nodes).find(n => {
+                        if (n.name !== "whatsapp_list") return false;
+                        return Object.values(n.data).some(val => val.trim().toLowerCase() === incomingText.toLowerCase());
+                    });
+
+                    if (activeListNode) {
+                        const rowKey = Object.keys(activeListNode.data).find(k => 
+                            activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
+                        );
+                        
+                        if (rowKey) {
+                            const outputNum = rowKey.replace('row', 'output_'); 
+                            const connection = activeListNode.outputs[outputNum]?.connections[0];
+                            
+                            if (connection) {
+                                const nextNodeId = connection.node;
+                                return await processSequence(sender, nodes[nextNodeId], nodes);
+                            }
+                        }
                     }
                 }
-            } catch (err) { console.error("❌ Error Secuencia:", err.message); }
+            } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
         }
     }
     res.sendStatus(200);
 });
 
+/* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
 
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
+    // Manejo de tipos de nodo
     if (node.name === "message" || node.name === "ia") {
         botText = node.data.info || "Base S/380. WhatsApp: 991138132";
         payload.type = "text";
@@ -114,29 +142,29 @@ async function processSequence(to, node, allNodes) {
     else if (node.name === "media") {
         const mediaPath = node.data.media_url;
         const caption = node.data.caption || "";
-        
-        if (mediaPath) {
-            const isLocal = mediaPath.startsWith('/uploads/');
-            const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-            const fullUrl = isLocal ? `https://${domain}${mediaPath}` : mediaPath;
+        const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
+        const fullUrl = mediaPath.startsWith('/uploads/') ? `https://${domain}${mediaPath}` : mediaPath;
 
-            payload.type = "image";
-            payload.image = { link: fullUrl, caption: caption };
-            botText = `🖼️ Imagen enviada: ${caption}`;
-        } else {
-            payload.type = "text";
-            payload.text = { body: "⚠️ (Media vacío)" };
-            botText = "Error: Media vacío";
-        }
+        payload.type = "image";
+        payload.image = { link: fullUrl, caption: caption };
+        botText = `🖼️ Imagen: ${caption}`;
     }
     else if (node.name === "whatsapp_list") {
-        const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ id: `row_${i}`, title: node.data[k].substring(0, 24) }));
+        const rows = Object.keys(node.data)
+            .filter(k => k.startsWith("row") && node.data[k])
+            .map((k, i) => ({ 
+                id: `row_${node.id}_${i}`, 
+                title: node.data[k].substring(0, 24) 
+            }));
+
         payload.type = "interactive";
         payload.interactive = {
             type: "list",
             body: { text: node.data.list_title || "Selecciona una opción:" },
-            action: { button: node.data.button_text || "Ver", sections: [{ title: "Menú", rows }] }
+            action: { 
+                button: node.data.button_text || "Ver opciones", 
+                sections: [{ title: "Opciones disponibles", rows }] 
+            }
         };
         botText = "📋 Menú enviado";
     }
@@ -149,51 +177,35 @@ async function processSequence(to, node, allNodes) {
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
+        // === CRUCIAL: Bloqueo de secuencia si es Lista ===
+        if (node.name === "whatsapp_list") {
+            console.log(`⏳ Nodo Lista enviado. Esperando acción del usuario ${to}...`);
+            return; // Detiene el flujo automático aquí
+        }
+
+        // Seguir al siguiente nodo si hay conexión en output_1 (para mensajes planos o media)
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1500)); 
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
-    } catch (err) { console.error("❌ Error flujo:", err.response?.data || err.message); }
+    } catch (err) { 
+        console.error("❌ Error en processSequence:", err.response?.data || err.message); 
+    }
 }
 
-/* ========================= APIS CRM Y SUBIDAS ========================= */
+/* ========================= APIS Y SUBIDAS ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
 });
 const upload = multer({ storage });
 
-// ARREGLADO: Ruta para el editor de flujos con manejo de errores
 app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No hay archivo" });
-        console.log("📁 Archivo de nodo recibido:", req.file.filename);
         res.json({ url: `/uploads/${req.file.filename}` });
-    } catch (err) {
-        res.status(500).json({ error: "Error en la subida" });
-    }
-});
-
-// ENVIAR MEDIA MANUAL (CRM)
-app.post("/send-media", upload.single("file"), async (req, res) => {
-    try {
-        const { to } = req.body;
-        const file = req.file;
-        const form = new FormData();
-        form.append("file", fs.createReadStream(file.path));
-        form.append("messaging_product", "whatsapp");
-        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-            headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-        
-        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", media: "/uploads/" + file.filename });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (err) { res.status(500).json({ error: "Error subida" }); }
 });
 
 app.post("/send-message", async (req, res) => {
@@ -209,7 +221,11 @@ app.post("/send-message", async (req, res) => {
 });
 
 app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([{ $sort: { timestamp: 1 } }, { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, { $sort: { lastTime: -1 } }]);
+    const chats = await Message.aggregate([
+        { $sort: { timestamp: 1 } }, 
+        { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, 
+        { $sort: { lastTime: -1 } }
+    ]);
     res.json(chats);
 });
 
@@ -219,8 +235,10 @@ app.get("/messages/:chatId", async (req, res) => {
 });
 
 app.post("/api/save-flow", async (req, res) => {
-    await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
-    res.json({ success: true });
+    try {
+        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get("/api/get-flow", async (req, res) => {
@@ -228,4 +246,6 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 2 Activo y Arreglado"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+    console.log("🚀 Server Punto Nemo 3 - Navegación de Listas Activa");
+});
