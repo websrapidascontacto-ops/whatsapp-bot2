@@ -40,7 +40,7 @@ function downloadFlow() {
 <button onclick="document.getElementById('importInput').click()" style="font-family: 'Montserrat', sans-serif; background: #34b7f1; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
     📤 Cargar Flujo
 </button>
-
+    <div id="drawflow"></div>
 <script>
 async function handleImport(event) {
     const file = event.target.files[0];
@@ -70,8 +70,6 @@ async function handleImport(event) {
     reader.readAsText(file);
 }
 </script>
-
-    <div id="drawflow"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
     <script src="flow-editor.js"></script>
