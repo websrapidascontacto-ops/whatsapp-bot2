@@ -31,7 +31,7 @@ app.get("/", (req, res) => res.redirect("/index.html"));
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado - Punto Nemo Final"))
+    .then(() => console.log("✅ Mongo conectado - Punto Nemo Final Estabilizado"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
@@ -64,7 +64,7 @@ async function downloadMedia(mediaId, fileName) {
     } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK PRINCIPAL ========================= */
+/* ========================= WEBHOOK Y NAVEGACIÓN ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
@@ -96,7 +96,7 @@ app.post("/webhook", async (req, res) => {
                         return await processSequence(sender, nodes[firstId], nodes);
                     }
 
-                    // 2. BUSCAR RESPUESTA EN LISTA
+                    // 2. BUSCAR RESPUESTA EN LISTA (SALTO DIRECTO)
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(v => v.trim().toLowerCase() === incomingText.toLowerCase());
@@ -107,7 +107,10 @@ app.post("/webhook", async (req, res) => {
                         if (rowKey) {
                             const outputNum = rowKey.replace('row', 'output_'); 
                             const conn = listNode.outputs[outputNum]?.connections[0];
-                            if (conn) return await processSequence(sender, nodes[conn.node], nodes);
+                            if (conn) {
+                                console.log(`🚀 Opción: ${incomingText}. Saltando al nodo: ${conn.node}`);
+                                return await processSequence(sender, nodes[conn.node], nodes);
+                            }
                         }
                     }
                 }
@@ -130,16 +133,18 @@ async function processSequence(to, node, allNodes) {
             payload.text = { body: botText };
         } 
         else if (node.name === "media") {
-            const pathMedia = node.data.media_url;
+            const pathMedia = node.data.media_url; // Corregido: coincide con df-media_url
             if (pathMedia) {
                 const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
                 const fullUrl = pathMedia.startsWith('/') ? `https://${domain}${pathMedia}` : pathMedia;
+                
                 payload.type = "image";
                 payload.image = { link: fullUrl, caption: node.data.caption || "" };
                 botText = `🖼️ Imagen enviada`;
             } else {
+                botText = "⚠️ Error: Media vacío";
                 payload.type = "text";
-                payload.text = { body: "⚠️ Error: Media no configurado" };
+                payload.text = { body: botText };
             }
         }
         else if (node.name === "whatsapp_list") {
@@ -148,7 +153,7 @@ async function processSequence(to, node, allNodes) {
             payload.type = "interactive";
             payload.interactive = {
                 type: "list",
-                body: { text: node.data.list_title || "Menú" },
+                body: { text: node.data.list_title || "Selecciona una opción:" },
                 action: { button: node.data.button_text || "Opciones", sections: [{ title: "Menú", rows }] }
             };
             botText = "📋 Menú enviado";
@@ -158,22 +163,22 @@ async function processSequence(to, node, allNodes) {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        await Message.create({ chatId: to, from: "me", text: botText });
-        broadcast({ type: "new_message", message: { chatId: to, from: "me", text: botText } });
+        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
+        broadcast({ type: "new_message", message: savedBot });
 
-        // Detener si es lista
+        // Si es lista, paramos para esperar respuesta del usuario
         if (node.name === "whatsapp_list") return;
 
-        // Continuar si hay conexión
+        // Si hay conexión en output_1, seguimos automáticamente (mensajes o media)
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 1200));
             return await processSequence(to, allNodes[nextId], allNodes);
         }
     } catch (err) { console.error("❌ Error flujo:", err.response?.data || err.message); }
 }
 
-/* ========================= APIS CRM Y STORAGE ========================= */
+/* ========================= RESTO DE APIS ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -191,8 +196,8 @@ app.post("/send-message", async (req, res) => {
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
             messaging_product: "whatsapp", to, type: "text", text: { body: text }
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-        await Message.create({ chatId: to, from: "me", text });
-        broadcast({ type: "new_message", message: { chatId: to, from: "me", text } });
+        const saved = await Message.create({ chatId: to, from: "me", text });
+        broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -217,4 +222,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 3 - Estable"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Punto Nemo Final - Listo"));
