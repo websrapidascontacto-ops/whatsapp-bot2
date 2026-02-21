@@ -73,16 +73,22 @@ body {
     font-size: 12px; 
     cursor: pointer; 
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex; 
+    display: inline-flex; /* Cambiado para alineación exacta */
     align-items: center; 
     justify-content: center;
-    gap: 10px; /* Espaciado perfecto entre icono y texto */
+    gap: 8px; /* Espacio calibrado entre icono y texto */
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
 }
 
-/* Eliminamos cualquier contenido previo que cause errores visuales */
+/* Forzar que los iconos de FontAwesome no hereden comportamientos extraños */
+.header-buttons button i {
+    font-size: 14px;
+    pointer-events: none;
+    display: inline-block;
+}
+
 .header-buttons button::before {
     content: none !important;
 }

@@ -1,6 +1,13 @@
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
 editor.reroute = true;
+
+/* === CONFIGURACIÓN DE ZOOM CON SCROLL === */
+editor.zoom_max = 1.6;
+editor.zoom_min = 0.5;
+editor.zoom_value = 0.1;
+/* ======================================== */
+
 editor.start();
 
 let lastNodeX = 50;
@@ -73,7 +80,6 @@ window.addMediaNode = () => {
         </div>`, { media_url: '', caption: '' });
 };
 
-// Función corregida para evitar el error de updateNodeValueById
 window.uploadNodeFile = async (event, nodeId) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -95,15 +101,13 @@ window.uploadNodeFile = async (event, nodeId) => {
         const data = await res.json();
 
         if (data.url) {
-            // 1. Guardamos la ruta en el input oculto del nodo
             pathInput.value = data.url;
             status.innerText = "✅ Subido: " + file.name;
             status.style.color = "green";
             
-            // 2. Actualización directa de datos en Drawflow para evitar el TypeError
+            // Actualización directa de datos
             editor.drawflow.drawflow.Home.data[nodeId].data.media_url = data.url;
-            console.log("💾 Datos del nodo " + nodeId + " actualizados con la imagen local.");
-            
+            console.log("💾 Nodo " + nodeId + " actualizado.");
         } else {
             throw new Error("No se recibió URL");
         }
