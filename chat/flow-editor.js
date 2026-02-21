@@ -1,12 +1,22 @@
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
-editor.reroute = true;
 
-/* === CONFIGURACIÓN DE ZOOM HACIA EL MOUSE === */
+/* === CONFIGURACIÓN DE ZOOM Y NAVEGACIÓN === */
+editor.reroute = true;
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
 editor.zoom_wheel_speed = 0.05; // Velocidad del zoom
-editor.zoom_last_value = 1;      // Referencia para el punto de origen
+editor.zoom_last_value = 1;
+
+editor.start();
+
+/* === ACTIVADOR DE ZOOM HACIA EL PUNTERO === */
+container.addEventListener('wheel', function(e) {
+    // Si no estás presionando CTRL, ejecuta el zoom de Drawflow
+    if (e.ctrlKey === false) {
+        editor.zoom_on_mousewheel(e);
+    }
+}, { passive: false });
 
 editor.start();
 
