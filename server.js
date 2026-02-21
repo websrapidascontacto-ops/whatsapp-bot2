@@ -206,10 +206,18 @@ app.post("/send-message", async (req, res) => {
     try {
         let payload = { messaging_product: "whatsapp", to };
         
-        // Si hay mediaUrl, enviamos imagen; si no, texto plano
         if (mediaUrl) {
+            // --- ESTE ES EL ARREGLO ---
+            // Si la URL empieza con /uploads, le pegamos tu dominio de Railway
+            let finalUrl = mediaUrl;
+            if (mediaUrl.startsWith('/uploads/')) {
+                const domain = process.env.RAILWAY_STATIC_URL || req.get('host');
+                const protocol = req.protocol === 'https' ? 'https' : 'https'; // Forzamos https para WhatsApp
+                finalUrl = `${protocol}://${domain}${mediaUrl}`;
+            }
+
             payload.type = "image";
-            payload.image = { link: mediaUrl, caption: text || "" };
+            payload.image = { link: finalUrl, caption: text || "" };
         } else {
             payload.type = "text";
             payload.text = { body: text };
@@ -219,7 +227,6 @@ app.post("/send-message", async (req, res) => {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        // Guardamos en la base de datos para que aparezca en tu chat
         const saved = await Message.create({ 
             chatId: to, 
             from: "me", 
@@ -233,8 +240,7 @@ app.post("/send-message", async (req, res) => {
         console.error("❌ Error enviando:", e.response?.data || e.message);
         res.status(500).json({ error: e.message }); 
     }
-});
-app.get("/chats", async (req, res) => {
+});app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
         { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, 
