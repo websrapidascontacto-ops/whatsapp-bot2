@@ -35,7 +35,7 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
-    chatId: String, from: String, text: String, media: String, timestamp: { type: Date, default: Date.now }
+    chatId: String, from: String, text: String, mediaUrl: String, timestamp: { type: Date, default: Date.now }
 }));
 
 const Flow = mongoose.model("Flow", new mongoose.Schema({
@@ -70,7 +70,6 @@ app.post("/webhook", async (req, res) => {
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            // Captura texto de mensajes normales o de respuestas interactivas (Listas/Botones)
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -79,7 +78,7 @@ app.post("/webhook", async (req, res) => {
                 incomingText = msg.image.caption || "📷 Imagen recibida";
             }
 
-            const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, media: mediaUrl });
+            const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, mediaUrl: mediaUrl });
             broadcast({ type: "new_message", message: saved });
             
             try {
@@ -87,7 +86,6 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // 1. LÓGICA DE TRIGGER (INICIO DE FLUJO)
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
@@ -97,8 +95,6 @@ app.post("/webhook", async (req, res) => {
                         return await processSequence(sender, nodes[firstNextNodeId], nodes);
                     }
 
-                    // 2. LÓGICA DE CONTINUACIÓN POR LISTA
-                    // Buscamos si el texto recibido coincide con alguna fila de un nodo whatsapp_list
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(val => val.trim().toLowerCase() === incomingText.toLowerCase());
@@ -132,8 +128,8 @@ async function processSequence(to, node, allNodes) {
 
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
+    let mediaForDb = null;
 
-    // Manejo de tipos de nodo
     if (node.name === "message" || node.name === "ia") {
         botText = node.data.info || "Base S/380. WhatsApp: 991138132";
         payload.type = "text";
@@ -147,7 +143,8 @@ async function processSequence(to, node, allNodes) {
 
         payload.type = "image";
         payload.image = { link: fullUrl, caption: caption };
-        botText = `🖼️ Imagen: ${caption}`;
+        botText = caption || "📷 Imagen";
+        mediaForDb = mediaPath;
     }
     else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data)
@@ -174,16 +171,11 @@ async function processSequence(to, node, allNodes) {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
+        const savedBot = await Message.create({ chatId: to, from: "me", text: botText, mediaUrl: mediaForDb });
         broadcast({ type: "new_message", message: savedBot });
 
-        // === CRUCIAL: Bloqueo de secuencia si es Lista ===
-        if (node.name === "whatsapp_list") {
-            console.log(`⏳ Nodo Lista enviado. Esperando acción del usuario ${to}...`);
-            return; // Detiene el flujo automático aquí
-        }
+        if (node.name === "whatsapp_list") return;
 
-        // Seguir al siguiente nodo si hay conexión en output_1 (para mensajes planos o media)
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1500)); 
@@ -206,6 +198,32 @@ app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
         if (!req.file) return res.status(400).json({ error: "No hay archivo" });
         res.json({ url: `/uploads/${req.file.filename}` });
     } catch (err) { res.status(500).json({ error: "Error subida" }); }
+});
+
+// NUEVO: ENDPOINT PARA ENVIAR FOTOS DESDE EL CHAT
+app.post("/send-media", upload.single("file"), async (req, res) => {
+    const { to } = req.body;
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: "No hay archivo" });
+
+    try {
+        const form = new FormData();
+        form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+        form.append('messaging_product', 'whatsapp');
+
+        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
+            headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
+        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+
+        const mediaUrl = `/uploads/${file.filename}`;
+        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
 app.post("/send-message", async (req, res) => {
