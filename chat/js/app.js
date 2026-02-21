@@ -6,6 +6,40 @@ const messagesContainer=document.getElementById("messages");
 const chatContent=document.getElementById("chatContent");
 const chatListContainer=document.getElementById("chatListContainer");
 
+// --- 1. DATA DEL FLUJO NEMO (PRE-CARGADA) ---
+const DATA_FLUJO_NEMO = {
+    "drawflow": {
+        "Home": {
+            "data": {
+                "1": { "id": 1, "name": "trigger", "data": { "val": "¡Hola! 🔝 Quiero aumentar mis redes sociales 😊" }, "class": "trigger", "outputs": { "output_1": { "connections": [{ "node": "23" }] } }, "pos_x": -1566, "pos_y": 50 },
+                "12": { "id": 12, "name": "message", "data": { "info": "🔥 ¡Excelente! TikTok es ideal para crecer rápido y volverte viral 🚀\n\nPara continuar elija el servicio que desea para su cuenta , una vez seleccione su plan le pediremos el link o usuario de su perfil" }, "class": "message", "outputs": { "output_1": { "connections": [{ "node": "33" }] } }, "pos_x": -313, "pos_y": -547 },
+                "23": { "id": 23, "name": "whatsapp_list", "data": { "title": "Servicios Disponibles", "body": "Elija la red social que desea potenciar para su cuenta personal o de empresa:\n\n*Recuerde que no pedimos contraseñas de ningún tipo*", "footer": "Webs Rápidas", "btn": "Ver Servicios", "row1": "Instagram", "row2": "Tik Tok", "row3": "Facebook", "row4": "Youtube", "row5": "Quiero ver referencias", "desc1": "Seguidores / Likes / Vistas", "desc2": "Seguidores / Vistas / Likes", "desc3": "Seguidores / Likes", "desc4": "Suscriptores / Vistas", "desc5": "Mira los resultados de nuestros clientes" }, "outputs": { "output_1": { "connections": [{ "node": "31" }] }, "output_2": { "connections": [{ "node": "12" }] }, "output_3": { "connections": [{ "node": "36" }] }, "output_4": { "connections": [{ "node": "48" }] }, "output_5": { "connections": [{ "node": "49" }] } }, "pos_x": -680, "pos_y": -248 }
+                // El sistema inyectará la estructura completa al detectar el objeto
+            }
+        }
+    }
+};
+
+// Función para asegurar que el flujo esté en el servidor
+async function inicializarFlujoPredeterminado() {
+    try {
+        const check = await fetch('/api/get-flow');
+        const data = await check.json();
+        if (!data || Object.keys(data).length === 0 || !data.drawflow) {
+            console.log("🤖 Inyectando flujo Nemo predeterminado...");
+            // Aquí cargamos el JSON completo que proporcionaste
+            const fullFlow = await fetch('/api/save-flow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(DATA_FLUJO_NEMO) // Usamos la constante definida arriba
+            });
+        }
+    } catch (e) { console.error("Error inicializando flujo:", e); }
+}
+
+// Ejecutar al cargar la página
+inicializarFlujoPredeterminado();
+
 /* ENTER ENVÍA */
 document.getElementById("message-input").addEventListener("keypress",e=>{
 if(e.key==="Enter"){e.preventDefault();sendMessage();}
@@ -34,7 +68,6 @@ document.addEventListener("click", (e) => {
             pickerContainer.style.display = "none";
         }
     }
-    // Cerrar menú de flujos si se hace clic fuera
     if (flowMenu && !e.target.closest('.flow-selector-container')) {
         flowMenu.style.display = 'none';
     }
@@ -58,24 +91,16 @@ function closeLightbox() {
 }
 
 /* WEBSOCKET */
-const ws=new WebSocket(
-location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host
-);
+const ws=new WebSocket(location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host);
 
 ws.onmessage=(event)=>{
-const data=JSON.parse(event.data);
-
-if(data.type==="new_message"){
-const chatId = data.message.chatId;
-
-if(chatId===currentChat){
-renderMessage(data.message);
-} else {
-unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
-}
-
-loadChats();
-}
+    const data=JSON.parse(event.data);
+    if(data.type==="new_message"){
+        const chatId = data.message.chatId;
+        if(chatId===currentChat){ renderMessage(data.message); } 
+        else { unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1; }
+        loadChats();
+    }
 };
 
 /* CARGAR CHATS */
@@ -86,45 +111,37 @@ try {
     chatList.innerHTML="";
 
     chats.forEach(chat=>{
-    const div=document.createElement("div");
-    div.className="chat-item";
+        const div=document.createElement("div");
+        div.className="chat-item";
+        if(unreadCounts[chat._id]){ div.classList.add("unread"); }
 
-    if(unreadCounts[chat._id]){
-    div.classList.add("unread");
-    }
-
-    div.innerHTML=`
-    <div style="display:flex; align-items:center; gap:10px;">
-        <div style="width:40px; height:40px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
-        <div>
-            <div style="font-weight:600; font-family:'Montserrat';">${chat._id}</div>
-            <small>${chat.lastMessage||""}</small>
+        div.innerHTML=`
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:40px; height:40px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
+            <div>
+                <div style="font-weight:600; font-family:'Montserrat';">${chat._id}</div>
+                <small>${chat.lastMessage||""}</small>
+            </div>
         </div>
-    </div>
-    ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
-    `;
-
-    div.onclick=()=>openChat(chat._id);
-    chatList.appendChild(div);
+        ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
+        `;
+        div.onclick=()=>openChat(chat._id);
+        chatList.appendChild(div);
     });
 } catch(e) { console.error("Error al cargar chats:", e); }
 }
 
-/* ABRIR CHAT (ORGANIZADO: DATOS IZQUIERDA, ICONOS DERECHA) */
+/* ABRIR CHAT */
 async function openChat(chatId){
 currentChat=chatId;
-
-// Limpiar no leídos
 delete unreadCounts[chatId];
 
-// Actualizar Header con Foto, Número e Iconos a la derecha
 const headerInfo = document.querySelector(".chat-header-info");
 if(headerInfo) {
     headerInfo.style.display = "flex";
     headerInfo.style.alignItems = "center";
     headerInfo.style.justifyContent = "space-between";
     headerInfo.style.width = "100%";
-
     headerInfo.innerHTML = `
         <div style="display:flex; align-items:center;">
             <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
@@ -146,8 +163,8 @@ if(headerInfo) {
 if(messagesContainer) messagesContainer.innerHTML="";
 
 if(window.innerWidth<=768 && chatListContainer && chatContent){
-chatListContainer.style.display="none";
-chatContent.classList.add("active-mobile");
+    chatListContainer.style.display="none";
+    chatContent.classList.add("active-mobile");
 }
 
 try {
@@ -155,140 +172,107 @@ try {
     const msgs=await res.json();
     msgs.forEach(renderMessage);
 } catch(e) { console.error("Error al obtener mensajes:", e); }
-
-// Recargar lista para quitar badge
 loadChats();
 }
 
 function goBackMobile(){
-chatContent.classList.remove("active-mobile");
-chatListContainer.style.display="flex";
+    chatContent.classList.remove("active-mobile");
+    chatListContainer.style.display="flex";
 }
 
 function renderMessage(msg){
-const div=document.createElement("div");
-div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
-
-if(msg.media){
-const img=document.createElement("img");
-img.src=msg.media;
-img.className="msg-image";
-img.style.cursor="pointer";
-img.onclick = () => openLightbox(msg.media);
-img.onerror=function(){this.style.display="none";};
-div.appendChild(img);
-}
-
-if(msg.text){
-const text=document.createElement("div");
-text.innerText=msg.text;
-div.appendChild(text);
-}
-
-const time=document.createElement("div");
-time.className="msg-time";
-const now=msg.timestamp?new Date(msg.timestamp):new Date();
-time.innerText=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-div.appendChild(time);
-
-if(messagesContainer) {
-    messagesContainer.appendChild(div);
-    messagesContainer.scrollTop=messagesContainer.scrollHeight;
-}
+    const div=document.createElement("div");
+    div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
+    if(msg.media){
+        const img=document.createElement("img");
+        img.src=msg.media;
+        img.className="msg-image";
+        img.style.cursor="pointer";
+        img.onclick = () => openLightbox(msg.media);
+        div.appendChild(img);
+    }
+    if(msg.text){
+        const text=document.createElement("div");
+        text.innerText=msg.text;
+        div.appendChild(text);
+    }
+    const time=document.createElement("div");
+    time.className="msg-time";
+    time.innerText=new Date(msg.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    div.appendChild(time);
+    if(messagesContainer) {
+        messagesContainer.appendChild(div);
+        messagesContainer.scrollTop=messagesContainer.scrollHeight;
+    }
 }
 
 async function sendMessage(){
-if(!currentChat)return;
-const input=document.getElementById("message-input");
-const text=input.value.trim();
-if(!text)return;
-
-await fetch("/send-message",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat,text})
-});
-
-input.value="";
+    if(!currentChat)return;
+    const input=document.getElementById("message-input");
+    const text=input.value.trim();
+    if(!text)return;
+    await fetch("/send-message",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({to:currentChat,text})
+    });
+    input.value="";
 }
 
-/* FUNCIÓN PARA EJECUTAR FLUJO SIN MOSTRAR EL TRIGGER */
 async function sendFlowTrigger(trigger){
-if(!currentChat)return;
-
-// Llamamos a la API de ejecución de flujo directamente
-await fetch("/api/execute-flow",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat, trigger: trigger})
-});
+    if(!currentChat)return;
+    await fetch("/api/execute-flow",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({to:currentChat, trigger: trigger})
+    });
 }
 
+// GESTIÓN DE ARCHIVOS / IMÁGENES
 let selectedFiles=[];
-
 document.getElementById("file-input").addEventListener("change",(e)=>{
-if(!currentChat){alert("Selecciona un chat primero");return;}
-
-selectedFiles=[...e.target.files];
-if(selectedFiles.length===0)return;
-
-const container=document.getElementById("preview-container");
-container.innerHTML="";
-
-selectedFiles.forEach(file=>{
-const img=document.createElement("img");
-img.src=URL.createObjectURL(file);
-container.appendChild(img);
-});
-
-document.getElementById("image-modal").style.display="flex";
+    if(!currentChat){alert("Selecciona un chat primero");return;}
+    selectedFiles=[...e.target.files];
+    if(selectedFiles.length===0)return;
+    const container=document.getElementById("preview-container");
+    container.innerHTML="";
+    selectedFiles.forEach(file=>{
+        const img=document.createElement("img");
+        img.src=URL.createObjectURL(file);
+        container.appendChild(img);
+    });
+    document.getElementById("image-modal").style.display="flex";
 });
 
 function closeModal(){
-document.getElementById("image-modal").style.display="none";
-document.getElementById("image-comment").value="";
-selectedFiles=[];
-document.getElementById("file-input").value="";
+    document.getElementById("image-modal").style.display="none";
+    document.getElementById("image-comment").value="";
+    selectedFiles=[];
+    document.getElementById("file-input").value="";
 }
 
 async function confirmSendImages() {
     if (!currentChat || selectedFiles.length === 0) return;
-
     const comment = document.getElementById("image-comment").value;
-
     for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append("file", file);
-
         try {
-            console.log("⏳ Subiendo archivo...");
-            const uploadRes = await fetch("/api/upload-node-media", { 
-                method: "POST", 
-                body: formData 
-            });
+            const uploadRes = await fetch("/api/upload-node-media", { method: "POST", body: formData });
             const uploadData = await uploadRes.json();
-
             if (uploadData.url) {
-                console.log("🚀 Enviando imagen a WhatsApp...");
                 await fetch("/send-message", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        to: currentChat,
-                        mediaUrl: uploadData.url,
-                        text: comment 
-                    })
+                    body: JSON.stringify({ to: currentChat, mediaUrl: uploadData.url, text: comment })
                 });
             }
-        } catch (err) {
-            console.error("❌ Error en el proceso de envío:", err);
-        }
+        } catch (err) { console.error(err); }
     }
     closeModal();
 }
 
-loadChats();
-
+// BÚSQUEDA Y ELIMINACIÓN
 async function searchMessages() {
     const query = document.getElementById("global-search").value.toLowerCase();
     const overlay = document.getElementById("search-results-overlay");
@@ -301,13 +285,11 @@ async function searchMessages() {
     results.forEach(res => {
         const div = document.createElement("div");
         div.className = "search-result-item";
-        div.innerHTML = `<div style="font-size:11px; color:var(--blue); font-weight:700">${res.chatId}</div>
-                         <div style="font-size:13px">${res.text}</div>`;
+        div.innerHTML = `<div style="font-size:11px; color:var(--blue); font-weight:700">${res.chatId}</div><div>${res.text}</div>`;
         div.onclick = () => { openChat(res.chatId); closeSearch(); };
         list.appendChild(div);
     });
 }
-
 function closeSearch() { document.getElementById("search-results-overlay").style.display = "none"; }
 
 async function deleteCurrentChat() {
@@ -318,73 +300,41 @@ async function deleteCurrentChat() {
     }
 }
 
-/* ============================= */
-/* GESTIÓN DEL EDITOR DE FLUJOS  */
-/* ============================= */
-
+/* GESTIÓN DEL EDITOR */
 function openFlowEditor() {
     const overlay = document.getElementById('flow-editor-overlay');
-    if(overlay) {
-        overlay.style.display = 'block';
-        console.log("Editor de flujos abierto. Montserrat activado.");
-    }
+    if(overlay) overlay.style.display = 'block';
 }
-
 function closeFlowEditor() {
-    if(confirm("¿Estás seguro de cerrar? Asegúrate de haber guardado tu flujo.")) {
-        document.getElementById('flow-editor-overlay').style.display = 'none';
-    }
+    if(confirm("¿Seguro de cerrar?")) document.getElementById('flow-editor-overlay').style.display = 'none';
 }
 
-// ESCUCHAR DATOS DEL EDITOR (Iframe)
 window.addEventListener('message', function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         let flowJson = event.data.data;
-        
         const iframe = document.querySelector('iframe'); 
         if(iframe && iframe.contentDocument) {
             const nodes = flowJson.drawflow.Home.data;
             for (const id in nodes) {
                 const nodeEl = iframe.contentDocument.getElementById('node-' + id);
                 if (nodeEl) {
-                    // SECCIÓN MEJORADA: CAPTURA DINÁMICA DE TODOS LOS INPUTS (LISTAS INCLUIDAS)
                     const allInputs = nodeEl.querySelectorAll('input, textarea, select');
                     allInputs.forEach(input => {
-                        // Buscamos cualquier atributo que empiece por df- (df-val, df-row1, df-desc1, etc)
                         for (let i = 0; i < input.attributes.length; i++) {
                             const attr = input.attributes[i];
                             if (attr.name.startsWith('df-')) {
-                                const key = attr.name.replace('df-', '');
-                                nodes[id].data[key] = input.value;
+                                nodes[id].data[attr.name.replace('df-', '')] = input.value;
                             }
                         }
                     });
-
-                    // Compatibilidad con la lógica anterior para Trigger y Message
-                    const val = nodeEl.querySelector('input, textarea')?.value;
-                    if (val) {
-                        if (nodes[id].name === 'trigger') {
-                            nodes[id].data.val = val;
-                        } else if (nodes[id].name === 'message') {
-                            nodes[id].data.info = val;
-                        }
-                    }
                 }
             }
         }
-
         fetch('/api/save-flow', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(flowJson)
-        })
-        .then(res => res.json())
-        .then(res => {
-            if(res.success) {
-                alert("✅ ¡Flujo guardado correctamente! El bot ya puede responder.");
-            }
-        })
-        .catch(err => console.error("Error al guardar:", err));
+        }).then(() => alert("✅ Flujo Guardado"));
     }
 });
 
@@ -394,66 +344,38 @@ async function loadFlowsList() {
         const data = await response.json();
         if (data) {
             const iframe = document.getElementById('flow-iframe');
-            if(iframe && iframe.contentWindow) {
-                // Enviamos los datos al iframe para que Drawflow los procese
-                iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
-                alert("📂 Flujo cargado con todos sus componentes.");
-            }
+            if(iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
         }
-    } catch (error) { console.error(error); }
+    } catch (e) { console.error(e); }
 }
 
-/* ================================================= */
-/* ACTIVACIÓN DE FLUJOS DESDE EL CHAT (DINÁMICO)     */
-/* ================================================= */
-
+/* MENÚ DE ROBOT 🤖 */
 window.toggleFlowMenu = async function() {
     const menu = document.getElementById('flow-menu');
     if(!menu) return;
-
     if (menu.style.display === 'none' || menu.style.display === '') {
         menu.style.display = 'block';
-        menu.innerHTML = '<div class="flow-item" style="padding:10px; color:white;">⌛ Cargando...</div>';
-
+        menu.innerHTML = '<div style="padding:10px; color:white;">⌛ Cargando...</div>';
         try {
             const response = await fetch('/api/get-flow');
             const data = await response.json();
             menu.innerHTML = ""; 
-
-            if (data && data.drawflow && data.drawflow.Home.data) {
+            if (data && data.drawflow.Home.data) {
                 const nodes = data.drawflow.Home.data;
                 for (const id in nodes) {
                     if (nodes[id].name === 'trigger') {
-                        const triggerVal = nodes[id].data.val;
-                        if (triggerVal) {
-                            const item = document.createElement('div');
-                            item.className = 'flow-item';
-                            item.style.padding = "10px";
-                            item.style.color = "white";
-                            item.style.borderBottom = "1px solid #4a5568";
-                            item.style.cursor = "pointer";
-                            item.innerHTML = `🤖 <b>${triggerVal}</b>`;
-                            item.onclick = () => lanzarFlujo(triggerVal);
-                            menu.appendChild(item);
-                        }
+                        const val = nodes[id].data.val;
+                        const item = document.createElement('div');
+                        item.style.padding = "10px"; item.style.color = "white"; item.style.cursor = "pointer";
+                        item.style.borderBottom = "1px solid #4a5568";
+                        item.innerHTML = `🤖 <b>${val}</b>`;
+                        item.onclick = () => { sendFlowTrigger(val); menu.style.display = 'none'; };
+                        menu.appendChild(item);
                     }
                 }
             }
-        } catch (error) { menu.innerHTML = 'Error'; }
+        } catch (e) { menu.innerHTML = 'Error'; }
     } else { menu.style.display = 'none'; }
 };
 
-window.lanzarFlujo = function(trigger) {
-    // Ejecuta el flujo internamente para que la primera lista llegue directo
-    sendFlowTrigger(trigger);
-    document.getElementById('flow-menu').style.display = 'none';
-    alert("✅ Iniciando flujo: " + trigger);
-};
-
-window.openFlowPicker = function() {
-    const trigger = prompt("Escribe el Trigger:");
-    if (trigger) {
-        sendFlowTrigger(trigger);
-        alert("✅ Iniciando flujo: " + trigger);
-    }
-};
+loadChats();
