@@ -1,13 +1,14 @@
-/* === INICIO Y CONFIGURACIÓN (Mantén tus variables globales arriba) === */
-// Asegúrate de que estas líneas solo estén UNA VEZ en todo el archivo
+/* === INICIO Y CONFIGURACIÓN (WEBS RÁPIDAS - MONTSERRAT) === */
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
 editor.reroute = true;
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
+
+// Iniciamos el editor una sola vez para evitar conflictos
 editor.start();
 
-/* === ZOOM TOTAL AL PUNTERO (ESTO ES LO ÚNICO NUEVO) === */
+/* === ZOOM TOTAL AL PUNTERO (SIN CTRL) === */
 container.addEventListener('wheel', function(e) {
     e.preventDefault(); 
     const delta = e.deltaY > 0 ? -1 : 1;
@@ -23,12 +24,11 @@ container.addEventListener('wheel', function(e) {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Cálculo matemático para que el zoom siga al mouse
+        // Cálculo para que el zoom siga la posición del mouse
         editor.pre_canvas_x += (x - editor.pre_canvas_x) * (1 - newZoom / oldZoom);
         editor.pre_canvas_y += (y - editor.pre_canvas_y) * (1 - newZoom / oldZoom);
         editor.zoom = newZoom;
 
-        // Actualización visual forzada para que sea instantáneo
         const map = container.querySelector('.drawflow-canvas');
         if(map) {
             map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
@@ -36,51 +36,6 @@ container.addEventListener('wheel', function(e) {
         editor.updateZoom();
     }
 }, { passive: false });
-
-/* === DESPUÉS DE ESTO, DEJA TODO TU CÓDIGO ORIGINAL TAL CUAL === */
-// No borres tus funciones addTriggerNode, addMessageNode, addRowDynamic, etc.
-
-/* === LÓGICA DE POSICIONAMIENTO AUTOMÁTICO === */
-let lastNodeX = 50;
-let lastNodeY = 150;
-const nodeWidth = 380;
-
-function createNode(type, inputs, outputs, html, data = {}) {
-    const nodeId = editor.addNode(type, inputs, outputs, lastNodeX, lastNodeY, type, data, html);
-    lastNodeX += nodeWidth; 
-    if (lastNodeX > 2000) { lastNodeX = 50; lastNodeY += 400; }
-    
-    setTimeout(() => {
-        const nodeElem = document.getElementById(`node-${nodeId}`);
-        if (nodeElem) {
-            const closeBtn = document.createElement("div");
-            closeBtn.innerHTML = "×";
-            closeBtn.className = "node-close-btn";
-            closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
-            nodeElem.appendChild(closeBtn);
-        }
-    }, 100);
-    return nodeId;
-}
-editor.start();
-
-/* FORZAR ZOOM EN POSICIÓN DEL MOUSE */
-container.addEventListener('wheel', function(e) {
-    if (e.ctrlKey === false) {
-        // Esta función interna de Drawflow calcula la posición del mouse automáticamente
-        editor.zoom_on_mousewheel(e);
-    }
-}, { passive: false });
-editor.start();
-
-// Esta lógica fuerza al editor a centrar el zoom donde esté el mouse
-container.addEventListener('wheel', function(e) {
-    if (e.ctrlKey === false) {
-        editor.zoom_on_mousewheel(e);
-    }
-}, { passive: false });
-
-editor.start();
 
 /* === LÓGICA DE POSICIONAMIENTO AUTOMÁTICO === */
 let lastNodeX = 50;
@@ -114,12 +69,13 @@ function createNode(type, inputs, outputs, html, data = {}) {
 
     return nodeId;
 }
+
+/* === NODOS BÁSICOS === */
 window.addTriggerNode = () => createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><input type="text" class="form-control" df-val></div></div>`, { val: '' });
 window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><textarea class="form-control" df-info></textarea></div></div>`, { info: '' });
 window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
 
-/* LISTA CORREGIDA: MÉTODO DE BÚSQUEDA DINÁMICA */
-/* LISTA CORREGIDA CON COMENTARIOS */
+/* === NODO LISTA Y FILAS DINÁMICAS === */
 window.addListNode = function() {
     const html = `
         <div class="node-wrapper">
@@ -139,7 +95,6 @@ window.addListNode = function() {
             </div>
         </div>`;
     
-    // Inicializamos row1 y desc1 vacíos en la data
     createNode("whatsapp_list", 1, 1, html, { 
         list_title: '', 
         button_text: '', 
@@ -148,14 +103,13 @@ window.addListNode = function() {
     });
 };
 
-/* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS - CORREGIDA */
 window.addRowDynamic = function(button) {
     const nodeElement = button.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
-    const container = nodeElement.querySelector('.items-container');
+    const containerRows = nodeElement.querySelector('.items-container');
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
-    const count = container.querySelectorAll(".row-group").length + 1;
+    const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
 
@@ -190,15 +144,15 @@ window.addRowDynamic = function(button) {
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
-    container.appendChild(group);
+    containerRows.appendChild(group);
 
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
     
     editor.updateConnectionNodes(`node-${nodeId}`);
-}; // Aquí termina correctamente addRowDynamic
+};
 
-// === FUNCIÓN DE GUARDAR (FUERA DE OTRAS FUNCIONES) ===
+/* === GUARDAR Y CARGAR === */
 window.saveFlow = function() {
     const data = editor.export();
     console.log("Exportando datos:", data);
@@ -225,7 +179,7 @@ window.addEventListener('message', e => {
     if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
 });
 
-/* MEDIA NODE */
+/* === MEDIA NODE === */
 window.addMediaNode = () => {
     const nodeId = editor.node_id + 1;
     createNode("media", 1, 1, `
@@ -259,11 +213,9 @@ window.uploadNodeFile = async (event, nodeId) => {
         }
     } catch (e) { status.innerText = "❌ Error"; }
 };
-function addNotifyNode() {
-    // Calculamos la posición para que aparezca junto al anterior
-    const pos_x = editor.pre_canvas_x + 50;
-    const pos_y = editor.pre_canvas_y + 50;
 
+/* === NOTIFY NODE === */
+window.addNotifyNode = function() {
     const html = `
         <div>
             <div class="title-box" style="font-family: 'Montserrat', sans-serif; background: #ff9800; color: white; padding: 8px; border-radius: 5px 5px 0 0; font-size: 12px; font-weight: bold;">
@@ -275,10 +227,10 @@ function addNotifyNode() {
             </div>
         </div>
     `;
-
-    // Añadimos el nodo con 1 entrada y 1 salida
-    editor.addNode('notify', 1, 1, pos_x, pos_y, 'notify', { info: '' }, html);
+    createNode('notify', 1, 1, html, { info: '' });
 }
+
+/* === IMPORTAR ARCHIVO Y RECONSTRUIR FILAS === */
 document.getElementById('import_file').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -287,44 +239,27 @@ document.getElementById('import_file').addEventListener('change', function(e) {
     reader.onload = function(e) {
         try {
             const flowData = JSON.parse(e.target.result);
-            
-            // 1. Cargar los datos al editor visual
             editor.import(flowData);
             
-            // 2. RECONSTRUCCIÓN DE FILAS Y COMENTARIOS
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
-                    
                     if (node.name === "whatsapp_list") {
                         const btn = document.querySelector(`#node-${nodeId} .btn-success`);
-                        
                         if (btn) {
                             let i = 2;
                             while (node.data[`row${i}`] !== undefined) {
-                                // Creamos visualmente el grupo (Título + Comentario)
                                 window.addRowDynamic(btn);
-                                
-                                // Rellenamos el Título
                                 const inputRow = document.querySelector(`#node-${nodeId} [df-row${i}]`);
-                                if (inputRow) {
-                                    inputRow.value = node.data[`row${i}`];
-                                }
+                                if (inputRow) inputRow.value = node.data[`row${i}`];
 
-                                // Rellenamos el Comentario (desc)
                                 const inputDesc = document.querySelector(`#node-${nodeId} [df-desc${i}]`);
-                                if (inputDesc) {
-                                    inputDesc.value = node.data[`desc${i}`] || "";
-                                }
+                                if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
                                 i++;
                             }
-
-                            // No olvidar rellenar el comentario de la Fila 1 (que ya existe por defecto)
                             const desc1 = document.querySelector(`#node-${nodeId} [df-desc1]`);
-                            if (desc1 && node.data.desc1) {
-                                desc1.value = node.data.desc1;
-                            }
+                            if (desc1 && node.data.desc1) desc1.value = node.data.desc1;
                         }
                     }
                 });
