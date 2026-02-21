@@ -84,25 +84,26 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // --- 1. LISTA (Prioridad) ---
+                   // --- 1. LISTA (Prioridad) ---
 const activeListNode = Object.values(nodes).find(n => {
     if (n.name !== "whatsapp_list") return false;
-    // Buscamos específicamente en las keys que empiezan con "row"
     return Object.keys(n.data).some(k => 
-        k.startsWith("row") && n.data[k]?.toString().toLowerCase() === incomingText.toLowerCase()
+        k.startsWith("row") && n.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
     );
 });
 
 if (activeListNode) {
-    // Encontramos exactamente qué fila (row1, row2, etc.) pulsó el usuario
     const rowKey = Object.keys(activeListNode.data).find(k => 
-        k.startsWith("row") && activeListNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase()
+        k.startsWith("row") && activeListNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
     );
     
     if (rowKey) {
-        const outNum = rowKey.replace("row", ""); // Extrae el número de salida
+        // CORRECCIÓN: Usamos una expresión regular para extraer SOLO los números
+        const outNum = rowKey.match(/\d+/)[0]; 
         const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
+        
         if (conn) {
+            console.log(`✅ Coincidencia: ${incomingText} -> Salida: ${outNum}`);
             await processSequence(sender, nodes[conn.node], nodes);
             return res.sendStatus(200);
         }
