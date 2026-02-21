@@ -197,27 +197,44 @@ selectedFiles=[];
 document.getElementById("file-input").value="";
 }
 
-async function confirmSendImages(){
-if(!currentChat)return;
+async function confirmSendImages() {
+    if (!currentChat || selectedFiles.length === 0) return;
 
-for(const file of selectedFiles){
-const formData=new FormData();
-formData.append("file",file);
-formData.append("to",currentChat);
-await fetch("/send-media",{method:"POST",body:formData});
-}
+    const comment = document.getElementById("image-comment").value;
 
-const comment=document.getElementById("image-comment").value;
+    // Procesamos cada archivo seleccionado
+    for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
 
-if(comment.trim()!==""){
-await fetch("/send-message",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({to:currentChat,text:comment})
-});
-}
+        try {
+            console.log("⏳ Subiendo archivo...");
+            // 1. Subimos el archivo a tu carpeta /uploads
+            const uploadRes = await fetch("/api/upload-node-media", { 
+                method: "POST", 
+                body: formData 
+            });
+            const uploadData = await uploadRes.json();
 
-closeModal();
+            if (uploadData.url) {
+                console.log("🚀 Enviando imagen a WhatsApp...");
+                // 2. Enviamos a la ruta /send-message que SÍ existe en tu server.js
+                await fetch("/send-message", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        to: currentChat,
+                        mediaUrl: uploadData.url, // El server completará la URL con el dominio
+                        text: comment // El comentario del modal se envía como texto/caption
+                    })
+                });
+            }
+        } catch (err) {
+            console.error("❌ Error en el proceso de envío:", err);
+        }
+    }
+
+    closeModal();
 }
 
 loadChats();
