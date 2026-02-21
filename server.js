@@ -70,7 +70,6 @@ app.post("/webhook", async (req, res) => {
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            // Captura texto de mensajes normales o de respuestas interactivas (Listas/Botones)
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -87,23 +86,7 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // 1. LÓGICA DE TRIGGER (INICIO DE FLUJO)
-                    const triggerNode = Object.values(nodes).find(n => 
-                        n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                    );
-                    
-                    if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
-                        return await processSequence(sender, nodes[firstNextNodeId], nodes);
-                    }
-
-try {
-                const flowDoc = await Flow.findOne({ name: "Main Flow" });
-                if (flowDoc && incomingText) {
-                    const nodes = flowDoc.data.drawflow.Home.data;
-
                     // --- 1. PRIORIDAD: LÓGICA DE CONTINUACIÓN POR LISTA ---
-                    // Buscamos primero si el mensaje es la respuesta a una lista activa
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(val => val && val.trim().toLowerCase() === incomingText.toLowerCase());
@@ -117,17 +100,15 @@ try {
                         if (rowKey) {
                             const outputNum = rowKey.replace('row', 'output_'); 
                             const connection = activeListNode.outputs[outputNum]?.connections[0];
-                            
                             if (connection) {
                                 const nextNodeId = connection.node;
                                 await processSequence(sender, nodes[nextNodeId], nodes);
-                                return res.sendStatus(200); // FINALIZA: Encontró la opción de la lista
+                                return res.sendStatus(200); // FINALIZA: Evita bucles
                             }
                         }
                     }
 
-                    // --- 2. SECUNDARIO: LÓGICA DE TRIGGER (INICIO DE FLUJO) ---
-                    // Solo si no fue una respuesta de lista, revisamos si es una palabra clave de inicio
+                    // --- 2. SECUNDARIO: LÓGICA DE TRIGGER ---
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
@@ -135,10 +116,15 @@ try {
                     if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
                         const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
                         await processSequence(sender, nodes[firstNextNodeId], nodes);
-                        return res.sendStatus(200); // FINALIZA: Inició un flujo nuevo
+                        return res.sendStatus(200);
                     }
                 }
             } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
+        }
+    }
+    res.sendStatus(200);
+});
+
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
@@ -146,9 +132,8 @@ async function processSequence(to, node, allNodes) {
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
-    // Manejo de tipos de nodo
     if (node.name === "message" || node.name === "ia") {
-        botText = node.data.info || "Base S/380. WhatsApp: 991138132";
+        botText = node.data.info || "Servicios Webs Rápidas 🚀";
         payload.type = "text";
         payload.text = { body: botText };
     } 
@@ -190,16 +175,11 @@ async function processSequence(to, node, allNodes) {
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        // === CRUCIAL: Bloqueo de secuencia si es Lista ===
-        if (node.name === "whatsapp_list") {
-            console.log(`⏳ Nodo Lista enviado. Esperando acción del usuario ${to}...`);
-            return; // Detiene el flujo automático aquí
-        }
+        if (node.name === "whatsapp_list") return; // STOP: Espera al usuario
 
-        // Seguir al siguiente nodo si hay conexión en output_1 (para mensajes planos o media)
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1500)); 
+            await new Promise(r => setTimeout(r, 1200)); 
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
     } catch (err) { 
@@ -260,5 +240,5 @@ app.get("/api/get-flow", async (req, res) => {
 });
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo 3 - Navegación de Listas Activa");
+    console.log("🚀 Server Punto Nemo 3 - Arreglado y Estable");
 });
