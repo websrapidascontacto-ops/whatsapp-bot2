@@ -179,23 +179,33 @@ else if (node.name === "notify") {
     return; // Si no hay conexión, se detiene aquí.
 }
     else if (node.name === "whatsapp_list") {
-        const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ 
-                id: `row_${node.id}_${i}`, 
-                title: node.data[k].substring(0, 24) 
-            }));
+        try {
+            const rows = Object.keys(node.data)
+                .filter(k => k.startsWith("row") && node.data[k])
+                .map((k, i) => ({ 
+                    id: `row_${node.id}_${i}`, 
+                    title: node.data[k].toString().substring(0, 24) // Forzamos 24 chars
+                }));
 
-        payload.type = "interactive";
-        payload.interactive = {
-            type: "list",
-            body: { text: node.data.list_title || "Selecciona una opción:" },
-            action: { 
-                button: node.data.button_text || "Ver opciones", 
-                sections: [{ title: "Opciones", rows }] 
+            if (rows.length === 0) {
+                console.error("❌ Error: La lista no tiene filas configuradas");
+                return;
             }
-        };
-        botText = "📋 Menú enviado";
+
+            payload.type = "interactive";
+            payload.interactive = {
+                type: "list",
+                header: { type: "text", text: "Menú de Opciones" },
+                body: { text: node.data.list_title || "Selecciona una de nuestras opciones:" },
+                action: { 
+                    button: (node.data.button_text || "Ver opciones").substring(0, 20), 
+                    sections: [{ title: "Servicios", rows }] 
+                }
+            };
+            botText = "📋 Menú enviado";
+        } catch (e) {
+            console.error("❌ Error construyendo payload de lista:", e.message);
+        }
     }
 
     try {
