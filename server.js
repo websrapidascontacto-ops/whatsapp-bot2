@@ -14,10 +14,8 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 /* ========================= CONFIGURACIÓN DE RUTAS ========================= */
-// Importante: Definimos que las imágenes se guarden y lean desde 'chat/uploads'
-const chatPath = path.join(__dirname, "chat");
-const uploadsPath = path.join(chatPath, "uploads");
-
+// 1. Las imágenes se guardan en la raíz del proyecto para evitar confusiones de rutas
+const uploadsPath = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
 }
@@ -25,9 +23,10 @@ if (!fs.existsSync(uploadsPath)) {
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Servir archivos estáticos: Esto elimina los errores 404
-app.use(express.static(chatPath)); 
-app.use("/uploads", express.static(uploadsPath)); 
+// 2. Servir archivos estáticos (IMPORTANTE: Mantenemos el orden)
+app.use(express.static(path.join(__dirname, "chat"))); // El CRM
+app.use("/uploads", express.static(uploadsPath));      // Las fotos
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ Mongo Conectado"));
@@ -62,7 +61,6 @@ async function processSequence(to, node, allNodes) {
         else if (node.name === "media") {
             const pathMedia = node.data.media_url; 
             if (pathMedia) {
-                // Generar URL absoluta para Meta
                 const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
                 const fullUrl = pathMedia.startsWith('http') ? pathMedia : `https://${domain}${pathMedia}`;
                 payload.type = "image";
@@ -90,15 +88,14 @@ async function processSequence(to, node, allNodes) {
         const saved = await Message.create({ chatId: to, from: "me", text: botText, mediaUrl: mediaForDb });
         broadcast({ type: "new_message", message: saved });
 
-        // Si es lista, NO continuamos automáticamente, esperamos la respuesta del usuario
-        if (node.name === "whatsapp_list") return;
+        if (node.name === "whatsapp_list") return; // Detener flujo para esperar respuesta
 
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1500));
             return await processSequence(to, allNodes[nextId], allNodes);
         }
-    } catch (err) { console.error("❌ Error Bot:", err.response?.data || err.message); }
+    } catch (err) { console.error("❌ Error Bot:", err.message); }
 }
 
 /* ========================= WEBHOOK ========================= */
@@ -117,20 +114,20 @@ app.post("/webhook", async (req, res) => {
             if (flowDoc) {
                 const nodes = flowDoc.data.drawflow.Home.data;
 
-                // 1. Verificar si el texto es un TRIGGER inicial
+                // 1. Trigger inicial
                 const trigger = Object.values(nodes).find(n => n.name === "trigger" && n.data.val?.toLowerCase() === text.toLowerCase());
                 if (trigger && trigger.outputs.output_1.connections[0]) {
                     return processSequence(sender, nodes[trigger.outputs.output_1.connections[0].node], nodes);
                 }
 
-                // 2. Verificar si es una respuesta a una LISTA (Evita el bucle)
+                // 2. Respuesta a Lista (Fix Bucle)
                 const listNode = Object.values(nodes).find(n => n.name === "whatsapp_list" && 
                     Object.values(n.data).some(v => v.toString().toLowerCase() === text.toLowerCase()));
                 
                 if (listNode) {
                     const rowKey = Object.keys(listNode.data).find(k => listNode.data[k].toString().toLowerCase() === text.toLowerCase());
-                    const outputNum = rowKey.replace('row', 'output_');
-                    const conn = listNode.outputs[outputNum]?.connections?.[0];
+                    const outId = rowKey.replace('row', 'output_');
+                    const conn = listNode.outputs[outId]?.connections?.[0];
                     if (conn) return processSequence(sender, nodes[conn.node], nodes);
                 }
             }
@@ -139,12 +136,20 @@ app.post("/webhook", async (req, res) => {
     res.sendStatus(200);
 });
 
-/* ========================= APIS CRM & EDITOR ========================= */
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsPath),
-    filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+/* ========================= ENDPOINTS CRM / API ========================= */
+
+// FIX: Endpoint para enviar mensajes desde app.js
+app.post("/send-message", async (req, res) => {
+    const { to, text } = req.body;
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, 
+            { messaging_product: "whatsapp", to, text: { body: text } },
+            { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+        const saved = await Message.create({ chatId: to, from: "me", text });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
-const upload = multer({ storage });
 
 app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
     res.json({ url: `/uploads/${req.file.filename}` });
@@ -170,4 +175,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Montserrat Ready"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Montserrat v2"));
