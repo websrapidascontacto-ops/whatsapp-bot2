@@ -195,7 +195,6 @@ else if (node.name === "notify") {
             payload.type = "interactive";
             payload.interactive = {
                 type: "list",
-                header: { type: "text", text: "Menú de Opciones" },
                 body: { text: node.data.list_title || "Selecciona una de nuestras opciones:" },
                 action: { 
                     button: (node.data.button_text || "Ver opciones").substring(0, 20), 
