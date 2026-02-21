@@ -347,14 +347,20 @@ window.addEventListener('message', function(event) {
             for (const id in nodes) {
                 const nodeEl = iframe.contentDocument.getElementById('node-' + id);
                 if (nodeEl) {
-                    const allInputs = nodeEl.querySelectorAll('input, textarea');
+                    // SECCIÓN MEJORADA: CAPTURA DINÁMICA DE TODOS LOS INPUTS (LISTAS INCLUIDAS)
+                    const allInputs = nodeEl.querySelectorAll('input, textarea, select');
                     allInputs.forEach(input => {
-                        const attr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
-                        if (attr) {
-                            const key = attr.name.replace('df-', '');
-                            nodes[id].data[key] = input.value;
+                        // Buscamos cualquier atributo que empiece por df- (df-val, df-row1, df-desc1, etc)
+                        for (let i = 0; i < input.attributes.length; i++) {
+                            const attr = input.attributes[i];
+                            if (attr.name.startsWith('df-')) {
+                                const key = attr.name.replace('df-', '');
+                                nodes[id].data[key] = input.value;
+                            }
                         }
                     });
+
+                    // Compatibilidad con la lógica anterior para Trigger y Message
                     const val = nodeEl.querySelector('input, textarea')?.value;
                     if (val) {
                         if (nodes[id].name === 'trigger') {
@@ -389,8 +395,9 @@ async function loadFlowsList() {
         if (data) {
             const iframe = document.getElementById('flow-iframe');
             if(iframe && iframe.contentWindow) {
+                // Enviamos los datos al iframe para que Drawflow los procese
                 iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
-                alert("📂 Flujo cargado. Precio base: S/380");
+                alert("📂 Flujo cargado con todos sus componentes.");
             }
         }
     } catch (error) { console.error(error); }
