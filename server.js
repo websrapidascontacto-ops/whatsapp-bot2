@@ -6,7 +6,6 @@ const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
 const axios = require("axios");
-const FormData = require("form-data");
 require("dotenv").config();
 
 const app = express();
@@ -18,20 +17,19 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 const chatPath = path.join(__dirname, "chat");
-const uploadsPath = path.join(chatPath, "uploads");
+// CAMBIO: Ponemos la carpeta uploads en la raíz para que sea /uploads directamente
+const uploadsPath = path.join(__dirname, "uploads"); 
 
 if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
 }
 
-app.use(express.static(chatPath));
+// CAMBIO: Ahora sí, /uploads apuntará a la carpeta física correcta
 app.use("/uploads", express.static(uploadsPath));
-app.get('/favicon.ico', (req, res) => res.status(204).end());
-app.get("/", (req, res) => res.redirect("/index.html"));
-
+app.use(express.static(chatPath));
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado - Punto Nemo Arreglado"))
+    .then(() => console.log("✅ Mongo conectado - Punto Nemo Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
@@ -64,13 +62,12 @@ async function downloadMedia(mediaId, fileName) {
     } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK PRINCIPAL (CORREGIDO) ========================= */
+/* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            // Captura texto, respuesta de lista o respuesta de botón
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -87,7 +84,7 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // --- 1. PRIORIDAD: CONTINUACIÓN DE LISTA (Punto Nemo Fix) ---
+                    // --- 1. LISTA (Prioridad) ---
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(v => v && v.toString().toLowerCase() === incomingText.toLowerCase());
@@ -98,31 +95,26 @@ app.post("/webhook", async (req, res) => {
                             activeListNode.data[k] && activeListNode.data[k].toString().toLowerCase() === incomingText.toLowerCase()
                         );
                         if (rowKey) {
-                            // Extrae el número de la fila (ej: "row1" -> "1")
                             const outNum = rowKey.replace(/\D/g, ""); 
                             const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
                             if (conn) {
-                                console.log(`🔗 Saltando al nodo: ${conn.node} desde la opción: ${incomingText}`);
                                 await processSequence(sender, nodes[conn.node], nodes);
-                                return res.sendStatus(200); // Detiene aquí para evitar el trigger inicial
+                                return res.sendStatus(200);
                             }
                         }
                     }
 
-                    // --- 2. TRIGGER INICIAL (Si no es respuesta de lista) ---
+                    // --- 2. TRIGGER ---
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
                     
                     if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
-                        await processSequence(sender, nodes[firstNextNodeId], nodes);
+                        await processSequence(sender, nodes[triggerNode.outputs.output_1.connections[0].node], nodes);
                         return res.sendStatus(200);
                     }
                 }
-            } catch (err) { 
-                console.error("❌ Error Webhook Logic:", err.message); 
-            }
+            } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
         }
     }
     res.sendStatus(200);
@@ -140,26 +132,19 @@ async function processSequence(to, node, allNodes) {
         payload.type = "text";
         payload.text = { body: botText };
     } 
-   else if (node.name === "media") {
-        // Buscamos la URL en todas las variables posibles que usa tu editor
+    else if (node.name === "media") {
         const mediaPath = node.data.url || node.data.media_url || node.data.info || node.data.val;
         const caption = node.data.caption || node.data.text || "";
         
-        if (mediaPath && mediaPath !== "") {
+        if (mediaPath) {
             const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-            const fullUrl = mediaPath.startsWith('/uploads/') 
-                ? `https://${domain}${mediaPath}` 
-                : mediaPath;
+            // Limpiamos la ruta para que no tenga dobles slashes
+            const cleanPath = mediaPath.startsWith('/uploads/') ? mediaPath : `/uploads/${mediaPath.split('/').pop()}`;
+            const fullUrl = `https://${domain}${cleanPath}`;
 
             payload.type = "image";
             payload.image = { link: fullUrl, caption: caption };
             botText = `🖼️ Imagen: ${caption}`;
-        } else {
-            // Log para debug: nos dirá en consola qué datos tiene el nodo realmente
-            console.log("⚠️ Datos del nodo media detectados:", node.data);
-            payload.type = "text";
-            payload.text = { body: "⚠️ No se encontró la ruta de la imagen en los datos del nodo." };
-            botText = "⚠️ Error: Ruta no encontrada";
         }
     }
     else if (node.name === "whatsapp_list") {
@@ -176,7 +161,7 @@ async function processSequence(to, node, allNodes) {
             body: { text: node.data.list_title || "Selecciona una opción:" },
             action: { 
                 button: node.data.button_text || "Ver opciones", 
-                sections: [{ title: "Opciones disponibles", rows }] 
+                sections: [{ title: "Opciones", rows }] 
             }
         };
         botText = "📋 Menú enviado";
@@ -190,16 +175,14 @@ async function processSequence(to, node, allNodes) {
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        if (node.name === "whatsapp_list") return; // STOP: Espera al usuario
+        if (node.name === "whatsapp_list") return;
 
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1200)); 
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
-    } catch (err) { 
-        console.error("❌ Error en processSequence:", err.response?.data || err.message); 
-    }
+    } catch (err) { console.error("❌ Error Envío Bot:", err.response?.data || err.message); }
 }
 
 /* ========================= APIS Y SUBIDAS ========================= */
@@ -220,45 +203,28 @@ app.post("/send-message", async (req, res) => {
     const { to, text, mediaUrl } = req.body;
     try {
         let payload = { messaging_product: "whatsapp", to };
-        
         if (mediaUrl) {
-            // --- ESTE ES EL ARREGLO ---
-            // Si la URL empieza con /uploads, le pegamos tu dominio de Railway
-            let finalUrl = mediaUrl;
-            if (mediaUrl.startsWith('/uploads/')) {
-                const domain = process.env.RAILWAY_STATIC_URL || req.get('host');
-                const protocol = req.protocol === 'https' ? 'https' : 'https'; // Forzamos https para WhatsApp
-                finalUrl = `${protocol}://${domain}${mediaUrl}`;
-            }
-
+            const domain = process.env.RAILWAY_STATIC_URL || req.get('host');
+            const fullUrl = `https://${domain}${mediaUrl}`;
             payload.type = "image";
-            payload.image = { link: finalUrl, caption: text || "" };
+            payload.image = { link: fullUrl, caption: text || "" };
         } else {
             payload.type = "text";
             payload.text = { body: text };
         }
-
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
-
-        const saved = await Message.create({ 
-            chatId: to, 
-            from: "me", 
-            text: text || (mediaUrl ? "📷 Imagen enviada" : ""), 
-            media: mediaUrl || null 
-        });
-        
+        const saved = await Message.create({ chatId: to, from: "me", text: text || "📷 Imagen", media: mediaUrl });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
-    } catch (e) { 
-        console.error("❌ Error enviando:", e.response?.data || e.message);
-        res.status(500).json({ error: e.message }); 
-    }
-});app.get("/chats", async (req, res) => {
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
-        { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, 
+        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
         { $sort: { lastTime: -1 } }
     ]);
     res.json(chats);
@@ -282,5 +248,5 @@ app.get("/api/get-flow", async (req, res) => {
 });
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo 3 - Arreglado y Estable");
+    console.log("🚀 Server Punto Nemo Estable - Carpeta uploads corregida");
 });
