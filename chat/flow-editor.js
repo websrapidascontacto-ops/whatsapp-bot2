@@ -34,20 +34,33 @@ window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrap
 window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
 
 /* LISTA CORREGIDA: MÉTODO DE BÚSQUEDA DINÁMICA */
+/* LISTA CORREGIDA CON COMENTARIOS */
 window.addListNode = function() {
     const html = `
         <div class="node-wrapper">
-            <div class="node-header header-list">📝 Lista</div>
+            <div class="node-header header-list" style="font-family: 'Montserrat', sans-serif;">📝 Lista</div>
             <div class="node-body">
-                <input type="text" class="form-control mb-1" df-list_title placeholder="Título">
-                <input type="text" class="form-control mb-1" df-button_text placeholder="Botón">
+                <input type="text" class="form-control mb-1" df-list_title placeholder="Título de la lista" style="font-family: 'Montserrat';">
+                <input type="text" class="form-control mb-1" df-button_text placeholder="Texto del Botón" style="font-family: 'Montserrat';">
+                
                 <div class="items-container">
-                    <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
+                    <div class="row-group mb-2" style="border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;">
+                        <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1 (Título)" style="font-family: 'Montserrat';">
+                        <input type="text" class="form-control" df-desc1 placeholder="Comentario (Opcional)" style="font-family: 'Montserrat'; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;">
+                    </div>
                 </div>
-                <button class="btn btn-sm btn-success w-100 mt-2" onclick="addRowDynamic(this)">+ Fila</button>
+                
+                <button class="btn btn-sm btn-success w-100 mt-2" onclick="addRowDynamic(this)" style="font-family: 'Montserrat';">+ Añadir Fila</button>
             </div>
         </div>`;
-    createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
+    
+    // Inicializamos row1 y desc1 vacíos en la data
+    createNode("whatsapp_list", 1, 1, html, { 
+        list_title: '', 
+        button_text: '', 
+        row1: '', 
+        desc1: '' 
+    });
 };
 
 /* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS */
@@ -56,49 +69,57 @@ window.addRowDynamic = function(button) {
     const nodeElement = button.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const container = nodeElement.querySelector('.items-container');
-    
-    // Acceso correcto a la data del nodo
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
-    // Contamos inputs para saber qué número de fila sigue
-    const count = container.querySelectorAll("input").length + 1;
-    const key = `row${count}`;
+    // Contamos cuántos grupos de filas hay para saber el índice (row2, row3...)
+    const count = container.querySelectorAll(".row-group").length + 1;
+    const keyRow = `row${count}`;
+    const keyDesc = `desc${count}`;
 
-    // --- MEJORA PARA EVITAR PUNTOS EXTRAS ---
-    // Solo añadimos salida si la fila nueva NO tiene una salida asignada ya
+    // 1. Solo añadimos salida si el grupo nuevo no tiene una salida asignada
     const currentOutputs = Object.keys(editor.drawflow.drawflow.Home.data[nodeId].outputs).length;
     if (count > currentOutputs) {
         editor.addNodeOutput(nodeId);
     }
 
-    // Crear el input con Montserrat
-    const input = document.createElement("input");
-    input.className = "form-control mb-1";
-    input.style.fontFamily = "Montserrat, sans-serif";
-    input.placeholder = `Fila ${count}`;
+    // 2. Crear el contenedor del grupo (Título + Comentario)
+    const group = document.createElement("div");
+    group.className = "row-group mb-2";
+    group.style.borderBottom = "1px solid #444";
+    group.style.paddingBottom = "8px";
+    group.style.marginTop = "10px";
 
-    // ASIGNACIÓN CLAVE: Esto vincula el input con el JSON de exportación
-    input.setAttribute(`df-${key}`, ""); 
+    // 3. Crear Input de Título (Fila)
+    const inputRow = document.createElement("input");
+    inputRow.className = "form-control mb-1";
+    inputRow.style.fontFamily = "Montserrat, sans-serif";
+    inputRow.placeholder = `Fila ${count} (Título)`;
+    inputRow.setAttribute(`df-${keyRow}`, "");
+    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
 
-    // Sincronización en tiempo real
-    input.addEventListener('input', (e) => {
-        nodeData[key] = e.target.value;
-    });
+    // 4. Crear Input de Comentario (Descripción)
+    const inputDesc = document.createElement("input");
+    inputDesc.className = "form-control";
+    inputDesc.style.fontFamily = "Montserrat, sans-serif";
+    inputDesc.style.fontSize = "11px";
+    inputDesc.style.height = "28px";
+    inputDesc.style.background = "#f0f0f0";
+    inputDesc.style.color = "#333";
+    inputDesc.placeholder = "Comentario opcional";
+    inputDesc.setAttribute(`df-${keyDesc}`, "");
+    inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
-    container.appendChild(input);
+    // 5. Unir todo
+    group.appendChild(inputRow);
+    group.appendChild(inputDesc);
+    container.appendChild(group);
 
-    // Inicializar el valor en el objeto de datos si no existe
-    if (nodeData[key] === undefined) {
-        nodeData[key] = "";
-    }
+    // Inicializar datos
+    nodeData[keyRow] = "";
+    nodeData[keyDesc] = "";
     
-    // Refrescar el nodo para que Drawflow registre el nuevo atributo df-*
     editor.updateConnectionNodes(`node-${nodeId}`);
-};window.saveFlow = function() {
-    const data = editor.export();
-    fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Flujo Guardado"));
 };
-
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
 
 /* MEDIA NODE */
