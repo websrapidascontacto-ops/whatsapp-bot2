@@ -1,270 +1,219 @@
 const express = require("express");
-const http = require("http");
-const mongoose = require("mongoose");
 const WebSocket = require("ws");
+const mongoose = require("mongoose");
 const path = require("path");
-const multer = require("multer");
-const fs = require("fs");
+const multer = require("multer"); 
 const axios = require("axios");
+const fs = require("fs");
 const FormData = require("form-data");
 require("dotenv").config();
 
+// Importación de modelos (Asegúrate de que tu modelo Message tenga el campo mediaUrl)
+const Message = require("./models/Message");
+
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
 
-/* ========================= CONFIGURACIÓN ========================= */
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
-const chatPath = path.join(__dirname, "chat");
-const uploadsPath = path.join(chatPath, "uploads");
-
-if (!fs.existsSync(uploadsPath)) {
-    fs.mkdirSync(uploadsPath, { recursive: true });
-}
-
-app.use(express.static(chatPath));
-app.use("/uploads", express.static(uploadsPath));
-app.get('/favicon.ico', (req, res) => res.status(204).end());
-app.get("/", (req, res) => res.redirect("/index.html"));
-
-/* ========================= MONGODB ========================= */
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado - Punto Nemo Arreglado"))
-    .catch(err => console.error("❌ Error Mongo:", err));
-
-const Message = mongoose.model("Message", new mongoose.Schema({
-    chatId: String, from: String, text: String, mediaUrl: String, timestamp: { type: Date, default: Date.now }
-}));
-
-const Flow = mongoose.model("Flow", new mongoose.Schema({
-    name: { type: String, default: "Main Flow" },
-    data: { type: Object, required: true }
-}));
-
-/* ========================= WEBSOCKET ========================= */
-function broadcast(data) {
-    wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
-}
-
-/* ========================= WHATSAPP MEDIA DOWNLOADER ========================= */
-async function downloadMedia(mediaId, fileName) {
-    try {
-        const resUrl = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        const response = await axios.get(resUrl.data.url, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` },
-            responseType: 'arraybuffer'
-        });
-        const filePath = path.join(uploadsPath, fileName);
-        fs.writeFileSync(filePath, response.data);
-        return `/uploads/${fileName}`;
-    } catch (e) { return null; }
-}
-
-/* ========================= WEBHOOK PRINCIPAL ========================= */
-app.post("/webhook", async (req, res) => {
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
-    if (value?.messages) {
-        for (const msg of value.messages) {
-            const sender = msg.from;
-            let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
-            let mediaUrl = null;
-
-            if (msg.type === "image") {
-                mediaUrl = await downloadMedia(msg.image.id, `${Date.now()}-${sender}.jpg`);
-                incomingText = msg.image.caption || "📷 Imagen recibida";
-            }
-
-            const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, mediaUrl: mediaUrl });
-            broadcast({ type: "new_message", message: saved });
-            
-            try {
-                const flowDoc = await Flow.findOne({ name: "Main Flow" });
-                if (flowDoc && incomingText) {
-                    const nodes = flowDoc.data.drawflow.Home.data;
-
-                    const triggerNode = Object.values(nodes).find(n => 
-                        n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                    );
-                    
-                    if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
-                        return await processSequence(sender, nodes[firstNextNodeId], nodes);
-                    }
-
-                    const activeListNode = Object.values(nodes).find(n => {
-                        if (n.name !== "whatsapp_list") return false;
-                        return Object.values(n.data).some(val => val.trim().toLowerCase() === incomingText.toLowerCase());
-                    });
-
-                    if (activeListNode) {
-                        const rowKey = Object.keys(activeListNode.data).find(k => 
-                            activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
-                        );
-                        
-                        if (rowKey) {
-                            const outputNum = rowKey.replace('row', 'output_'); 
-                            const connection = activeListNode.outputs[outputNum]?.connections[0];
-                            
-                            if (connection) {
-                                const nextNodeId = connection.node;
-                                return await processSequence(sender, nodes[nextNodeId], nodes);
-                            }
-                        }
-                    }
-                }
-            } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
-        }
-    }
-    res.sendStatus(200);
-});
-
-/* ========================= PROCESADOR DE SECUENCIA ========================= */
-async function processSequence(to, node, allNodes) {
-    if (!node) return;
-
-    let payload = { messaging_product: "whatsapp", to };
-    let botText = "";
-    let mediaForDb = null;
-
-    if (node.name === "message" || node.name === "ia") {
-        botText = node.data.info || "Base S/380. WhatsApp: 991138132";
-        payload.type = "text";
-        payload.text = { body: botText };
-    } 
-    else if (node.name === "media") {
-        const mediaPath = node.data.media_url;
-        const caption = node.data.caption || "";
-        const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-        const fullUrl = mediaPath.startsWith('/uploads/') ? `https://${domain}${mediaPath}` : mediaPath;
-
-        payload.type = "image";
-        payload.image = { link: fullUrl, caption: caption };
-        botText = caption || "📷 Imagen";
-        mediaForDb = mediaPath;
-    }
-    else if (node.name === "whatsapp_list") {
-        const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ 
-                id: `row_${node.id}_${i}`, 
-                title: node.data[k].substring(0, 24) 
-            }));
-
-        payload.type = "interactive";
-        payload.interactive = {
-            type: "list",
-            body: { text: node.data.list_title || "Selecciona una opción:" },
-            action: { 
-                button: node.data.button_text || "Ver opciones", 
-                sections: [{ title: "Opciones disponibles", rows }] 
-            }
-        };
-        botText = "📋 Menú enviado";
-    }
-
-    try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-
-        const savedBot = await Message.create({ chatId: to, from: "me", text: botText, mediaUrl: mediaForDb });
-        broadcast({ type: "new_message", message: savedBot });
-
-        if (node.name === "whatsapp_list") return;
-
-        if (node.outputs?.output_1?.connections?.[0]) {
-            const nextNodeId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1500)); 
-            return await processSequence(to, allNodes[nextNodeId], allNodes);
-        }
-    } catch (err) { 
-        console.error("❌ Error en processSequence:", err.response?.data || err.message); 
-    }
-}
-
-/* ========================= APIS Y SUBIDAS ========================= */
+// --- CONFIGURACIÓN DE ALMACENAMIENTO (MULTER) ---
+// Se asegura de mantener la extensión para que el navegador reconozca la imagen
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsPath),
-    filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+    destination: (req, file, cb) => {
+        const dir = "uploads/";
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
 });
-const upload = multer({ storage });
+const upload = multer({ storage: storage });
 
-app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: "No hay archivo" });
-        res.json({ url: `/uploads/${req.file.filename}` });
-    } catch (err) { res.status(500).json({ error: "Error subida" }); }
+// MIDDLEWARES
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// RUTAS ESTÁTICAS
+app.use(express.static("public"));
+app.use("/chat", express.static(path.join(__dirname, "chat")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// CONEXIÓN A MONGO (Usando tu URI del .env)
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ MongoDB conectado exitosamente"))
+    .catch(err => console.error("❌ Error conectando a MongoDB:", err));
+
+// CONFIGURACIÓN DE SERVIDOR Y WEBSOCKET
+const server = require("http").createServer(app);
+const wss = new WebSocket.Server({ server });
+const wsClients = new Set();
+
+wss.on("connection", (ws) => {
+    wsClients.add(ws);
+    console.log("📱 Nuevo cliente visualizador conectado");
+    ws.on("close", () => wsClients.delete(ws));
 });
 
+function broadcastMessage(data) {
+    wsClients.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+        }
+    });
+}
+
+// --- RUTA: ENVÍO DE MEDIA (IMÁGENES/ARCHIVOS) ---
 app.post("/send-media", upload.single("file"), async (req, res) => {
-    const { to } = req.body;
-    const file = req.file;
-    if (!file) return res.status(400).json({ error: "No hay archivo" });
-
     try {
+        const { to } = req.body;
+        const file = req.file;
+
+        if (!file) return res.status(400).json({ error: "No se subió ningún archivo" });
+
+        // 1. Subir el archivo a los servidores de Meta (WhatsApp)
         const form = new FormData();
-        form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+        form.append('file', fs.createReadStream(file.path), {
+            filename: file.filename,
+            contentType: file.mimetype,
+        });
+        form.append('type', file.mimetype);
         form.append('messaging_product', 'whatsapp');
 
-        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-            headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        const uploadRes = await axios.post(
+            `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`,
+            form,
+            { headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
+        );
+
+        const mediaId = uploadRes.data.id;
+
+        // 2. Enviar el mensaje de imagen a través de la API de WhatsApp
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            {
+                messaging_product: "whatsapp",
+                to: to,
+                type: "image",
+                image: { id: mediaId }
+            },
+            { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+
+        // 3. Preparar URL local para el Front-end
+        const mediaUrl = `/uploads/${file.filename}`;
+
+        // 4. Emitir por WebSocket para actualización en tiempo real
+        broadcastMessage({
+            type: "sent",
+            data: {
+                to: to,
+                text: "📷 Imagen",
+                mediaUrl: mediaUrl,
+                source: "whatsapp",
+                timestamp: new Date()
+            }
         });
 
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+        // 5. Guardar en la Base de Datos con mediaUrl
+        await Message.create({
+            chatId: to,
+            from: "me",
+            text: "📷 Imagen",
+            mediaUrl: mediaUrl,
+            source: "whatsapp"
+        });
 
-        const mediaUrl = `/uploads/${file.filename}`;
-        // Aseguramos que se guarde y emita como mediaUrl
-        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl: mediaUrl });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+        res.json({ status: "ok", url: mediaUrl });
+
+    } catch (err) {
+        console.error("❌ ERROR EN SEND-MEDIA:", err.response?.data || err.message);
+        res.status(500).json({ error: "Error procesando el envío de media" });
+    }
 });
 
+// --- RUTA: ENVÍO DE TEXTO ---
 app.post("/send-message", async (req, res) => {
-    const { to, text } = req.body;
     try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "text", text: { body: text }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-        // Aseguramos mediaUrl: null para evitar errores en el front
-        const saved = await Message.create({ chatId: to, from: "me", text: text, mediaUrl: null });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        const { to, text } = req.body;
+
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            {
+                messaging_product: "whatsapp",
+                recipient_type: "individual",
+                to: to,
+                type: "text",
+                text: { body: text }
+            },
+            { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } }
+        );
+
+        broadcastMessage({ type: "sent", data: { to, text, source: "whatsapp" } });
+
+        await Message.create({ chatId: to, from: "me", text, source: "whatsapp" });
+
+        res.json({ status: "ok" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } }, 
-        { $group: { _id: "$chatId", lastMessage: { $last: { $ifNull: ["$text", "📷 Imagen"] } }, lastTime: { $last: "$timestamp" } } }, 
-        { $sort: { lastTime: -1 } }
-    ]);
-    res.json(chats);
+// --- WEBHOOK (RECEPCIÓN DE MENSAJES) ---
+app.get("/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
+        res.status(200).send(challenge);
+    } else {
+        res.sendStatus(403);
+    }
 });
 
-app.get("/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
+app.post("/webhook", async (req, res) => {
+    const body = req.body;
+    if (body.object === "whatsapp_business_account") {
+        const entry = body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+        const message = value?.messages?.[0];
+
+        if (message) {
+            const from = message.from;
+            let text = "";
+            let mediaUrl = "";
+
+            if (message.type === "text") {
+                text = message.text.body;
+            } else if (message.type === "image") {
+                text = "📷 Imagen recibida";
+                // Aquí podrías agregar lógica para descargar la imagen de Meta y generar una mediaUrl local
+            }
+
+            const newMessage = {
+                chatId: from,
+                from: from,
+                text: text,
+                mediaUrl: mediaUrl,
+                source: "whatsapp",
+                timestamp: new Date()
+            };
+
+            broadcastMessage({ type: "received", data: newMessage });
+            await Message.create(newMessage);
+        }
+        res.sendStatus(200);
+    } else {
+        res.sendStatus(404);
+    }
 });
 
-app.post("/api/save-flow", async (req, res) => {
-    try {
-        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+// RUTA RAIZ
+app.get("/", (req, res) => {
+    res.send("<h1>Servidor Ventas Pro Activo 🚀</h1><p>Precio base: S/380 | WhatsApp: 991138132</p>");
 });
 
-app.get("/api/get-flow", async (req, res) => {
-    const flow = await Flow.findOne({ name: "Main Flow" });
-    res.json(flow ? flow.data : null);
-});
-
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo 3 - Navegación de Listas Activa");
+// INICIO DEL SERVIDOR
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
