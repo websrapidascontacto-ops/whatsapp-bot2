@@ -217,3 +217,46 @@ body {
     gap: 34px; 
     padding-top: 178px; 
 }
+/* ================= EFECTO PULSO EN PUNTOS DE CONEXIÓN ================= */
+.drawflow-node .input, .drawflow-node .output {
+    width: 18px !important; 
+    height: 18px !important;
+    border: 4px solid var(--bg-secondary) !important;
+    position: relative;
+    transition: all 0.3s;
+    cursor: crosshair;
+}
+
+/* Animación de pulso para la salida (Output) */
+.drawflow-node .output {
+    background: var(--indigo) !important;
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+    animation: pulse-indigo 2s infinite;
+}
+
+/* Animación de pulso para la entrada (Input) */
+.drawflow-node .input {
+    background: #94a3b8 !important;
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.7);
+    animation: pulse-gray 2s infinite;
+}
+
+/* Keyframes para el pulso Índigo */
+@keyframes pulse-indigo {
+    0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+/* Keyframes para el pulso Gris */
+@keyframes pulse-gray {
+    0% { box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(148, 163, 184, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(148, 163, 184, 0); }
+}
+
+/* Efecto al pasar el mouse sobre el punto */
+.drawflow-node .input:hover, .drawflow-node .output:hover {
+    transform: scale(1.4);
+    filter: brightness(1.3);
+}
