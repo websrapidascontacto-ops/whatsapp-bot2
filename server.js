@@ -86,7 +86,6 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // 1. BUSCAR TRIGGER
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
@@ -96,7 +95,6 @@ app.post("/webhook", async (req, res) => {
                         return await processSequence(sender, nodes[firstId], nodes);
                     }
 
-                    // 2. BUSCAR RESPUESTA EN LISTA (SALTO DIRECTO)
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(v => v.trim().toLowerCase() === incomingText.toLowerCase());
@@ -107,10 +105,7 @@ app.post("/webhook", async (req, res) => {
                         if (rowKey) {
                             const outputNum = rowKey.replace('row', 'output_'); 
                             const conn = listNode.outputs[outputNum]?.connections[0];
-                            if (conn) {
-                                console.log(`🚀 Opción: ${incomingText}. Saltando al nodo: ${conn.node}`);
-                                return await processSequence(sender, nodes[conn.node], nodes);
-                            }
+                            if (conn) return await processSequence(sender, nodes[conn.node], nodes);
                         }
                     }
                 }
@@ -133,16 +128,20 @@ async function processSequence(to, node, allNodes) {
             payload.text = { body: botText };
         } 
         else if (node.name === "media") {
-            const pathMedia = node.data.media_url; // Corregido: coincide con df-media_url
+            // CORRECCIÓN: Usar 'media_url' que es como lo guarda tu flow-editor.js
+            const pathMedia = node.data.media_url; 
             if (pathMedia) {
                 const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
                 const fullUrl = pathMedia.startsWith('/') ? `https://${domain}${pathMedia}` : pathMedia;
                 
                 payload.type = "image";
-                payload.image = { link: fullUrl, caption: node.data.caption || "" };
-                botText = `🖼️ Imagen enviada`;
+                payload.image = { 
+                    link: fullUrl, 
+                    caption: node.data.caption || "" 
+                };
+                botText = `🖼️ Imagen enviada: ${node.data.caption || ""}`;
             } else {
-                botText = "⚠️ Error: Media vacío";
+                botText = "⚠️ Error: Media no configurado";
                 payload.type = "text";
                 payload.text = { body: botText };
             }
@@ -166,19 +165,19 @@ async function processSequence(to, node, allNodes) {
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        // Si es lista, paramos para esperar respuesta del usuario
         if (node.name === "whatsapp_list") return;
 
-        // Si hay conexión en output_1, seguimos automáticamente (mensajes o media)
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1200));
             return await processSequence(to, allNodes[nextId], allNodes);
         }
-    } catch (err) { console.error("❌ Error flujo:", err.response?.data || err.message); }
+    } catch (err) { 
+        console.error("❌ Error flujo:", err.response?.data || err.message); 
+    }
 }
 
-/* ========================= RESTO DE APIS ========================= */
+/* ========================= APIS CRM Y STORAGE ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -222,4 +221,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Punto Nemo Final - Listo"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Punto Nemo Final - Imágenes Corregidas"));
