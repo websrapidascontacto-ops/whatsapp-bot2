@@ -31,7 +31,7 @@ app.get("/", (req, res) => res.redirect("/index.html"));
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado - Punto Nemo 3 Estabilizado"))
+    .then(() => console.log("✅ Mongo conectado - Punto Nemo Final"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
@@ -64,13 +64,12 @@ async function downloadMedia(mediaId, fileName) {
     } catch (e) { return null; }
 }
 
-/* ========================= WEBHOOK (LÓGICA DE NAVEGACIÓN) ========================= */
+/* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            // Captura el texto de la opción seleccionada o del mensaje normal
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
 
@@ -87,42 +86,32 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
-                    // 1. BUSCAR TRIGGER INICIAL
+                    // 1. BUSCAR TRIGGER
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
                     
                     if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
-                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
-                        return await processSequence(sender, nodes[firstNextNodeId], nodes);
+                        const firstId = triggerNode.outputs.output_1.connections[0].node;
+                        return await processSequence(sender, nodes[firstId], nodes);
                     }
 
-                    // 2. BUSCAR SI ES RESPUESTA A UNA LISTA (SIN BUCLES)
-                    const activeListNode = Object.values(nodes).find(n => {
+                    // 2. BUSCAR RESPUESTA EN LISTA
+                    const listNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
-                        return Object.values(n.data).some(val => val.trim().toLowerCase() === incomingText.toLowerCase());
+                        return Object.values(n.data).some(v => v.trim().toLowerCase() === incomingText.toLowerCase());
                     });
 
-                    if (activeListNode) {
-                        const rowKey = Object.keys(activeListNode.data).find(k => 
-                            activeListNode.data[k].trim().toLowerCase() === incomingText.toLowerCase()
-                        );
-                        
+                    if (listNode) {
+                        const rowKey = Object.keys(listNode.data).find(k => listNode.data[k].trim().toLowerCase() === incomingText.toLowerCase());
                         if (rowKey) {
-                            // Convertimos rowX a output_X (ej: row2 -> output_2)
                             const outputNum = rowKey.replace('row', 'output_'); 
-                            const connection = activeListNode.outputs[outputNum]?.connections[0];
-                            
-                            if (connection) {
-                                const nextNodeId = connection.node;
-                                console.log(`🚀 Opción detectada: ${incomingText}. Saltando al nodo: ${nextNodeId}`);
-                                // IMPORTANTE: Ejecutamos el SIGUIENTE nodo directamente
-                                return await processSequence(sender, nodes[nextNodeId], nodes);
-                            }
+                            const conn = listNode.outputs[outputNum]?.connections[0];
+                            if (conn) return await processSequence(sender, nodes[conn.node], nodes);
                         }
                     }
                 }
-            } catch (err) { console.error("❌ Error en Webhook:", err.message); }
+            } catch (err) { console.error("❌ Error Webhook:", err.message); }
         }
     }
     res.sendStatus(200);
@@ -131,63 +120,57 @@ app.post("/webhook", async (req, res) => {
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
-
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
-    if (node.name === "message" || node.name === "ia") {
-        botText = node.data.info || "Base S/380. WhatsApp: 991138132";
-        payload.type = "text";
-        payload.text = { body: botText };
-    } 
-    else if (node.name === "media") {
-        const mediaPath = node.data.media_url;
-        const caption = node.data.caption || "";
-        const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-        const fullUrl = mediaPath.startsWith('/uploads/') ? `https://${domain}${mediaPath}` : mediaPath;
-
-        payload.type = "image";
-        payload.image = { link: fullUrl, caption: caption };
-        botText = `🖼️ Imagen: ${caption}`;
-    }
-    else if (node.name === "whatsapp_list") {
-        const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k])
-            .map((k, i) => ({ 
-                id: `row_${node.id}_${i}`, 
-                title: node.data[k].substring(0, 24) 
-            }));
-
-        payload.type = "interactive";
-        payload.interactive = {
-            type: "list",
-            body: { text: node.data.list_title || "Selecciona una opción:" },
-            action: { 
-                button: node.data.button_text || "Ver opciones", 
-                sections: [{ title: "Menú", rows }] 
-            }
-        };
-        botText = "📋 Menú enviado";
-    }
-
     try {
+        if (node.name === "message" || node.name === "ia") {
+            botText = node.data.info || "Base S/380. WhatsApp: 991138132";
+            payload.type = "text";
+            payload.text = { body: botText };
+        } 
+        else if (node.name === "media") {
+            const pathMedia = node.data.media_url;
+            if (pathMedia) {
+                const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
+                const fullUrl = pathMedia.startsWith('/') ? `https://${domain}${pathMedia}` : pathMedia;
+                payload.type = "image";
+                payload.image = { link: fullUrl, caption: node.data.caption || "" };
+                botText = `🖼️ Imagen enviada`;
+            } else {
+                payload.type = "text";
+                payload.text = { body: "⚠️ Error: Media no configurado" };
+            }
+        }
+        else if (node.name === "whatsapp_list") {
+            const rows = Object.keys(node.data).filter(k => k.startsWith("row") && node.data[k])
+                .map((k, i) => ({ id: `r${node.id}_${i}`, title: node.data[k].substring(0, 24) }));
+            payload.type = "interactive";
+            payload.interactive = {
+                type: "list",
+                body: { text: node.data.list_title || "Menú" },
+                action: { button: node.data.button_text || "Opciones", sections: [{ title: "Menú", rows }] }
+            };
+            botText = "📋 Menú enviado";
+        }
+
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
-        broadcast({ type: "new_message", message: savedBot });
+        await Message.create({ chatId: to, from: "me", text: botText });
+        broadcast({ type: "new_message", message: { chatId: to, from: "me", text: botText } });
 
-        // === BLOQUEO: Si es lista, NO seguir automáticamente al output_1 ===
+        // Detener si es lista
         if (node.name === "whatsapp_list") return;
 
-        // Continuación automática para mensajes simples o media
+        // Continuar si hay conexión
         if (node.outputs?.output_1?.connections?.[0]) {
-            const nextNodeId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1200)); 
-            return await processSequence(to, allNodes[nextNodeId], allNodes);
+            const nextId = node.outputs.output_1.connections[0].node;
+            await new Promise(r => setTimeout(r, 1500));
+            return await processSequence(to, allNodes[nextId], allNodes);
         }
-    } catch (err) { console.error("❌ Error en flujo:", err.response?.data || err.message); }
+    } catch (err) { console.error("❌ Error flujo:", err.response?.data || err.message); }
 }
 
 /* ========================= APIS CRM Y STORAGE ========================= */
@@ -234,4 +217,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 3 - Bucle Eliminado"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Server Punto Nemo 3 - Estable"));
