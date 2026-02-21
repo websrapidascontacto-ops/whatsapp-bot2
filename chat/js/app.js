@@ -110,21 +110,35 @@ try {
 } catch(e) { console.error("Error al cargar chats:", e); }
 }
 
-/* ABRIR CHAT (CORREGIDO CON FOTO Y NÚMERO) */
+/* ABRIR CHAT (ORGANIZADO: DATOS IZQUIERDA, ICONOS DERECHA) */
 async function openChat(chatId){
 currentChat=chatId;
 
 // Limpiar no leídos
 delete unreadCounts[chatId];
 
-// Actualizar Header con Foto y Número
+// Actualizar Header con Foto, Número e Iconos a la derecha
 const headerInfo = document.querySelector(".chat-header-info");
 if(headerInfo) {
+    headerInfo.style.display = "flex";
+    headerInfo.style.alignItems = "center";
+    headerInfo.style.justifyContent = "space-between";
+    headerInfo.style.width = "100%";
+
     headerInfo.innerHTML = `
-        <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
-        <div>
-            <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px;">${chatId}</div>
-            <div style="font-size:11px; color:green; font-family:'Montserrat';">● En línea</div>
+        <div style="display:flex; align-items:center;">
+            <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
+            <div>
+                <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px; color:white;">${chatId}</div>
+                <div style="font-size:11px; color:#25D366; font-family:'Montserrat';">● En línea</div>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <div class="flow-selector-container" style="position:relative;">
+                <div onclick="toggleFlowMenu()" style="cursor:pointer; font-size:22px;" title="Lanzar flujo">🤖</div>
+                <div id="flow-menu" class="flow-menu" style="display:none; position:absolute; right:0; top:40px; background:#2d3748; border:1px solid #4a5568; border-radius:8px; z-index:1000; min-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
+            </div>
+            <div onclick="deleteCurrentChat()" style="cursor:pointer; font-size:18px;" title="Borrar chat">🗑️</div>
         </div>
     `;
 }
@@ -392,7 +406,7 @@ window.toggleFlowMenu = async function() {
 
     if (menu.style.display === 'none' || menu.style.display === '') {
         menu.style.display = 'block';
-        menu.innerHTML = '<div class="flow-item">⌛ Cargando...</div>';
+        menu.innerHTML = '<div class="flow-item" style="padding:10px; color:white;">⌛ Cargando...</div>';
 
         try {
             const response = await fetch('/api/get-flow');
@@ -407,6 +421,10 @@ window.toggleFlowMenu = async function() {
                         if (triggerVal) {
                             const item = document.createElement('div');
                             item.className = 'flow-item';
+                            item.style.padding = "10px";
+                            item.style.color = "white";
+                            item.style.borderBottom = "1px solid #4a5568";
+                            item.style.cursor = "pointer";
                             item.innerHTML = `🤖 <b>${triggerVal}</b>`;
                             item.onclick = () => lanzarFlujo(triggerVal);
                             menu.appendChild(item);
