@@ -21,21 +21,21 @@ const upload = multer({ dest: "uploads/" });
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Servir carpetas del CRM y subidas
+// Servir la carpeta chat e imágenes (Vital para verlas en el front)
 app.use(express.static(path.join(__dirname, "chat")));
 app.use("/uploads", express.static(uploadDir));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB Conectado - Sistema Estable"))
+    .then(() => console.log("✅ MongoDB Conectado - Punto Nemo Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
     chatId: String, 
     from: String, 
     text: String, 
-    mediaUrl: String, 
+    mediaUrl: String, // Este es el campo que lee tu front para el <img>
     timestamp: { type: Date, default: Date.now }
 }));
 
@@ -44,13 +44,9 @@ const Flow = mongoose.model("Flow", new mongoose.Schema({
     data: { type: Object, required: true }
 }));
 
-/* ========================= WEBSOCKET (BROADCAST TOTAL) ========================= */
+/* ========================= WEBSOCKET ========================= */
 function broadcast(data) {
-    wss.clients.forEach(c => { 
-        if (c.readyState === WebSocket.OPEN) {
-            c.send(JSON.stringify(data)); 
-        }
-    });
+    wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
 }
 
 /* ========================= PROCESADOR DE FLUJO (BOT) ========================= */
@@ -73,7 +69,7 @@ async function processSequence(to, node, allNodes) {
                 const fullUrl = pathMedia.startsWith('http') ? pathMedia : `https://${domain}${pathMedia}`;
                 payload.type = "image";
                 payload.image = { link: fullUrl, caption: node.data.caption || "" };
-                botText = "📷 Imagen";
+                botText = "📷 Imagen enviada";
                 mediaForDb = pathMedia;
             } else { return; }
         }
@@ -94,7 +90,6 @@ async function processSequence(to, node, allNodes) {
         });
 
         const saved = await Message.create({ chatId: to, from: "me", text: botText, mediaUrl: mediaForDb });
-        // Enviamos ambos formatos de evento para que cualquier versión de app.js lo capte
         broadcast({ type: "new_message", message: saved });
         broadcast({ type: "sent", data: saved });
 
@@ -104,10 +99,10 @@ async function processSequence(to, node, allNodes) {
             await new Promise(r => setTimeout(r, 1500));
             return await processSequence(to, allNodes[nextId], allNodes);
         }
-    } catch (err) { console.error("❌ Error Bot:", err.response?.data || err.message); }
+    } catch (err) { console.error("❌ Error Bot:", err.message); }
 }
 
-/* ========================= WEBHOOK (PUNTO NEMO) ========================= */
+/* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
@@ -132,7 +127,7 @@ app.post("/webhook", async (req, res) => {
     res.sendStatus(200);
 });
 
-/* ========================= ENDPOINTS CRM (SEND MESSAGE/MEDIA) ========================= */
+/* ========================= ENDPOINTS CRM ========================= */
 
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
@@ -157,7 +152,6 @@ app.post("/send-message", async (req, res) => {
         );
         const saved = await Message.create({ chatId: to, from: "me", text });
         broadcast({ type: "new_message", message: saved });
-        broadcast({ type: "sent", data: saved });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -178,14 +172,16 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
             messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
 
-        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl: `/uploads/${file.filename}` });
+        const mediaUrl = `/uploads/${file.filename}`;
+        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl: mediaUrl });
+        
         broadcast({ type: "new_message", message: saved });
         broadcast({ type: "sent", data: saved });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ========================= APIS FLOW EDITOR ========================= */
+/* ========================= APIS FLUJO ========================= */
 app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).send("No file");
     res.json({ url: `/uploads/${req.file.filename}` });
@@ -201,4 +197,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 CRM & Bot Restaurados al 100%"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Sistema Punto Nemo unificado con éxito"));
