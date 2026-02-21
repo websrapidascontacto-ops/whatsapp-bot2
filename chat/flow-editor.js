@@ -1,22 +1,24 @@
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
-
-/* === CONFIGURACIÓN DE ZOOM Y NAVEGACIÓN === */
 editor.reroute = true;
+
+/* === CONFIGURACIÓN DE ZOOM SUAVE === */
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
-editor.zoom_wheel_speed = 0.05; // Velocidad del zoom
+// Bajamos este valor para que no sea exagerado
+editor.zoom_wheel_speed = 0.02; 
 editor.zoom_last_value = 1;
 
 editor.start();
 
-/* === ACTIVADOR DE ZOOM HACIA EL PUNTERO === */
+/* === CAPTURA EL SCROLL Y ELIMINA EL CTRL === */
 container.addEventListener('wheel', function(e) {
-    // Si no estás presionando CTRL, ejecuta el zoom de Drawflow
-    if (e.ctrlKey === false) {
-        editor.zoom_on_mousewheel(e);
-    }
-}, { passive: false });
+    // IMPORTANTE: Bloquea el zoom exagerado del navegador
+    e.preventDefault(); 
+
+    // Ejecuta el zoom de la librería donde está el mouse
+    editor.zoom_on_mousewheel(e);
+}, { passive: false }); // 'passive: false' es vital para poder usar preventDefault
 
 editor.start();
 
