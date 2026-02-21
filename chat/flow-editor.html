@@ -35,6 +35,41 @@ function downloadFlow() {
 </script>
         </div>
     </div>
+<input type="file" id="importInput" style="display: none;" accept=".json" onchange="handleImport(event)">
+
+<button onclick="document.getElementById('importInput').click()" style="font-family: 'Montserrat', sans-serif; background: #34b7f1; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+    📤 Cargar Flujo
+</button>
+
+<script>
+async function handleImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const flowData = JSON.parse(e.target.result);
+            
+            const response = await fetch('/api/import-flow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(flowData)
+            });
+
+            if (response.ok) {
+                alert("✅ Flujo cargado con éxito. La página se recargará.");
+                location.reload(); // Recargamos para que Drawflow pinte el nuevo flujo
+            } else {
+                alert("❌ Error al importar el flujo.");
+            }
+        } catch (err) {
+            alert("❌ El archivo no es un JSON válido.");
+        }
+    };
+    reader.readAsText(file);
+}
+</script>
 
     <div id="drawflow"></div>
 

@@ -262,4 +262,22 @@ app.get("/api/download-flow", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => {
+    try {
+        const flowData = req.body;
+        if (!flowData || !flowData.drawflow) {
+            return res.status(400).json({ error: "Formato de flujo inválido" });
+        }
+        
+        await Flow.findOneAndUpdate(
+            { name: "Main Flow" }, 
+            { data: flowData }, 
+            { upsert: true }
+        );
+        
+        res.json({ success: true, message: "Flujo importado correctamente" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 });
