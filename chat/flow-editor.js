@@ -2,10 +2,20 @@ const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
 editor.reroute = true;
 
-/* === CONFIGURACIÓN DE ZOOM CON SCROLL === */
+/* === CONFIGURACIÓN DE ZOOM HACIA EL MOUSE === */
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
-editor.zoom_value = 0.1;
+editor.zoom_wheel_speed = 0.05; // Velocidad del scroll
+editor.zoom_last_value = 1;      // Permite rastrear el punto de origen
+
+editor.start();
+
+// Esta lógica fuerza al editor a centrar el zoom donde esté el mouse
+container.addEventListener('wheel', function(e) {
+    if (e.ctrlKey === false) {
+        editor.zoom_on_mousewheel(e);
+    }
+}, { passive: false });
 
 editor.start();
 

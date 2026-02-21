@@ -291,3 +291,19 @@ body {
 .btn-import:hover {
     background-color: #666;
 }
+/* Cursor de manito abierta por defecto en el canvas */
+#drawflow {
+    cursor: grab;
+    background-image: radial-gradient(#222 1px, transparent 1px); /* Opcional: puntitos de guía */
+    background-size: 25px 25px;
+}
+
+/* Cursor de manito cerrada mientras arrastras */
+#drawflow:active {
+    cursor: grabbing;
+}
+
+/* Importante: Que los nodos mantengan el cursor de flecha para no confundir */
+.drawflow-node {
+    cursor: default;
+}
