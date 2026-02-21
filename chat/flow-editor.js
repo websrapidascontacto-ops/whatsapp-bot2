@@ -142,3 +142,25 @@ function addNotifyNode() {
     // Añadimos el nodo con 1 entrada y 1 salida
     editor.addNode('notify', 1, 1, pos_x, pos_y, 'notify', { info: '' }, html);
 }
+document.getElementById('import_file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const flowData = JSON.parse(e.target.result);
+            
+            // 1. Cargar los datos al editor visual
+            editor.import(flowData);
+            
+            // 2. Avisar al usuario
+            alert("✅ Flujo cargado correctamente en el editor. No olvides darle a 'Guardar' para aplicarlo al bot.");
+            
+        } catch (err) {
+            alert("❌ Error: El archivo no es un JSON de flujo válido.");
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+});

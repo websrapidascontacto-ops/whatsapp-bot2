@@ -32,6 +32,11 @@
 <button onclick="downloadFlow()" style="font-family: 'Montserrat', sans-serif; background: #25d366; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer;">
     📥 Descargar Flujo
 </button>
+<input type="file" id="import_file" style="display:none" accept=".json">
+
+<button onclick="document.getElementById('import_file').click()" class="btn-import">
+    📥 Importar Flujo
+</button>
 
 <script>
 function downloadFlow() {
