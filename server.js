@@ -85,24 +85,29 @@ app.post("/webhook", async (req, res) => {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
                     // --- 1. LISTA (Prioridad) ---
-                    const activeListNode = Object.values(nodes).find(n => {
-                        if (n.name !== "whatsapp_list") return false;
-                        return Object.values(n.data).some(v => v && v.toString().toLowerCase() === incomingText.toLowerCase());
-                    });
+const activeListNode = Object.values(nodes).find(n => {
+    if (n.name !== "whatsapp_list") return false;
+    // Buscamos específicamente en las keys que empiezan con "row"
+    return Object.keys(n.data).some(k => 
+        k.startsWith("row") && n.data[k]?.toString().toLowerCase() === incomingText.toLowerCase()
+    );
+});
 
-                    if (activeListNode) {
-                        const rowKey = Object.keys(activeListNode.data).find(k => 
-                            activeListNode.data[k] && activeListNode.data[k].toString().toLowerCase() === incomingText.toLowerCase()
-                        );
-                        if (rowKey) {
-                            const outNum = rowKey.replace(/\D/g, ""); 
-                            const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
-                            if (conn) {
-                                await processSequence(sender, nodes[conn.node], nodes);
-                                return res.sendStatus(200);
-                            }
-                        }
-                    }
+if (activeListNode) {
+    // Encontramos exactamente qué fila (row1, row2, etc.) pulsó el usuario
+    const rowKey = Object.keys(activeListNode.data).find(k => 
+        k.startsWith("row") && activeListNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase()
+    );
+    
+    if (rowKey) {
+        const outNum = rowKey.replace("row", ""); // Extrae el número de salida
+        const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
+        if (conn) {
+            await processSequence(sender, nodes[conn.node], nodes);
+            return res.sendStatus(200);
+        }
+    }
+}
 
                     // --- 2. TRIGGER ---
                     const triggerNode = Object.values(nodes).find(n => 
@@ -178,23 +183,20 @@ else if (node.name === "notify") {
     }
     return; // Si no hay conexión, se detiene aquí.
 }
-    else if (node.name === "whatsapp_list") {
-        try {
-            const rows = Object.keys(node.data)
-                .filter(k => k.startsWith("row") && node.data[k])
-                .map((k, i) => {
-                    // Extraemos el número de la fila (ej: de "row1" sacamos "1")
-                    const rowNum = k.replace("row", "");
-                    // Buscamos su pareja de descripción (desc1, desc2...)
-                    const descriptionText = node.data[`desc${rowNum}`] || "";
+   else if (node.name === "whatsapp_list") {
+    try {
+        const rows = Object.keys(node.data)
+            .filter(k => k.startsWith("row") && node.data[k])
+            .map((k) => {
+                const rowNum = k.replace("row", ""); // Mantiene el número original (1, 2, 3...)
+                const descriptionText = node.data[`desc${rowNum}`] || "";
 
-                    return { 
-                        id: `row_${node.id}_${i}`, 
-                        title: node.data[k].toString().substring(0, 24),
-                        // AGREGAMOS LA DESCRIPCIÓN AQUÍ:
-                        description: descriptionText.toString().substring(0, 72) 
-                    };
-                });
+                return { 
+                    id: `row_${node.id}_${rowNum}`, // ID sincronizado con la salida
+                    title: node.data[k].toString().substring(0, 24),
+                    description: descriptionText.toString().substring(0, 72) // Ahora sí se envía
+                };
+            });
 
             if (rows.length === 0) {
                 console.error("❌ Error: La lista no tiene filas configuradas");
