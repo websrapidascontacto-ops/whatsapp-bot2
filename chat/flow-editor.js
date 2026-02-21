@@ -40,31 +40,36 @@ window.addListNode = function() {
     createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
-/* AJUSTE PARA AÑADIR FILAS CORRECTAMENTE */
+/* CORRECCIÓN FINAL ADDRROW (PUNTO NEMO) */
 window.addRow = (nodeId, prefix) => {
     const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
     if(!container) return;
+
+    // Buscamos el nodo directamente en el objeto de Drawflow por seguridad
+    const nodeData = editor.drawflow.drawflow.Home.data[nodeId];
     
+    if(!nodeData) {
+        console.error("Error: Nodo " + nodeId + " no encontrado en el Home.");
+        return;
+    }
+
     const count = container.querySelectorAll("input").length + 1;
     const key = `${prefix}${count}`;
-    
-    // Añadir salida física al nodo
+
+    // 1. Añadimos el output visual
     editor.addNodeOutput(nodeId);
-    
-    // Crear input visual
+
+    // 2. Creamos el input visual
     const input = document.createElement("input");
     input.className = "form-control mb-1";
     input.placeholder = `Fila ${count}`;
     input.setAttribute(`df-${key}`, "");
     container.appendChild(input);
-    
-    // Registrar el dato en el objeto de Drawflow
-    const node = editor.getNodeFromId(nodeId);
-    if(node) {
-        node.data[key] = "";
-    }
-    
-    // Forzar actualización de conexiones
+
+    // 3. Insertamos el dato en el JSON interno
+    nodeData.data[key] = "";
+
+    // 4. Actualizamos el nodo para que Drawflow reconozca el nuevo input df-
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
@@ -75,7 +80,6 @@ window.saveFlow = function() {
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
 
-/* NUEVO MÓDULO MEDIA ADJUNTA - PUNTO NEMO 2 */
 window.addMediaNode = () => {
     const nodeId = editor.node_id + 1;
     createNode("media", 1, 1, `
@@ -84,11 +88,8 @@ window.addMediaNode = () => {
             <div class="node-body">
                 <label class="small" style="font-family: 'Montserrat', sans-serif;">Adjuntar archivo (Imagen):</label>
                 <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, ${nodeId})">
-                
                 <input type="hidden" df-media_url id="path-${nodeId}">
-                
                 <div id="status-${nodeId}" style="font-size:11px; color:gray; margin-bottom:5px; font-family: 'Montserrat';">Esperando archivo...</div>
-
                 <label class="small" style="font-family: 'Montserrat', sans-serif;">Pie de foto:</label>
                 <input type="text" class="form-control" df-caption placeholder="Ej: Mira esta oferta">
             </div>
@@ -98,36 +99,25 @@ window.addMediaNode = () => {
 window.uploadNodeFile = async (event, nodeId) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const status = document.getElementById(`status-${nodeId}`);
     const pathInput = document.getElementById(`path-${nodeId}`);
-    
     status.innerText = "⏳ Subiendo archivo...";
     status.style.color = "#e67e22";
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
-        const res = await fetch('/api/upload-node-media', {
-            method: 'POST',
-            body: formData
-        });
+        const res = await fetch('/api/upload-node-media', { method: 'POST', body: formData });
         const data = await res.json();
-
         if (data.url) {
             pathInput.value = data.url;
             status.innerText = "✅ Subido: " + file.name;
             status.style.color = "green";
-            
-            // Actualización directa de datos
-            editor.drawflow.drawflow.Home.data[nodeId].data.media_url = data.url;
-            console.log("💾 Nodo " + nodeId + " actualizado.");
+            const node = editor.drawflow.drawflow.Home.data[nodeId];
+            if(node) node.data.media_url = data.url;
         } else {
             throw new Error("No se recibió URL");
         }
     } catch (e) {
-        console.error("Error upload:", e);
         status.innerText = "❌ Error al subir";
         status.style.color = "red";
     }
