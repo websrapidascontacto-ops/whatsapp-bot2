@@ -114,18 +114,18 @@ app.post("/webhook", async (req, res) => {
                         if (firstConn) {
                             const nextNode = nodes[firstConn.node];
                             console.log("🚀 Trigger activado. Saltando a nodo:", nextNode.name);
-                            
-                            // Llamamos a la secuencia para el nodo conectado al trigger
                             await processSequence(sender, nextNode, nodes);
                             return res.sendStatus(200);
                         }
                     }
-            } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
+                }
+            } catch (err) { 
+                console.error("❌ Error Webhook Logic:", err.message); 
+            }
         }
     }
     res.sendStatus(200);
 });
-
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
