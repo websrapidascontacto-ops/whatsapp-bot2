@@ -9,7 +9,28 @@ const axios = require("axios");
 const FormData = require("form-data");
 require("dotenv").config();
 
-// Carga del modelo (Asegúrate que la ruta sea correcta según tu carpeta)
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+/* ========================= CONFIGURACIÓN DE ARCHIVOS ========================= */
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir); }
+const upload = multer({ dest: "uploads/" });
+
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Servir archivos estáticos
+app.use(express.static(path.join(__dirname, "chat")));
+app.use("/uploads", express.static(uploadDir));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+/* ========================= MONGODB ========================= */
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ MongoDB Conectado - Base Estable"))
+    .catch(err => console.error("❌ Error Mongo:", err));
+
 const Message = mongoose.model("Message", new mongoose.Schema({
     chatId: String, from: String, text: String, media: String, mediaUrl: String, timestamp: { type: Date, default: Date.now }
 }));
@@ -19,32 +40,16 @@ const Flow = mongoose.model("Flow", new mongoose.Schema({
     data: { type: Object, required: true }
 }));
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-/* ========================= CONFIGURACIÓN DE ARCHIVOS ========================= */
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir); }
-
-const upload = multer({ dest: "uploads/" });
-
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use(express.static(path.join(__dirname, "chat")));
-app.use("/uploads", express.static(uploadDir));
-
-/* ========================= MONGODB ========================= */
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB Conectado - Base Punto Nemo"))
-    .catch(err => console.error("❌ Error Mongo:", err));
-
 /* ========================= WEBSOCKET ========================= */
 function broadcast(data) {
-    wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
+    wss.clients.forEach(c => { 
+        if (c.readyState === WebSocket.OPEN) {
+            c.send(JSON.stringify(data)); 
+        }
+    });
 }
 
-/* ========================= PROCESADOR DE SECUENCIA (BOT) ========================= */
+/* ========================= PROCESADOR DE FLUJO ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
     let payload = { messaging_product: "whatsapp", to };
@@ -59,10 +64,8 @@ async function processSequence(to, node, allNodes) {
         else if (node.name === "media") {
             const pathMedia = node.data.media_url; 
             if (pathMedia) {
-                // WhatsApp prefiere links públicos o IDs. Usamos el link público de tu servidor.
                 const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
                 const fullUrl = pathMedia.startsWith('http') ? pathMedia : `https://${domain}${pathMedia}`;
-                
                 payload.type = "image";
                 payload.image = { link: fullUrl, caption: node.data.caption || "" };
                 botText = "📷 Imagen enviada";
@@ -85,6 +88,8 @@ async function processSequence(to, node, allNodes) {
         });
 
         const saved = await Message.create({ chatId: to, from: "me", text: botText });
+        // Enviar evento dual para asegurar que el CRM lo reciba (new_message o sent)
+        broadcast({ type: "new_message", message: saved });
         broadcast({ type: "sent", data: saved });
 
         if (node.name === "whatsapp_list") return;
@@ -96,50 +101,7 @@ async function processSequence(to, node, allNodes) {
     } catch (err) { console.error("❌ Error Bot:", err.response?.data || err.message); }
 }
 
-/* ========================= ENDPOINTS CRM (FIJAN LOS 404) ========================= */
-
-// Envío manual de texto
-app.post("/send-message", async (req, res) => {
-    const { to, text } = req.body;
-    try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, 
-            { messaging_product: "whatsapp", to, text: { body: text } },
-            { headers: { "Authorization": `Bearer ${process.env.ACCESS_TOKEN}` } }
-        );
-        const saved = await Message.create({ chatId: to, from: "me", text });
-        broadcast({ type: "sent", data: saved });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Envío manual de media (Lógica Punto Nemo)
-app.post("/send-media", upload.single("file"), async (req, res) => {
-    try {
-        const { to } = req.body;
-        const file = req.file;
-        if (!file || !to) return res.status(400).json({ error: "Faltan datos" });
-
-        const form = new FormData();
-        form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
-        form.append('type', file.mimetype);
-        form.append('messaging_product', 'whatsapp');
-
-        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
-            headers: { ...form.getHeaders(), 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
-        }, { headers: { 'Authorization': `Bearer ${process.env.ACCESS_TOKEN}` } });
-
-        const mediaUrl = `/uploads/${file.filename}`;
-        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl });
-        broadcast({ type: "sent", data: saved });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Error Punto Nemo Media" }); }
-});
-
-/* ========================= WEBHOOK Y FLUJO ========================= */
+/* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
@@ -147,7 +109,8 @@ app.post("/webhook", async (req, res) => {
             const sender = msg.from;
             const text = (msg.text?.body || msg.interactive?.list_reply?.title || "").trim();
             
-            const saved = await Message.create({ chatId: sender, from: sender, text: text || "Media recibido" });
+            const saved = await Message.create({ chatId: sender, from: sender, text: text || "Mensaje recibido" });
+            broadcast({ type: "new_message", message: saved });
             broadcast({ type: "incoming", data: saved });
 
             const flowDoc = await Flow.findOne({ name: "Main Flow" });
@@ -155,12 +118,68 @@ app.post("/webhook", async (req, res) => {
                 const nodes = flowDoc.data.drawflow.Home.data;
                 const trigger = Object.values(nodes).find(n => n.name === "trigger" && n.data.val?.toLowerCase() === text.toLowerCase());
                 if (trigger && trigger.outputs.output_1.connections[0]) {
-                    return processSequence(sender, nodes[trigger.outputs.output_1.connections[0].node], nodes);
+                    processSequence(sender, nodes[trigger.outputs.output_1.connections[0].node], nodes);
                 }
             }
         }
     }
     res.sendStatus(200);
+});
+
+/* ========================= ENDPOINTS CRM (FIJAN LOS 404) ========================= */
+
+// Obtener todos los chats
+app.get("/chats", async (req, res) => {
+    const chats = await Message.aggregate([
+        { $sort: { timestamp: 1 } },
+        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } },
+        { $sort: { lastTime: -1 } }
+    ]);
+    res.json(chats);
+});
+
+// Obtener mensajes de un chat específico (Doble ruta para compatibilidad)
+app.get(["/messages/:chatId", "/chat/messages/:chatId"], async (req, res) => {
+    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
+    res.json(messages);
+});
+
+// Enviar mensaje manual
+app.post("/send-message", async (req, res) => {
+    const { to, text } = req.body;
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, 
+            { messaging_product: "whatsapp", to, text: { body: text } },
+            { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }
+        );
+        const saved = await Message.create({ chatId: to, from: "me", text });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Enviar media manual (CRM)
+app.post("/send-media", upload.single("file"), async (req, res) => {
+    try {
+        const { to } = req.body;
+        const file = req.file;
+        const form = new FormData();
+        form.append('file', fs.createReadStream(file.path), { filename: file.originalname, contentType: file.mimetype });
+        form.append('type', file.mimetype);
+        form.append('messaging_product', 'whatsapp');
+
+        const uploadRes = await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/media`, form, {
+            headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp", to, type: "image", image: { id: uploadRes.data.id }
+        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
+
+        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl: `/uploads/${file.filename}` });
+        broadcast({ type: "new_message", message: saved });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* ========================= APIS FLUJO ========================= */
@@ -179,9 +198,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-app.get("/chat/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
-});
-
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 CRM & Bot Restaurado con éxito"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 CRM & Bot Sincronizados"));
