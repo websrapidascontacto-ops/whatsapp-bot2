@@ -97,7 +97,13 @@ app.post("/webhook", async (req, res) => {
                         return await processSequence(sender, nodes[firstNextNodeId], nodes);
                     }
 
-                    // 2. LÓGICA DE CONTINUACIÓN POR LISTA
+try {
+                const flowDoc = await Flow.findOne({ name: "Main Flow" });
+                if (flowDoc && incomingText) {
+                    const nodes = flowDoc.data.drawflow.Home.data;
+
+                    // --- 1. PRIORIDAD: LÓGICA DE CONTINUACIÓN POR LISTA ---
+                    // Buscamos primero si el mensaje es la respuesta a una lista activa
                     const activeListNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(val => val && val.trim().toLowerCase() === incomingText.toLowerCase());
@@ -114,19 +120,25 @@ app.post("/webhook", async (req, res) => {
                             
                             if (connection) {
                                 const nextNodeId = connection.node;
-                                // PROCESA EL SIGUIENTE Y CORTA LA EJECUCIÓN
                                 await processSequence(sender, nodes[nextNodeId], nodes);
-                                return res.sendStatus(200); 
+                                return res.sendStatus(200); // FINALIZA: Encontró la opción de la lista
                             }
                         }
                     }
+
+                    // --- 2. SECUNDARIO: LÓGICA DE TRIGGER (INICIO DE FLUJO) ---
+                    // Solo si no fue una respuesta de lista, revisamos si es una palabra clave de inicio
+                    const triggerNode = Object.values(nodes).find(n => 
+                        n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                    );
+                    
+                    if (triggerNode && triggerNode.outputs.output_1.connections[0]) {
+                        const firstNextNodeId = triggerNode.outputs.output_1.connections[0].node;
+                        await processSequence(sender, nodes[firstNextNodeId], nodes);
+                        return res.sendStatus(200); // FINALIZA: Inició un flujo nuevo
+                    }
                 }
             } catch (err) { console.error("❌ Error Webhook Logic:", err.message); }
-        }
-    }
-    res.sendStatus(200);
-});
-
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
