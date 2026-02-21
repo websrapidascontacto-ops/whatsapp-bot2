@@ -141,14 +141,26 @@ async function processSequence(to, node, allNodes) {
         payload.text = { body: botText };
     } 
     else if (node.name === "media") {
-        const mediaPath = node.data.media_url;
+        // Detectamos la URL en media_url o info para mayor compatibilidad
+        const mediaPath = node.data.media_url || node.data.info;
         const caption = node.data.caption || "";
-        const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-        const fullUrl = mediaPath.startsWith('/uploads/') ? `https://${domain}${mediaPath}` : mediaPath;
+        
+        if (mediaPath) {
+            // Construimos la URL absoluta obligatoria para WhatsApp
+            const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
+            const fullUrl = mediaPath.startsWith('/uploads/') 
+                ? `https://${domain}${mediaPath}` 
+                : mediaPath;
 
-        payload.type = "image";
-        payload.image = { link: fullUrl, caption: caption };
-        botText = `🖼️ Imagen: ${caption}`;
+            payload.type = "image";
+            payload.image = { link: fullUrl, caption: caption };
+            botText = `🖼️ Imagen: ${caption}`;
+        } else {
+            // Si el nodo está vacío, envía un mensaje de error en lugar de romperse
+            payload.type = "text";
+            payload.text = { body: "⚠️ No se encontró ninguna imagen configurada en este nodo." };
+            botText = "⚠️ Error: Nodo imagen vacío";
+        }
     }
     else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data)
