@@ -200,7 +200,6 @@ app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
     } catch (err) { res.status(500).json({ error: "Error subida" }); }
 });
 
-// NUEVO: ENDPOINT PARA ENVIAR FOTOS DESDE EL CHAT
 app.post("/send-media", upload.single("file"), async (req, res) => {
     const { to } = req.body;
     const file = req.file;
@@ -220,7 +219,8 @@ app.post("/send-media", upload.single("file"), async (req, res) => {
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
 
         const mediaUrl = `/uploads/${file.filename}`;
-        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl });
+        // Aseguramos que se guarde y emita como mediaUrl
+        const saved = await Message.create({ chatId: to, from: "me", text: "📷 Imagen", mediaUrl: mediaUrl });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
     } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
@@ -232,7 +232,8 @@ app.post("/send-message", async (req, res) => {
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
             messaging_product: "whatsapp", to, type: "text", text: { body: text }
         }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-        const saved = await Message.create({ chatId: to, from: "me", text });
+        // Aseguramos mediaUrl: null para evitar errores en el front
+        const saved = await Message.create({ chatId: to, from: "me", text: text, mediaUrl: null });
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
