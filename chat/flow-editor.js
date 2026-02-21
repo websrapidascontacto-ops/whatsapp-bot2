@@ -36,21 +36,36 @@ window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div 
 
 window.addListNode = function() {
     const nodeId = editor.node_id + 1;
-    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title placeholder="Título"><input type="text" class="form-control mb-1" df-button_text placeholder="Botón"><div id=\"list-items-${nodeId}\"><input type=\"text\" class=\"form-control mb-1\" df-row1></div><button class=\"btn btn-sm btn-success w-100\" onclick=\"addRow(${nodeId}, 'row')\">+ Fila</button></div></div>`;
+    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title placeholder="Título"><input type="text" class="form-control mb-1" df-button_text placeholder="Botón"><div id=\"list-items-${nodeId}\"><input type=\"text\" class=\"form-control mb-1\" df-row1 placeholder=\"Fila 1\"></div><button class=\"btn btn-sm btn-success w-100\" onclick=\"addRow(${nodeId}, 'row')\">+ Fila</button></div></div>`;
     createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
+/* AJUSTE PARA AÑADIR FILAS CORRECTAMENTE */
 window.addRow = (nodeId, prefix) => {
     const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
     if(!container) return;
+    
     const count = container.querySelectorAll("input").length + 1;
+    const key = `${prefix}${count}`;
+    
+    // Añadir salida física al nodo
     editor.addNodeOutput(nodeId);
+    
+    // Crear input visual
     const input = document.createElement("input");
     input.className = "form-control mb-1";
-    input.setAttribute(`df-${prefix}${count}`, "");
+    input.placeholder = `Fila ${count}`;
+    input.setAttribute(`df-${key}`, "");
     container.appendChild(input);
+    
+    // Registrar el dato en el objeto de Drawflow
     const node = editor.getNodeFromId(nodeId);
-    if(node) node.data[`${prefix}${count}`] = "";
+    if(node) {
+        node.data[key] = "";
+    }
+    
+    // Forzar actualización de conexiones
+    editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
 window.saveFlow = function() {
