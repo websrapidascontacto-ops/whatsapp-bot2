@@ -57,37 +57,44 @@ window.addRowDynamic = function(button) {
     const nodeId = nodeElement.id.replace('node-', '');
     const container = nodeElement.querySelector('.items-container');
     
+    // Acceso correcto a la data del nodo
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
+    // Contamos inputs para saber qué número de fila sigue
     const count = container.querySelectorAll("input").length + 1;
     const key = `row${count}`;
 
-    // 1. Añadir salida física
-    editor.addNodeOutput(nodeId);
+    // --- MEJORA PARA EVITAR PUNTOS EXTRAS ---
+    // Solo añadimos salida si la fila nueva NO tiene una salida asignada ya
+    const currentOutputs = Object.keys(editor.drawflow.drawflow.Home.data[nodeId].outputs).length;
+    if (count > currentOutputs) {
+        editor.addNodeOutput(nodeId);
+    }
 
-    // 2. Crear el input
+    // Crear el input con Montserrat
     const input = document.createElement("input");
     input.className = "form-control mb-1";
     input.style.fontFamily = "Montserrat, sans-serif";
     input.placeholder = `Fila ${count}`;
 
-    // --- LA LÍNEA CLAVE QUE TE FALTABA ---
-    // Esto le dice a Drawflow: "Este input pertenece a la llave rowX"
+    // ASIGNACIÓN CLAVE: Esto vincula el input con el JSON de exportación
     input.setAttribute(`df-${key}`, ""); 
-    // -------------------------------------
 
+    // Sincronización en tiempo real
     input.addEventListener('input', (e) => {
         nodeData[key] = e.target.value;
     });
 
     container.appendChild(input);
 
-    nodeData[key] = "";
+    // Inicializar el valor en el objeto de datos si no existe
+    if (nodeData[key] === undefined) {
+        nodeData[key] = "";
+    }
     
-    // 3. Importante: Actualizar el editor para que registre el nuevo input df-*
+    // Refrescar el nodo para que Drawflow registre el nuevo atributo df-*
     editor.updateConnectionNodes(`node-${nodeId}`);
-};
-window.saveFlow = function() {
+};window.saveFlow = function() {
     const data = editor.export();
     fetch('/api/save-flow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(() => alert("✅ Flujo Guardado"));
 };
@@ -160,34 +167,39 @@ document.getElementById('import_file').addEventListener('change', function(e) {
             // 1. Cargar los datos al editor visual
             editor.import(flowData);
             
-            // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS
-            // Recorremos todos los nodos cargados
-            const nodes = flowData.drawflow.Home.data;
-            Object.keys(nodes).forEach(nodeId => {
-                const node = nodes[nodeId];
-                if (node.name === "whatsapp_list") {
-                    // Buscamos el botón de "+ Fila" de ese nodo específico
-                    const btn = document.querySelector(`#node-${nodeId} .btn-success`);
-                    if (btn) {
-                        // Buscamos cuántas filas (row2, row3...) hay en los datos
-                        // Empezamos desde i=2 porque la row1 ya viene en el HTML
-                        let i = 2;
-                        while (node.data[`row${i}`] !== undefined) {
-                            // Ejecutamos la función de añadir fila
-                            window.addRowDynamic(btn);
-                            // Rellenamos el valor que acabamos de crear
-                            const input = document.querySelector(`#node-${nodeId} [df-row${i}]`);
-                            if (input) input.value = node.data[`row${i}`];
-                            i++;
+            // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS (Con retraso de seguridad)
+            setTimeout(() => {
+                const nodes = flowData.drawflow.Home.data;
+                Object.keys(nodes).forEach(nodeId => {
+                    const node = nodes[nodeId];
+                    
+                    if (node.name === "whatsapp_list") {
+                        // Buscamos el botón de "+ Fila" dentro del nodo renderizado
+                        const btn = document.querySelector(`#node-${nodeId} .btn-success`);
+                        
+                        if (btn) {
+                            // Empezamos desde i=2 porque la row1 es parte del HTML base
+                            let i = 2;
+                            while (node.data[`row${i}`] !== undefined) {
+                                // Ejecuta la función que crea el input visual
+                                window.addRowDynamic(btn);
+                                
+                                // Buscamos el input recién creado para ponerle su texto
+                                const input = document.querySelector(`#node-${nodeId} [df-row${i}]`);
+                                if (input) {
+                                    input.value = node.data[`row${i}`];
+                                }
+                                i++;
+                            }
                         }
                     }
-                }
-            });
+                });
+                alert("✅ Flujo cargado y filas reconstruidas correctamente.");
+            }, 150); // 150ms asegura que el DOM de Drawflow esté listo
 
-            alert("✅ Flujo cargado y filas reconstruidas.");
         } catch (err) {
             alert("❌ Error: El archivo no es un JSON de flujo válido.");
-            console.error(err);
+            console.error("Error al importar:", err);
         }
     };
     reader.readAsText(file);
