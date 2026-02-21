@@ -34,42 +34,55 @@ window.addTriggerNode = () => createNode("trigger", 0, 1, `<div class="node-wrap
 window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><textarea class="form-control" df-info></textarea></div></div>`, { info: '' });
 window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
 
+/* CORRECCIÓN DE ID EN LISTA */
 window.addListNode = function() {
-    const nodeId = editor.node_id + 1;
-    const html = `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title placeholder="Título"><input type="text" class="form-control mb-1" df-button_text placeholder="Botón"><div id=\"list-items-${nodeId}\"><input type=\"text\" class=\"form-control mb-1\" df-row1 placeholder=\"Fila 1\"></div><button class=\"btn btn-sm btn-success w-100\" onclick=\"addRow(${nodeId}, 'row')\">+ Fila</button></div></div>`;
-    createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
+    // Primero creamos el nodo con un HTML base
+    const nodeId = createNode("whatsapp_list", 1, 1, `
+        <div class="node-wrapper">
+            <div class="node-header header-list">📝 Lista</div>
+            <div class="node-body">
+                <input type="text" class="form-control mb-1" df-list_title placeholder="Título">
+                <input type="text" class="form-control mb-1" df-button_text placeholder="Botón">
+                <div id="list-items-TEMP_ID">
+                    <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
+                </div>
+                <button class="btn btn-sm btn-success w-100" id="btn-add-TEMP_ID">+ Fila</button>
+            </div>
+        </div>`, { list_title: '', button_text: '', row1: '' });
+
+    // Ahora inyectamos el ID real en el HTML del nodo recién creado
+    setTimeout(() => {
+        const listContainer = document.querySelector(`#node-${nodeId} [id*="list-items-TEMP_ID"]`);
+        const btnAdd = document.querySelector(`#node-${nodeId} [id*="btn-add-TEMP_ID"]`);
+        
+        if(listContainer) listContainer.id = `list-items-${nodeId}`;
+        if(btnAdd) {
+            btnAdd.id = `btn-add-${nodeId}`;
+            btnAdd.onclick = () => window.addRow(nodeId, 'row');
+        }
+    }, 50);
 };
 
-/* CORRECCIÓN FINAL ADDRROW (PUNTO NEMO) */
+/* FUNCIÓN ADDROW ACTUALIZADA */
 window.addRow = (nodeId, prefix) => {
-    const container = document.getElementById(prefix === 'row' ? `list-items-${nodeId}` : `menu-items-${nodeId}`);
+    const container = document.getElementById(`${prefix}-items-${nodeId}`);
     if(!container) return;
 
-    // Buscamos el nodo directamente en el objeto de Drawflow por seguridad
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId];
-    
-    if(!nodeData) {
-        console.error("Error: Nodo " + nodeId + " no encontrado en el Home.");
-        return;
-    }
+    if(!nodeData) return;
 
     const count = container.querySelectorAll("input").length + 1;
     const key = `${prefix}${count}`;
 
-    // 1. Añadimos el output visual
     editor.addNodeOutput(nodeId);
 
-    // 2. Creamos el input visual
     const input = document.createElement("input");
     input.className = "form-control mb-1";
     input.placeholder = `Fila ${count}`;
     input.setAttribute(`df-${key}`, "");
     container.appendChild(input);
 
-    // 3. Insertamos el dato en el JSON interno
     nodeData.data[key] = "";
-
-    // 4. Actualizamos el nodo para que Drawflow reconozca el nuevo input df-
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
