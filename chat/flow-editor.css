@@ -14,18 +14,24 @@
     --text-main: #f1f5f9;
 }
 
+/* FUENTE GLOBAL MONTSERRAT */
 * { 
     font-family: 'Montserrat', sans-serif !important; 
     box-sizing: border-box;
 }
 
-body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--text-main); }
+body { 
+    margin: 0; 
+    background: var(--bg-main); 
+    overflow: hidden; 
+    color: var(--text-main); 
+}
 
 /* ================= HEADER MODERNO ================= */
 .editor-header {
-    height: 80px; 
+    height: 85px; 
     background: rgba(22, 28, 45, 0.9);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
     display: flex; 
     align-items: center; 
     justify-content: space-between;
@@ -37,49 +43,82 @@ body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--tex
     border-bottom: 1px solid var(--border-color);
 }
 
-.logo { 
-    height: 50px; 
-    filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));
+.logo-container {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 18px;
+    border-radius: 15px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
 }
 
-/* ================= BOTONES CON ICONOS Y COLORES ================= */
-.header-buttons { display: flex; gap: 10px; }
+.logo { 
+    height: 45px; 
+    object-fit: contain;
+}
+
+/* ================= BOTONES SUPERIORES CON GLOW ================= */
+.header-buttons { 
+    display: flex; 
+    gap: 12px; 
+    align-items: center;
+}
 
 .header-buttons button {
-    border: none; padding: 10px 16px; border-radius: 12px; color: white;
-    font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.3s;
-    display: flex; align-items: center; gap: 8px; /* Espacio para el icono */
+    border: none; 
+    padding: 10px 18px; 
+    border-radius: 12px; 
+    color: white;
+    font-weight: 700; 
+    font-size: 12px; 
+    cursor: pointer; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    gap: 10px; /* Espaciado perfecto entre icono y texto */
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
-/* Colores Individuales */
-.btn-trigger { background: #f59e0b; }
-.btn-message { background: #2563eb; }
-.btn-ia { background: #10b981; }
-.btn-list { background: #075e54; }
-.btn-media { background: #e67e22; }
-.btn-save { background: #6366f1; border: 2px solid white !important; }
+/* Eliminamos cualquier contenido previo que cause errores visuales */
+.header-buttons button::before {
+    content: none !important;
+}
 
-.header-buttons button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+/* Colores por Clase */
+.btn-trigger { background: var(--warning); }
+.btn-message { background: var(--primary); }
+.btn-ia { background: var(--success); }
+.btn-list { background: var(--whatsapp); }
+.btn-media { background: var(--media); }
+.btn-save { 
+    background: transparent; 
+    border: 2px solid var(--indigo) !important; 
+    margin-left: 15px;
+}
 
-/* Inserción de iconos mediante pseudo-elementos si no están en el HTML */
-.btn-trigger::before { content: "⚡"; font-size: 16px; }
-.btn-message::before { content: "💬"; font-size: 16px; }
-.btn-ia::before { content: "🤖"; font-size: 16px; }
-.btn-list::before { content: "📝"; font-size: 16px; }
-.btn-media::before { content: "🖼️"; font-size: 16px; }
-.btn-save::before { content: "💾"; font-size: 16px; }
+/* EFECTO HOVER CON RESPLANDOR (GLOW) */
+.header-buttons button:hover {
+    transform: translateY(-3px);
+    filter: brightness(1.2);
+    box-shadow: 0 0 20px currentColor;
+}
 
-/* ================= CONEXIONES ANIMADAS (Grosor 5px) ================= */
+.btn-save:hover { background: var(--indigo); }
+
+/* ================= CONEXIONES ANIMADAS (GROSOR 5PX) ================= */
 .drawflow .connection .main-path {
-    stroke: #6366f1; /* Color índigo brillante */
+    stroke: #6366f1; 
     stroke-width: 5px !important;
-    stroke-dasharray: 10; /* Crea el efecto de línea punteada/segmentada */
-    animation: dash 1s linear infinite; /* Animación de movimiento */
+    stroke-dasharray: 15, 8; 
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));
+    animation: flowDash 0.8s linear infinite;
 }
 
-@keyframes dash {
-    from { stroke-dashoffset: 20; }
+@keyframes flowDash {
+    from { stroke-dashoffset: 23; }
     to { stroke-dashoffset: 0; }
 }
 
@@ -89,12 +128,23 @@ body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--tex
     border-radius: 20px !important;
     border: 1px solid var(--border-color) !important; 
     width: 320px !important;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+}
+
+.drawflow-node.selected {
+    border: 2px solid var(--indigo) !important;
+    box-shadow: 0 0 25px rgba(99, 102, 241, 0.3) !important;
 }
 
 .node-header { 
-    padding: 15px; border-radius: 20px 20px 0 0; 
-    font-weight: 700; font-size: 14px; 
+    padding: 15px 20px; 
+    border-radius: 20px 20px 0 0; 
+    font-weight: 700; 
+    font-size: 14px; 
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
 }
 
 .header-trigger { background: linear-gradient(135deg, #f59e0b, #d97706); }
@@ -106,27 +156,58 @@ body { margin: 0; background: var(--bg-main); overflow: hidden; color: var(--tex
 .node-body { padding: 20px; }
 
 .form-control {
-    background: #0b0f1a; border: 1px solid var(--border-color);
-    color: white; border-radius: 10px; padding: 10px; width: 100%;
+    background: #0b0f1a; 
+    border: 1px solid var(--border-color);
+    color: white; 
+    border-radius: 12px; 
+    padding: 12px; 
+    width: 100%;
+    font-size: 13px;
+    margin-bottom: 10px;
 }
 
 /* PUNTOS DE CONEXIÓN */
 .drawflow-node .input, .drawflow-node .output {
-    width: 20px !important; height: 20px !important;
-    border: 3px solid var(--bg-secondary) !important;
+    width: 18px !important; 
+    height: 18px !important;
+    border: 4px solid var(--bg-secondary) !important;
 }
-.drawflow-node .output { background: #6366f1 !important; }
 
+.drawflow-node .input { background: #94a3b8 !important; left: -10px !important; }
+.drawflow-node .output { background: var(--indigo) !important; right: -10px !important; }
+
+/* CANVAS Y GRILLA */
 #drawflow {
-    position: absolute; top: 0; width: 100%; height: 100vh;
+    position: absolute; 
+    top: 0; 
+    width: 100%; 
+    height: 100vh;
     background-color: var(--bg-main);
-    background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
-    background-size: 30px 30px;
+    background-image: radial-gradient(rgba(255,255,255,0.05) 1.5px, transparent 1.5px);
+    background-size: 35px 35px;
 }
 
 /* BOTÓN CERRAR NODO */
 .node-close-btn {
-    position: absolute; top: -10px; right: -10px; background: var(--danger);
-    color: white; width: 26px; height: 26px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    position: absolute; 
+    top: -12px; 
+    right: -12px; 
+    background: var(--danger);
+    color: white; 
+    width: 28px; 
+    height: 28px; 
+    border-radius: 50%;
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* ALINEACIÓN DE SALIDAS PARA LISTAS */
+.drawflow-node.whatsapp_list .outputs {
+    display: flex;
+    flex-direction: column;
+    gap: 34px; 
+    padding-top: 178px; 
 }
