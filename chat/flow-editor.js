@@ -273,3 +273,19 @@ document.getElementById('import_file').addEventListener('change', function(e) {
     };
     reader.readAsText(file);
 });
+/* === NODO BOTÓN DE ACTIVACIÓN (S/380 UX) === */
+window.addButtonTriggerNode = () => {
+    const html = `
+        <div class="node-wrapper">
+            <div class="node-header" style="background: #9b59b6; color: white; font-family: 'Montserrat';">🔘 Botón en Chat</div>
+            <div class="node-body">
+                <p style="font-size: 10px; color: #666; margin-bottom: 5px;">Texto que verá el usuario:</p>
+                <input type="text" class="form-control mb-2" df-button_text placeholder="Ej: Ver Catálogo" style="font-family: 'Montserrat';">
+                
+                <p style="font-size: 10px; color: #666; margin-bottom: 5px;">Palabra que activa (Trigger):</p>
+                <input type="text" class="form-control" df-trigger_val placeholder="Ej: catalogo" style="font-family: 'Montserrat';">
+            </div>
+        </div>`;
+    
+    createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
+};

@@ -366,3 +366,14 @@ async function loadFlowsList() {
         console.error(error);
     }
 }
+/* Función para activar flujos desde el chat */
+window.openFlowPicker = function() {
+    // Aquí puedes abrir un pequeño modal o un prompt para elegir el trigger
+    const trigger = prompt("Escribe la palabra clave (Trigger) del flujo que deseas activar:");
+    if (trigger) {
+        // Simulamos que el usuario escribió la palabra para que el sistema la procese
+        document.getElementById('message-input').value = trigger;
+        sendMessage();
+        alert("✅ Iniciando flujo: " + trigger);
+    }
+};
