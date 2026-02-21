@@ -202,17 +202,38 @@ app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
 });
 
 app.post("/send-message", async (req, res) => {
-    const { to, text } = req.body;
+    const { to, text, mediaUrl } = req.body;
     try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-            messaging_product: "whatsapp", to, type: "text", text: { body: text }
-        }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } });
-        const saved = await Message.create({ chatId: to, from: "me", text });
+        let payload = { messaging_product: "whatsapp", to };
+        
+        // Si hay mediaUrl, enviamos imagen; si no, texto plano
+        if (mediaUrl) {
+            payload.type = "image";
+            payload.image = { link: mediaUrl, caption: text || "" };
+        } else {
+            payload.type = "text";
+            payload.text = { body: text };
+        }
+
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+
+        // Guardamos en la base de datos para que aparezca en tu chat
+        const saved = await Message.create({ 
+            chatId: to, 
+            from: "me", 
+            text: text || (mediaUrl ? "📷 Imagen enviada" : ""), 
+            media: mediaUrl || null 
+        });
+        
         broadcast({ type: "new_message", message: saved });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("❌ Error enviando:", e.response?.data || e.message);
+        res.status(500).json({ error: e.message }); 
+    }
 });
-
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
