@@ -94,8 +94,13 @@ try {
     }
 
     div.innerHTML=`
-    <div>${chat._id}</div>
-    <small>${chat.lastMessage||""}</small>
+    <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:40px; height:40px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
+        <div>
+            <div style="font-weight:600; font-family:'Montserrat';">${chat._id}</div>
+            <small>${chat.lastMessage||""}</small>
+        </div>
+    </div>
     ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
     `;
 
@@ -105,15 +110,24 @@ try {
 } catch(e) { console.error("Error al cargar chats:", e); }
 }
 
-/* ABRIR CHAT (CORREGIDO PARA EVITAR TypeError) */
+/* ABRIR CHAT (CORREGIDO CON FOTO Y NÚMERO) */
 async function openChat(chatId){
 currentChat=chatId;
 
 // Limpiar no leídos
 delete unreadCounts[chatId];
 
-const hName = document.getElementById("header-name");
-if(hName) hName.innerText=chatId;
+// Actualizar Header con Foto y Número
+const headerInfo = document.querySelector(".chat-header-info");
+if(headerInfo) {
+    headerInfo.innerHTML = `
+        <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
+        <div>
+            <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px;">${chatId}</div>
+            <div style="font-size:11px; color:green; font-family:'Montserrat';">● En línea</div>
+        </div>
+    `;
+}
 
 if(messagesContainer) messagesContainer.innerHTML="";
 
@@ -182,6 +196,18 @@ body:JSON.stringify({to:currentChat,text})
 });
 
 input.value="";
+}
+
+/* FUNCIÓN PARA EJECUTAR FLUJO SIN MOSTRAR EL TRIGGER */
+async function sendFlowTrigger(trigger){
+if(!currentChat)return;
+
+// Llamamos a la API de ejecución de flujo directamente
+await fetch("/api/execute-flow",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({to:currentChat, trigger: trigger})
+});
 }
 
 let selectedFiles=[];
@@ -307,22 +333,14 @@ window.addEventListener('message', function(event) {
             for (const id in nodes) {
                 const nodeEl = iframe.contentDocument.getElementById('node-' + id);
                 if (nodeEl) {
-                    // Mejora para capturar todos los inputs dinámicos (row1, row2, desc1, desc2...)
                     const allInputs = nodeEl.querySelectorAll('input, textarea');
                     allInputs.forEach(input => {
-                        const dfKey = input.getAttribute('df-val') || input.getAttribute('df-info') || input.className.split(' ').find(c => c.startsWith('df-'));
-                        // Si el input tiene un valor, lo mapeamos al objeto data
-                        if (input.value) {
-                             // Buscamos el nombre del campo df-*
-                             const attr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
-                             if (attr) {
-                                 const key = attr.name.replace('df-', '');
-                                 nodes[id].data[key] = input.value;
-                             }
+                        const attr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
+                        if (attr) {
+                            const key = attr.name.replace('df-', '');
+                            nodes[id].data[key] = input.value;
                         }
                     });
-
-                    // Mantener lógica original de trigger/message
                     const val = nodeEl.querySelector('input, textarea')?.value;
                     if (val) {
                         if (nodes[id].name === 'trigger') {
@@ -334,8 +352,6 @@ window.addEventListener('message', function(event) {
                 }
             }
         }
-
-        console.log("Datos procesados en CRM:", flowJson);
 
         fetch('/api/save-flow', {
             method: 'POST',
@@ -352,7 +368,6 @@ window.addEventListener('message', function(event) {
     }
 });
 
-// Función para cargar flujos (funcional para Railway/MongoDB)
 async function loadFlowsList() {
     try {
         const response = await fetch('/api/get-flow');
@@ -363,19 +378,14 @@ async function loadFlowsList() {
                 iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
                 alert("📂 Flujo cargado. Precio base: S/380");
             }
-        } else {
-            alert("No hay flujos guardados aún.");
         }
-    } catch (error) {
-        console.error(error);
-    }
+    } catch (error) { console.error(error); }
 }
 
 /* ================================================= */
 /* ACTIVACIÓN DE FLUJOS DESDE EL CHAT (DINÁMICO)     */
 /* ================================================= */
 
-// Abre/Cierra el menú y carga los triggers del flujo actual
 window.toggleFlowMenu = async function() {
     const menu = document.getElementById('flow-menu');
     if(!menu) return;
@@ -387,18 +397,14 @@ window.toggleFlowMenu = async function() {
         try {
             const response = await fetch('/api/get-flow');
             const data = await response.json();
-            
             menu.innerHTML = ""; 
 
             if (data && data.drawflow && data.drawflow.Home.data) {
                 const nodes = data.drawflow.Home.data;
-                let found = false;
-
                 for (const id in nodes) {
                     if (nodes[id].name === 'trigger') {
                         const triggerVal = nodes[id].data.val;
                         if (triggerVal) {
-                            found = true;
                             const item = document.createElement('div');
                             item.className = 'flow-item';
                             item.innerHTML = `🤖 <b>${triggerVal}</b>`;
@@ -407,34 +413,22 @@ window.toggleFlowMenu = async function() {
                         }
                     }
                 }
-                if(!found) menu.innerHTML = '<div class="flow-item">Sin Triggers</div>';
-            } else {
-                menu.innerHTML = '<div class="flow-item">Crea un flujo primero</div>';
             }
-        } catch (error) {
-            menu.innerHTML = '<div class="flow-item">Error de conexión</div>';
-        }
-    } else {
-        menu.style.display = 'none';
-    }
+        } catch (error) { menu.innerHTML = 'Error'; }
+    } else { menu.style.display = 'none'; }
 };
 
 window.lanzarFlujo = function(trigger) {
-    const input = document.getElementById('message-input');
-    if(input) {
-        input.value = trigger;
-        sendMessage(); 
-        document.getElementById('flow-menu').style.display = 'none';
-        alert("✅ Lanzando flujo: " + trigger);
-    }
+    // Ejecuta el flujo internamente para que la primera lista llegue directo
+    sendFlowTrigger(trigger);
+    document.getElementById('flow-menu').style.display = 'none';
+    alert("✅ Iniciando flujo: " + trigger);
 };
 
-// Función antigua por si acaso
 window.openFlowPicker = function() {
-    const trigger = prompt("Escribe la palabra clave (Trigger) del flujo que deseas activar:");
+    const trigger = prompt("Escribe el Trigger:");
     if (trigger) {
-        document.getElementById('message-input').value = trigger;
-        sendMessage();
+        sendFlowTrigger(trigger);
         alert("✅ Iniciando flujo: " + trigger);
     }
 };
