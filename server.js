@@ -31,7 +31,7 @@ app.get("/", (req, res) => res.redirect("/index.html"));
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Mongo conectado - Punto Nemo Final Estabilizado"))
+    .then(() => console.log("✅ Mongo conectado - Punto Nemo Final Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
@@ -86,6 +86,7 @@ app.post("/webhook", async (req, res) => {
                 if (flowDoc && incomingText) {
                     const nodes = flowDoc.data.drawflow.Home.data;
 
+                    // 1. BUSCAR TRIGGER
                     const triggerNode = Object.values(nodes).find(n => 
                         n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
                     );
@@ -95,6 +96,7 @@ app.post("/webhook", async (req, res) => {
                         return await processSequence(sender, nodes[firstId], nodes);
                     }
 
+                    // 2. BUSCAR RESPUESTA EN LISTA
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name !== "whatsapp_list") return false;
                         return Object.values(n.data).some(v => v.trim().toLowerCase() === incomingText.toLowerCase());
@@ -128,20 +130,18 @@ async function processSequence(to, node, allNodes) {
             payload.text = { body: botText };
         } 
         else if (node.name === "media") {
-            // CORRECCIÓN: Usar 'media_url' que es como lo guarda tu flow-editor.js
-            const pathMedia = node.data.media_url; 
+            // AQUÍ ESTABA EL FALLO: Usamos node.data.media_url para que coincida con tu flow-editor.js
+            const pathMedia = node.data.media_url || node.data.media; 
+            
             if (pathMedia) {
                 const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-                const fullUrl = pathMedia.startsWith('/') ? `https://${domain}${pathMedia}` : pathMedia;
+                const fullUrl = pathMedia.startsWith('http') ? pathMedia : `https://${domain}${pathMedia}`;
                 
                 payload.type = "image";
-                payload.image = { 
-                    link: fullUrl, 
-                    caption: node.data.caption || "" 
-                };
-                botText = `🖼️ Imagen enviada: ${node.data.caption || ""}`;
+                payload.image = { link: fullUrl, caption: node.data.caption || "" };
+                botText = `🖼️ Imagen enviada`;
             } else {
-                botText = "⚠️ Error: Media no configurado";
+                botText = "⚠️ Error: Imagen no encontrada";
                 payload.type = "text";
                 payload.text = { body: botText };
             }
@@ -152,7 +152,7 @@ async function processSequence(to, node, allNodes) {
             payload.type = "interactive";
             payload.interactive = {
                 type: "list",
-                body: { text: node.data.list_title || "Selecciona una opción:" },
+                body: { text: node.data.list_title || "Menú" },
                 action: { button: node.data.button_text || "Opciones", sections: [{ title: "Menú", rows }] }
             };
             botText = "📋 Menú enviado";
@@ -169,12 +169,10 @@ async function processSequence(to, node, allNodes) {
 
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(r => setTimeout(r, 1500));
             return await processSequence(to, allNodes[nextId], allNodes);
         }
-    } catch (err) { 
-        console.error("❌ Error flujo:", err.response?.data || err.message); 
-    }
+    } catch (err) { console.error("❌ Error flujo:", err.response?.data || err.message); }
 }
 
 /* ========================= APIS CRM Y STORAGE ========================= */
@@ -221,4 +219,4 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Punto Nemo Final - Imágenes Corregidas"));
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => console.log("🚀 Punto Nemo Final - Listo"));
