@@ -1,16 +1,13 @@
-// 1. PRIMERO definimos las variables globales
+/* === INICIO Y CONFIGURACIÓN (Mantén tus variables globales arriba) === */
+// Asegúrate de que estas líneas solo estén UNA VEZ en todo el archivo
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
-
-// 2. Configuración básica
 editor.reroute = true;
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
-
-// 3. Iniciamos el editor
 editor.start();
 
-/* === ZOOM TOTAL INSTANTÁNEO AL PUNTERO (CORREGIDO) === */
+/* === ZOOM TOTAL AL PUNTERO (ESTO ES LO ÚNICO NUEVO) === */
 container.addEventListener('wheel', function(e) {
     e.preventDefault(); 
     const delta = e.deltaY > 0 ? -1 : 1;
@@ -26,11 +23,12 @@ container.addEventListener('wheel', function(e) {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        // Cálculo matemático para que el zoom siga al mouse
         editor.pre_canvas_x += (x - editor.pre_canvas_x) * (1 - newZoom / oldZoom);
         editor.pre_canvas_y += (y - editor.pre_canvas_y) * (1 - newZoom / oldZoom);
         editor.zoom = newZoom;
 
-        // Forzamos actualización visual
+        // Actualización visual forzada para que sea instantáneo
         const map = container.querySelector('.drawflow-canvas');
         if(map) {
             map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
@@ -38,6 +36,9 @@ container.addEventListener('wheel', function(e) {
         editor.updateZoom();
     }
 }, { passive: false });
+
+/* === DESPUÉS DE ESTO, DEJA TODO TU CÓDIGO ORIGINAL TAL CUAL === */
+// No borres tus funciones addTriggerNode, addMessageNode, addRowDynamic, etc.
 
 /* === LÓGICA DE POSICIONAMIENTO AUTOMÁTICO === */
 let lastNodeX = 50;
