@@ -1,35 +1,36 @@
-const container = document.getElementById("drawflow");
-const editor = new Drawflow(container);
-editor.reroute = true;
-editor.zoom_max = 1.6;
-editor.zoom_min = 0.5;
-
-editor.start();
-
-/* === ZOOM TOTAL HACIA EL PUNTERO (SIN CTRL) === */
+/* === ZOOM TOTAL INSTANTÁNEO AL PUNTERO === */
 container.addEventListener('wheel', function(e) {
     e.preventDefault(); 
 
     const delta = e.deltaY > 0 ? -1 : 1;
-    const zoomSpeed = 0.1;
+    const zoomSpeed = 0.05; // Ajustado para mayor suavidad
     const oldZoom = editor.zoom;
     let newZoom = oldZoom + (delta * zoomSpeed);
 
-    // Respetar límites
+    // Límites de zoom
     if (newZoom > editor.zoom_max) newZoom = editor.zoom_max;
     if (newZoom < editor.zoom_min) newZoom = editor.zoom_min;
 
     if (oldZoom !== newZoom) {
-        // Cálculo de posición relativa al puntero
         const rect = container.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Ajustar el canvas para que el punto bajo el mouse no se mueva
+        // 1. Calculamos la nueva posición del canvas
         editor.pre_canvas_x += (x - editor.pre_canvas_x) * (1 - newZoom / oldZoom);
         editor.pre_canvas_y += (y - editor.pre_canvas_y) * (1 - newZoom / oldZoom);
 
+        // 2. Actualizamos el valor del zoom
         editor.zoom = newZoom;
+
+        // 3. ¡ESTA ES LA CLAVE! Forzamos la actualización visual inmediata
+        editor.drawflow.drawflow.Home.zoom = newZoom; 
+        
+        // Aplicamos el movimiento al elemento real de la pantalla
+        const map = container.querySelector('.drawflow-canvas');
+        map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
+        
+        // Avisamos a Drawflow que se actualice internamente
         editor.updateZoom();
     }
 }, { passive: false });
