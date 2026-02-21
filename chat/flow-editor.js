@@ -9,13 +9,25 @@ editor.zoom_value = 0.1;
 
 editor.start();
 
+/* === LÓGICA DE POSICIONAMIENTO AUTOMÁTICO === */
 let lastNodeX = 50;
 let lastNodeY = 150;
+const nodeWidth = 380; // Espacio que ocupa cada nodo + margen
 
 function createNode(type, inputs, outputs, html, data = {}) {
+    // 1. Creamos el nodo en la posición actual
     const nodeId = editor.addNode(type, inputs, outputs, lastNodeX, lastNodeY, type, data, html);
-    lastNodeX += 380; if (lastNodeX > 1000) { lastNodeX = 50; lastNodeY += 400; }
     
+    // 2. Calculamos la posición del PRÓXIMO nodo
+    lastNodeX += nodeWidth; 
+
+    // 3. Límite de ancho: Si llega a 2000px, vuelve a la izquierda y baja 400px
+    if (lastNodeX > 2000) { 
+        lastNodeX = 50; 
+        lastNodeY += 400; 
+    }
+    
+    // Botón de cerrar y UX
     setTimeout(() => {
         const nodeElem = document.getElementById(`node-${nodeId}`);
         if (nodeElem) {
@@ -26,9 +38,9 @@ function createNode(type, inputs, outputs, html, data = {}) {
             nodeElem.appendChild(closeBtn);
         }
     }, 100);
+
     return nodeId;
 }
-
 window.addTriggerNode = () => createNode("trigger", 0, 1, `<div class="node-wrapper"><div class="node-header header-trigger">⚡ Trigger</div><div class="node-body"><input type="text" class="form-control" df-val></div></div>`, { val: '' });
 window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><textarea class="form-control" df-info></textarea></div></div>`, { info: '' });
 window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
