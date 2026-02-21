@@ -23,14 +23,20 @@ const c=document.getElementById("emoji-picker-container");
 c.style.display=c.style.display==="none"?"block":"none";
 };
 
-/* CERRAR EMOJI AL DAR CLICK AFUERA */
+/* CERRAR EMOJI Y MENÚS AL DAR CLICK AFUERA */
 document.addEventListener("click", (e) => {
     const pickerContainer = document.getElementById("emoji-picker-container");
     const emojiTrigger = document.getElementById("emoji-trigger");
-    if (pickerContainer.style.display === "block") {
+    const flowMenu = document.getElementById('flow-menu');
+
+    if (pickerContainer && pickerContainer.style.display === "block") {
         if (!pickerContainer.contains(e.target) && e.target !== emojiTrigger) {
             pickerContainer.style.display = "none";
         }
+    }
+    // Cerrar menú de flujos si se hace clic fuera
+    if (flowMenu && !e.target.closest('.flow-selector-container')) {
+        flowMenu.style.display = 'none';
     }
 });
 
@@ -74,47 +80,53 @@ loadChats();
 
 /* CARGAR CHATS */
 async function loadChats(){
-const res=await fetch("/chats");
-const chats=await res.json();
-chatList.innerHTML="";
+try {
+    const res=await fetch("/chats");
+    const chats=await res.json();
+    chatList.innerHTML="";
 
-chats.forEach(chat=>{
-const div=document.createElement("div");
-div.className="chat-item";
+    chats.forEach(chat=>{
+    const div=document.createElement("div");
+    div.className="chat-item";
 
-if(unreadCounts[chat._id]){
-div.classList.add("unread");
+    if(unreadCounts[chat._id]){
+    div.classList.add("unread");
+    }
+
+    div.innerHTML=`
+    <div>${chat._id}</div>
+    <small>${chat.lastMessage||""}</small>
+    ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
+    `;
+
+    div.onclick=()=>openChat(chat._id);
+    chatList.appendChild(div);
+    });
+} catch(e) { console.error("Error al cargar chats:", e); }
 }
 
-div.innerHTML=`
-<div>${chat._id}</div>
-<small>${chat.lastMessage||""}</small>
-${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
-`;
-
-div.onclick=()=>openChat(chat._id);
-chatList.appendChild(div);
-});
-}
-
-/* ABRIR CHAT */
+/* ABRIR CHAT (CORREGIDO PARA EVITAR TypeError) */
 async function openChat(chatId){
 currentChat=chatId;
 
 // Limpiar no leídos
 delete unreadCounts[chatId];
 
-document.getElementById("header-name").innerText=chatId;
-messagesContainer.innerHTML="";
+const hName = document.getElementById("header-name");
+if(hName) hName.innerText=chatId;
 
-if(window.innerWidth<=768){
+if(messagesContainer) messagesContainer.innerHTML="";
+
+if(window.innerWidth<=768 && chatListContainer && chatContent){
 chatListContainer.style.display="none";
 chatContent.classList.add("active-mobile");
 }
 
-const res=await fetch("/messages/"+chatId);
-const msgs=await res.json();
-msgs.forEach(renderMessage);
+try {
+    const res=await fetch("/messages/"+chatId);
+    const msgs=await res.json();
+    msgs.forEach(renderMessage);
+} catch(e) { console.error("Error al obtener mensajes:", e); }
 
 // Recargar lista para quitar badge
 loadChats();
@@ -151,8 +163,10 @@ const now=msg.timestamp?new Date(msg.timestamp):new Date();
 time.innerText=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 div.appendChild(time);
 
-messagesContainer.appendChild(div);
-messagesContainer.scrollTop=messagesContainer.scrollHeight;
+if(messagesContainer) {
+    messagesContainer.appendChild(div);
+    messagesContainer.scrollTop=messagesContainer.scrollHeight;
+}
 }
 
 async function sendMessage(){
@@ -202,14 +216,12 @@ async function confirmSendImages() {
 
     const comment = document.getElementById("image-comment").value;
 
-    // Procesamos cada archivo seleccionado
     for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append("file", file);
 
         try {
             console.log("⏳ Subiendo archivo...");
-            // 1. Subimos el archivo a tu carpeta /uploads
             const uploadRes = await fetch("/api/upload-node-media", { 
                 method: "POST", 
                 body: formData 
@@ -218,14 +230,13 @@ async function confirmSendImages() {
 
             if (uploadData.url) {
                 console.log("🚀 Enviando imagen a WhatsApp...");
-                // 2. Enviamos a la ruta /send-message que SÍ existe en tu server.js
                 await fetch("/send-message", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         to: currentChat,
-                        mediaUrl: uploadData.url, // El server completará la URL con el dominio
-                        text: comment // El comentario del modal se envía como texto/caption
+                        mediaUrl: uploadData.url,
+                        text: comment 
                     })
                 });
             }
@@ -233,11 +244,11 @@ async function confirmSendImages() {
             console.error("❌ Error en el proceso de envío:", err);
         }
     }
-
     closeModal();
 }
 
 loadChats();
+
 async function searchMessages() {
     const query = document.getElementById("global-search").value.toLowerCase();
     const overlay = document.getElementById("search-results-overlay");
@@ -266,30 +277,10 @@ async function deleteCurrentChat() {
         if (res.ok) { currentChat = null; messagesContainer.innerHTML = ""; loadChats(); }
     }
 }
+
 /* ============================= */
 /* GESTIÓN DEL EDITOR DE FLUJOS  */
 /* ============================= */
-
-function openFlowEditor() {
-    const overlay = document.getElementById('flow-editor-overlay');
-    overlay.style.display = 'block';
-    console.log("Abriendo editor de flujos para Webs Rápidas... 🚀");
-}
-
-function closeFlowEditor() {
-    if(confirm("¿Estás seguro de cerrar? Asegúrate de haber guardado tu flujo.")) {
-        document.getElementById('flow-editor-overlay').style.display = 'none';
-    }
-}
-
-// Función para el botón de "Cargar Flujos"
-function loadFlowsList() {
-    alert("Cargando lista de flujos guardados... Base: S/380");
-    // Aquí podrías abrir un pequeño modal con la lista de archivos JSON guardados
-}
-/* ================================================= */
-/* INTEGRACIÓN CON EDITOR DE FLUJOS (Webs Rápidas)  */
-/* ================================================= */
 
 function openFlowEditor() {
     const overlay = document.getElementById('flow-editor-overlay');
@@ -300,11 +291,9 @@ function openFlowEditor() {
 }
 
 function closeFlowEditor() {
-    document.getElementById('flow-editor-overlay').style.display = 'none';
-}
-
-function loadFlowsList() {
-    alert("Cargando flujos guardados... Base S/380. WhatsApp: 991138132");
+    if(confirm("¿Estás seguro de cerrar? Asegúrate de haber guardado tu flujo.")) {
+        document.getElementById('flow-editor-overlay').style.display = 'none';
+    }
 }
 
 // ESCUCHAR DATOS DEL EDITOR (Iframe)
@@ -312,8 +301,7 @@ window.addEventListener('message', function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         let flowJson = event.data.data;
         
-        // 1. Extraer los datos de los inputs del iframe manualmente para asegurar que NO viajen vacíos
-        const iframe = document.querySelector('iframe'); // Asegúrate de que este sea tu iframe del editor
+        const iframe = document.querySelector('iframe'); 
         if(iframe && iframe.contentDocument) {
             const nodes = flowJson.drawflow.Home.data;
             for (const id in nodes) {
@@ -333,7 +321,6 @@ window.addEventListener('message', function(event) {
 
         console.log("Datos procesados en CRM:", flowJson);
 
-        // 2. Enviar a Railway (MongoDB)
         fetch('/api/save-flow', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -349,16 +336,17 @@ window.addEventListener('message', function(event) {
     }
 });
 
-// Función para cargar flujos (ahora funcional)
+// Función para cargar flujos (funcional para Railway/MongoDB)
 async function loadFlowsList() {
     try {
         const response = await fetch('/api/get-flow');
         const data = await response.json();
         if (data) {
-            // Enviamos el flujo cargado al iframe del editor
             const iframe = document.getElementById('flow-iframe');
-            iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
-            alert("📂 Flujo cargado. Precio base: S/380");
+            if(iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
+                alert("📂 Flujo cargado. Precio base: S/380");
+            }
         } else {
             alert("No hay flujos guardados aún.");
         }
@@ -366,33 +354,71 @@ async function loadFlowsList() {
         console.error(error);
     }
 }
-/* Función para activar flujos desde el chat */
+
+/* ================================================= */
+/* ACTIVACIÓN DE FLUJOS DESDE EL CHAT (DINÁMICO)     */
+/* ================================================= */
+
+// Abre/Cierra el menú y carga los triggers del flujo actual
+window.toggleFlowMenu = async function() {
+    const menu = document.getElementById('flow-menu');
+    if(!menu) return;
+
+    if (menu.style.display === 'none' || menu.style.display === '') {
+        menu.style.display = 'block';
+        menu.innerHTML = '<div class="flow-item">⌛ Cargando...</div>';
+
+        try {
+            const response = await fetch('/api/get-flow');
+            const data = await response.json();
+            
+            menu.innerHTML = ""; 
+
+            if (data && data.drawflow && data.drawflow.Home.data) {
+                const nodes = data.drawflow.Home.data;
+                let found = false;
+
+                for (const id in nodes) {
+                    if (nodes[id].name === 'trigger') {
+                        const triggerVal = nodes[id].data.val;
+                        if (triggerVal) {
+                            found = true;
+                            const item = document.createElement('div');
+                            item.className = 'flow-item';
+                            item.innerHTML = `🤖 <b>${triggerVal}</b>`;
+                            item.onclick = () => lanzarFlujo(triggerVal);
+                            menu.appendChild(item);
+                        }
+                    }
+                }
+                if(!found) menu.innerHTML = '<div class="flow-item">Sin Triggers</div>';
+            } else {
+                menu.innerHTML = '<div class="flow-item">Crea un flujo primero</div>';
+            }
+        } catch (error) {
+            menu.innerHTML = '<div class="flow-item">Error de conexión</div>';
+        }
+    } else {
+        menu.style.display = 'none';
+    }
+};
+
+window.lanzarFlujo = function(trigger) {
+    const input = document.getElementById('message-input');
+    if(input) {
+        input.value = trigger;
+        sendMessage(); 
+        document.getElementById('flow-menu').style.display = 'none';
+        alert("✅ Lanzando flujo: " + trigger);
+    }
+};
+
+// Función antigua por si acaso
 window.openFlowPicker = function() {
-    // Aquí puedes abrir un pequeño modal o un prompt para elegir el trigger
     const trigger = prompt("Escribe la palabra clave (Trigger) del flujo que deseas activar:");
     if (trigger) {
-        // Simulamos que el usuario escribió la palabra para que el sistema la procese
         document.getElementById('message-input').value = trigger;
         sendMessage();
         alert("✅ Iniciando flujo: " + trigger);
     }
 };
-// Abrir/Cerrar el menú
-window.toggleFlowMenu = function() {
-    const menu = document.getElementById('flow-menu');
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-};
-
-// Lanzar el flujo seleccionado
-window.lanzarFlujo = function(trigger) {
-    document.getElementById('message-input').value = trigger;
-    sendMessage(); // Reutiliza tu función de envío
-    toggleFlowMenu(); // Cierra el menú
-};
-
-// Cerrar si haces clic afuera
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.flow-selector-container')) {
-        document.getElementById('flow-menu').style.display = 'none';
-    }
-});
