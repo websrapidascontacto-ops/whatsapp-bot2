@@ -1,25 +1,38 @@
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
 editor.reroute = true;
-
-/* === CONFIGURACIÓN DE ZOOM SUAVE === */
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
-// Bajamos este valor para que no sea exagerado
-editor.zoom_wheel_speed = 0.02; 
-editor.zoom_last_value = 1;
 
 editor.start();
 
-/* === CAPTURA EL SCROLL Y ELIMINA EL CTRL === */
+/* === ZOOM TOTAL HACIA EL PUNTERO (SIN CTRL) === */
 container.addEventListener('wheel', function(e) {
-    // IMPORTANTE: Bloquea el zoom exagerado del navegador
     e.preventDefault(); 
 
-    // Ejecuta el zoom de la librería donde está el mouse
-    editor.zoom_on_mousewheel(e);
-}, { passive: false }); // 'passive: false' es vital para poder usar preventDefault
+    const delta = e.deltaY > 0 ? -1 : 1;
+    const zoomSpeed = 0.1;
+    const oldZoom = editor.zoom;
+    let newZoom = oldZoom + (delta * zoomSpeed);
 
+    // Respetar límites
+    if (newZoom > editor.zoom_max) newZoom = editor.zoom_max;
+    if (newZoom < editor.zoom_min) newZoom = editor.zoom_min;
+
+    if (oldZoom !== newZoom) {
+        // Cálculo de posición relativa al puntero
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Ajustar el canvas para que el punto bajo el mouse no se mueva
+        editor.pre_canvas_x += (x - editor.pre_canvas_x) * (1 - newZoom / oldZoom);
+        editor.pre_canvas_y += (y - editor.pre_canvas_y) * (1 - newZoom / oldZoom);
+
+        editor.zoom = newZoom;
+        editor.updateZoom();
+    }
+}, { passive: false });
 editor.start();
 
 /* FORZAR ZOOM EN POSICIÓN DEL MOUSE */
