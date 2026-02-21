@@ -307,12 +307,28 @@ window.addEventListener('message', function(event) {
             for (const id in nodes) {
                 const nodeEl = iframe.contentDocument.getElementById('node-' + id);
                 if (nodeEl) {
+                    // Mejora para capturar todos los inputs dinámicos (row1, row2, desc1, desc2...)
+                    const allInputs = nodeEl.querySelectorAll('input, textarea');
+                    allInputs.forEach(input => {
+                        const dfKey = input.getAttribute('df-val') || input.getAttribute('df-info') || input.className.split(' ').find(c => c.startsWith('df-'));
+                        // Si el input tiene un valor, lo mapeamos al objeto data
+                        if (input.value) {
+                             // Buscamos el nombre del campo df-*
+                             const attr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
+                             if (attr) {
+                                 const key = attr.name.replace('df-', '');
+                                 nodes[id].data[key] = input.value;
+                             }
+                        }
+                    });
+
+                    // Mantener lógica original de trigger/message
                     const val = nodeEl.querySelector('input, textarea')?.value;
                     if (val) {
                         if (nodes[id].name === 'trigger') {
-                            nodes[id].data = { val: val };
-                        } else {
-                            nodes[id].data = { info: val };
+                            nodes[id].data.val = val;
+                        } else if (nodes[id].name === 'message') {
+                            nodes[id].data.info = val;
                         }
                     }
                 }
