@@ -182,10 +182,19 @@ else if (node.name === "notify") {
         try {
             const rows = Object.keys(node.data)
                 .filter(k => k.startsWith("row") && node.data[k])
-                .map((k, i) => ({ 
-                    id: `row_${node.id}_${i}`, 
-                    title: node.data[k].toString().substring(0, 24) // Forzamos 24 chars
-                }));
+                .map((k, i) => {
+                    // Extraemos el número de la fila (ej: de "row1" sacamos "1")
+                    const rowNum = k.replace("row", "");
+                    // Buscamos su pareja de descripción (desc1, desc2...)
+                    const descriptionText = node.data[`desc${rowNum}`] || "";
+
+                    return { 
+                        id: `row_${node.id}_${i}`, 
+                        title: node.data[k].toString().substring(0, 24),
+                        // AGREGAMOS LA DESCRIPCIÓN AQUÍ:
+                        description: descriptionText.toString().substring(0, 72) 
+                    };
+                });
 
             if (rows.length === 0) {
                 console.error("❌ Error: La lista no tiene filas configuradas");
