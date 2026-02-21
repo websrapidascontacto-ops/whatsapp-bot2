@@ -24,6 +24,15 @@
             <button class="btn-list" onclick="addListNode()"><i class="fa-solid fa-list-ul"></i>LISTA</button>
             <button class="btn-media" onclick="addMediaNode()"><i class="fa-solid fa-image"></i>IMAGEN</button>
             <button class="btn-save" onclick="saveFlow()"><i class="fa-solid fa-floppy-disk"></i>GUARDAR</button>
+<button onclick="downloadFlow()" style="font-family: 'Montserrat', sans-serif; background: #25d366; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer;">
+    📥 Descargar Flujo
+</button>
+
+<script>
+function downloadFlow() {
+    window.location.href = "/api/download-flow";
+}
+</script>
         </div>
     </div>
 

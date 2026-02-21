@@ -249,4 +249,17 @@ app.get("/api/get-flow", async (req, res) => {
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Carpeta uploads corregida");
+app.get("/api/download-flow", async (req, res) => {
+    try {
+        const flow = await Flow.findOne({ name: "Main Flow" });
+        if (!flow) return res.status(404).send("No hay flujo guardado.");
+        
+        const flowData = JSON.stringify(flow.data, null, 4);
+        res.setHeader('Content-disposition', 'attachment; filename=flujo_nemo.json');
+        res.setHeader('Content-type', 'application/json');
+        res.send(flowData);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 });
