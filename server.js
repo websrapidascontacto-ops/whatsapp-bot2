@@ -175,14 +175,23 @@ async function processSequence(to, node, allNodes) {
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        if (node.name === "whatsapp_list") return;
+        // --- EXPLICACIÓN DEL CAMBIO ---
+        // 1. Si el nodo es una LISTA, el bot se detiene (espera al usuario).
+        if (node.name === "whatsapp_list") return; 
 
+        // 2. Si el nodo es TEXTO o IMAGEN y tiene una flecha conectada, AVANZA SOLO.
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
+            
+            // Esperamos un poquito (1.2 seg) para que no lleguen todos los mensajes de golpe
             await new Promise(r => setTimeout(r, 1200)); 
+            
+            // Llamamos a la función otra vez para enviar el siguiente mensaje
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
-    } catch (err) { console.error("❌ Error Envío Bot:", err.response?.data || err.message); }
+    } catch (err) { 
+        console.error("❌ Error en processSequence:", err.response?.data || err.message); 
+    }
 }
 
 /* ========================= APIS Y SUBIDAS ========================= */
