@@ -252,3 +252,28 @@ body {
 .drawflow-node.whatsapp_list .output {
     margin-top: 6px; /* Centrado vertical con el input */
 }
+/* Asegura que el texto sea legible y editable */
+.drawflow .drawflow-node .parent-drawflow {
+    display: flex;
+    flex-direction: column;
+}
+
+.drawflow .drawflow-node input, 
+.drawflow .drawflow-node textarea {
+    width: 90%; /* Evita que el input se salga del borde */
+    margin: 5px auto;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    padding: 8px;
+    font-family: 'Montserrat', sans-serif; /* Tu fuente preferida */
+    font-size: 14px;
+    background-color: #1a1b26; /* Color oscuro para que combine con tu UI */
+    color: white;
+}
+
+/* Evita que los nodos se vean cortados */
+.drawflow-node {
+    height: auto !important;
+    min-height: 150px;
+    padding-bottom: 20px;
+}
