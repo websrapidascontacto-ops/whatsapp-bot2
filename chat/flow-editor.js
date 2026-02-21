@@ -6,7 +6,6 @@ editor.reroute = true;
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
 editor.zoom_value = 0.1;
-/* ======================================== */
 
 editor.start();
 
@@ -34,55 +33,51 @@ window.addTriggerNode = () => createNode("trigger", 0, 1, `<div class="node-wrap
 window.addMessageNode = () => createNode("message", 1, 1, `<div class="node-wrapper"><div class="node-header header-message">💬 Mensaje</div><div class="node-body"><textarea class="form-control" df-info></textarea></div></div>`, { info: '' });
 window.addIANode = () => createNode("ia", 1, 1, `<div class="node-wrapper"><div class="node-header header-ia">🤖 IA</div><div class="node-body"><textarea class="form-control" df-info>Base: S/380. WhatsApp: 991138132</textarea></div></div>`, { info: '' });
 
-/* CORRECCIÓN DE ID EN LISTA */
+/* LISTA CORREGIDA: MÉTODO DE BÚSQUEDA DINÁMICA */
 window.addListNode = function() {
-    // Primero creamos el nodo con un HTML base
-    const nodeId = createNode("whatsapp_list", 1, 1, `
+    const html = `
         <div class="node-wrapper">
             <div class="node-header header-list">📝 Lista</div>
             <div class="node-body">
                 <input type="text" class="form-control mb-1" df-list_title placeholder="Título">
                 <input type="text" class="form-control mb-1" df-button_text placeholder="Botón">
-                <div id="list-items-TEMP_ID">
+                <div class="items-container">
                     <input type="text" class="form-control mb-1" df-row1 placeholder="Fila 1">
                 </div>
-                <button class="btn btn-sm btn-success w-100" id="btn-add-TEMP_ID">+ Fila</button>
+                <button class="btn btn-sm btn-success w-100 mt-2" onclick="addRowDynamic(this)">+ Fila</button>
             </div>
-        </div>`, { list_title: '', button_text: '', row1: '' });
-
-    // Ahora inyectamos el ID real en el HTML del nodo recién creado
-    setTimeout(() => {
-        const listContainer = document.querySelector(`#node-${nodeId} [id*="list-items-TEMP_ID"]`);
-        const btnAdd = document.querySelector(`#node-${nodeId} [id*="btn-add-TEMP_ID"]`);
-        
-        if(listContainer) listContainer.id = `list-items-${nodeId}`;
-        if(btnAdd) {
-            btnAdd.id = `btn-add-${nodeId}`;
-            btnAdd.onclick = () => window.addRow(nodeId, 'row');
-        }
-    }, 50);
+        </div>`;
+    createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '' });
 };
 
-/* FUNCIÓN ADDROW ACTUALIZADA */
-window.addRow = (nodeId, prefix) => {
-    const container = document.getElementById(`${prefix}-items-${nodeId}`);
-    if(!container) return;
-
+/* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS */
+window.addRowDynamic = function(button) {
+    // 1. Encontrar el nodo raíz donde se hizo clic
+    const nodeElement = button.closest('.drawflow-node');
+    const nodeId = nodeElement.id.replace('node-', '');
+    const container = nodeElement.querySelector('.items-container');
+    
+    // 2. Obtener datos del nodo en el editor
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId];
-    if(!nodeData) return;
-
+    
+    // 3. Contar filas actuales y crear nueva clave
     const count = container.querySelectorAll("input").length + 1;
-    const key = `${prefix}${count}`;
+    const key = `row${count}`;
 
+    // 4. Añadir salida física (el punto de conexión)
     editor.addNodeOutput(nodeId);
 
+    // 5. Crear el input visualmente
     const input = document.createElement("input");
     input.className = "form-control mb-1";
     input.placeholder = `Fila ${count}`;
     input.setAttribute(`df-${key}`, "");
     container.appendChild(input);
 
+    // 6. Sincronizar con el JSON interno
     nodeData.data[key] = "";
+    
+    // 7. Refrescar para que Drawflow reconozca el nuevo input
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
@@ -93,18 +88,17 @@ window.saveFlow = function() {
 
 window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
 
+/* MEDIA NODE */
 window.addMediaNode = () => {
     const nodeId = editor.node_id + 1;
     createNode("media", 1, 1, `
         <div class="node-wrapper">
-            <div class="node-header" style="background: #e67e22; color: white; font-family: 'Montserrat', sans-serif;">🖼️ Imagen Adjunta</div>
+            <div class="node-header" style="background: #e67e22; color: white;">🖼️ Imagen Adjunta</div>
             <div class="node-body">
-                <label class="small" style="font-family: 'Montserrat', sans-serif;">Adjuntar archivo (Imagen):</label>
                 <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, ${nodeId})">
                 <input type="hidden" df-media_url id="path-${nodeId}">
-                <div id="status-${nodeId}" style="font-size:11px; color:gray; margin-bottom:5px; font-family: 'Montserrat';">Esperando archivo...</div>
-                <label class="small" style="font-family: 'Montserrat', sans-serif;">Pie de foto:</label>
-                <input type="text" class="form-control" df-caption placeholder="Ej: Mira esta oferta">
+                <div id="status-${nodeId}" style="font-size:11px; color:gray;">Esperando archivo...</div>
+                <input type="text" class="form-control" df-caption placeholder="Pie de foto">
             </div>
         </div>`, { media_url: '', caption: '' });
 };
@@ -114,8 +108,7 @@ window.uploadNodeFile = async (event, nodeId) => {
     if (!file) return;
     const status = document.getElementById(`status-${nodeId}`);
     const pathInput = document.getElementById(`path-${nodeId}`);
-    status.innerText = "⏳ Subiendo archivo...";
-    status.style.color = "#e67e22";
+    status.innerText = "⏳ Subiendo...";
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -123,15 +116,9 @@ window.uploadNodeFile = async (event, nodeId) => {
         const data = await res.json();
         if (data.url) {
             pathInput.value = data.url;
-            status.innerText = "✅ Subido: " + file.name;
-            status.style.color = "green";
+            status.innerText = "✅ Subido";
             const node = editor.drawflow.drawflow.Home.data[nodeId];
             if(node) node.data.media_url = data.url;
-        } else {
-            throw new Error("No se recibió URL");
         }
-    } catch (e) {
-        status.innerText = "❌ Error al subir";
-        status.style.color = "red";
-    }
+    } catch (e) { status.innerText = "❌ Error"; }
 };
