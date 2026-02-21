@@ -445,3 +445,28 @@ body {
 .flow-btn.load:hover {
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
 }
+.flow-dropdown {
+    position: absolute;
+    top: 40px;
+    right: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    width: 180px;
+    z-index: 1000;
+    overflow: hidden;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.flow-item {
+    padding: 10px 15px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: 0.3s;
+    color: #333;
+}
+
+.flow-item:hover {
+    background: var(--blue);
+    color: white;
+}

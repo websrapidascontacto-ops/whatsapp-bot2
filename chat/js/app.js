@@ -377,3 +377,22 @@ window.openFlowPicker = function() {
         alert("✅ Iniciando flujo: " + trigger);
     }
 };
+// Abrir/Cerrar el menú
+window.toggleFlowMenu = function() {
+    const menu = document.getElementById('flow-menu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+};
+
+// Lanzar el flujo seleccionado
+window.lanzarFlujo = function(trigger) {
+    document.getElementById('message-input').value = trigger;
+    sendMessage(); // Reutiliza tu función de envío
+    toggleFlowMenu(); // Cierra el menú
+};
+
+// Cerrar si haces clic afuera
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.flow-selector-container')) {
+        document.getElementById('flow-menu').style.display = 'none';
+    }
+});
