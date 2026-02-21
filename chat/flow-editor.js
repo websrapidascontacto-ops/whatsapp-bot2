@@ -1,13 +1,23 @@
-/* === ZOOM TOTAL INSTANTÁNEO AL PUNTERO === */
+// 1. PRIMERO definimos las variables globales
+const container = document.getElementById("drawflow");
+const editor = new Drawflow(container);
+
+// 2. Configuración básica
+editor.reroute = true;
+editor.zoom_max = 1.6;
+editor.zoom_min = 0.5;
+
+// 3. Iniciamos el editor
+editor.start();
+
+/* === ZOOM TOTAL INSTANTÁNEO AL PUNTERO (CORREGIDO) === */
 container.addEventListener('wheel', function(e) {
     e.preventDefault(); 
-
     const delta = e.deltaY > 0 ? -1 : 1;
-    const zoomSpeed = 0.05; // Ajustado para mayor suavidad
+    const zoomSpeed = 0.05;
     const oldZoom = editor.zoom;
     let newZoom = oldZoom + (delta * zoomSpeed);
 
-    // Límites de zoom
     if (newZoom > editor.zoom_max) newZoom = editor.zoom_max;
     if (newZoom < editor.zoom_min) newZoom = editor.zoom_min;
 
@@ -16,24 +26,41 @@ container.addEventListener('wheel', function(e) {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // 1. Calculamos la nueva posición del canvas
         editor.pre_canvas_x += (x - editor.pre_canvas_x) * (1 - newZoom / oldZoom);
         editor.pre_canvas_y += (y - editor.pre_canvas_y) * (1 - newZoom / oldZoom);
-
-        // 2. Actualizamos el valor del zoom
         editor.zoom = newZoom;
 
-        // 3. ¡ESTA ES LA CLAVE! Forzamos la actualización visual inmediata
-        editor.drawflow.drawflow.Home.zoom = newZoom; 
-        
-        // Aplicamos el movimiento al elemento real de la pantalla
+        // Forzamos actualización visual
         const map = container.querySelector('.drawflow-canvas');
-        map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
-        
-        // Avisamos a Drawflow que se actualice internamente
+        if(map) {
+            map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
+        }
         editor.updateZoom();
     }
 }, { passive: false });
+
+/* === LÓGICA DE POSICIONAMIENTO AUTOMÁTICO === */
+let lastNodeX = 50;
+let lastNodeY = 150;
+const nodeWidth = 380;
+
+function createNode(type, inputs, outputs, html, data = {}) {
+    const nodeId = editor.addNode(type, inputs, outputs, lastNodeX, lastNodeY, type, data, html);
+    lastNodeX += nodeWidth; 
+    if (lastNodeX > 2000) { lastNodeX = 50; lastNodeY += 400; }
+    
+    setTimeout(() => {
+        const nodeElem = document.getElementById(`node-${nodeId}`);
+        if (nodeElem) {
+            const closeBtn = document.createElement("div");
+            closeBtn.innerHTML = "×";
+            closeBtn.className = "node-close-btn";
+            closeBtn.onclick = () => editor.removeNodeId("node-" + nodeId);
+            nodeElem.appendChild(closeBtn);
+        }
+    }, 100);
+    return nodeId;
+}
 editor.start();
 
 /* FORZAR ZOOM EN POSICIÓN DEL MOUSE */
