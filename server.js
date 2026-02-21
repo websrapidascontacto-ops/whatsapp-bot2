@@ -147,6 +147,31 @@ async function processSequence(to, node, allNodes) {
             botText = `🖼️ Imagen: ${caption}`;
         }
     }
+else if (node.name === "notify") {
+    const myNumber = "51933425911"; 
+    const alertText = node.data.info || "Alguien llegó a este punto";
+
+    let notifyPayload = {
+        messaging_product: "whatsapp",
+        to: myNumber,
+        type: "text",
+        text: { body: `🔔 *AVISO:* El cliente ${to} llegó al nodo: _${alertText}_` }
+    };
+
+    axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, notifyPayload, {
+        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+    }).catch(e => console.error("Error aviso admin:", e.message));
+
+    botText = "🔔 Aviso enviado al admin";
+
+    // --- ESTO ES LO QUE DEBES ASEGURARTE QUE ESTÉ ---
+    // Si el nodo notify tiene algo conectado, que siga al siguiente nodo inmediatamente
+    if (node.outputs?.output_1?.connections?.[0]) {
+        const nextNodeId = node.outputs.output_1.connections[0].node;
+        return await processSequence(to, allNodes[nextNodeId], allNodes);
+    }
+    return; // Si no hay conexión, se detiene aquí.
+}
     else if (node.name === "whatsapp_list") {
         const rows = Object.keys(node.data)
             .filter(k => k.startsWith("row") && node.data[k])
@@ -256,13 +281,16 @@ app.get("/api/get-flow", async (req, res) => {
     res.json(flow ? flow.data : null);
 });
 
+/* ========================= INICIO DEL SERVIDOR ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Carpeta uploads corregida");
+});
+
+// Rutas de Descarga e Importación
 app.get("/api/download-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ name: "Main Flow" });
         if (!flow) return res.status(404).send("No hay flujo guardado.");
-        
         const flowData = JSON.stringify(flow.data, null, 4);
         res.setHeader('Content-disposition', 'attachment; filename=flujo_nemo.json');
         res.setHeader('Content-type', 'application/json');
@@ -271,22 +299,16 @@ app.get("/api/download-flow", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
 app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => {
     try {
         const flowData = req.body;
         if (!flowData || !flowData.drawflow) {
             return res.status(400).json({ error: "Formato de flujo inválido" });
         }
-        
-        await Flow.findOneAndUpdate(
-            { name: "Main Flow" }, 
-            { data: flowData }, 
-            { upsert: true }
-        );
-        
+        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: flowData }, { upsert: true });
         res.json({ success: true, message: "Flujo importado correctamente" });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-});
 });

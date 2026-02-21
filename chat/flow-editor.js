@@ -122,3 +122,23 @@ window.uploadNodeFile = async (event, nodeId) => {
         }
     } catch (e) { status.innerText = "❌ Error"; }
 };
+function addNotifyNode() {
+    // Calculamos la posición para que aparezca junto al anterior
+    const pos_x = editor.pre_canvas_x + 50;
+    const pos_y = editor.pre_canvas_y + 50;
+
+    const html = `
+        <div>
+            <div class="title-box" style="font-family: 'Montserrat', sans-serif; background: #ff9800; color: white; padding: 8px; border-radius: 5px 5px 0 0; font-size: 12px; font-weight: bold;">
+                🔔 Alerta Admin
+            </div>
+            <div class="box" style="padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 0 0 5px 5px;">
+                <p style="font-family: 'Montserrat', sans-serif; font-size: 10px; margin-bottom: 5px; color: #666;">Aviso que recibirás:</p>
+                <input type="text" df-info placeholder="Ej: Cliente quiere hablar" style="width: 100%; font-family: 'Montserrat'; border: 1px solid #ccc; padding: 5px; border-radius: 3px; font-size: 12px;">
+            </div>
+        </div>
+    `;
+
+    // Añadimos el nodo con 1 entrada y 1 salida
+    editor.addNode('notify', 1, 1, pos_x, pos_y, 'notify', { info: '' }, html);
+}
