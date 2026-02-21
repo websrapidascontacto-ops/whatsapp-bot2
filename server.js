@@ -193,25 +193,28 @@ else if (node.name === "notify") {
     }
 
     try {
+        // 1. Enviamos el mensaje al API de Facebook
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
+        // 2. Guardamos en la DB y avisamos al chat web
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        // --- EXPLICACIÓN DEL CAMBIO ---
-        // 1. Si el nodo es una LISTA, el bot se detiene (espera al usuario).
+        // --- LÓGICA DE AVANCE AUTOMÁTICO (CORREGIDA) ---
+        
+        // Si el nodo actual es una LISTA, nos detenemos aquí (esperamos respuesta del usuario)
         if (node.name === "whatsapp_list") return; 
 
-        // 2. Si el nodo es TEXTO o IMAGEN y tiene una flecha conectada, AVANZA SOLO.
+        // Si el nodo actual tiene una conexión de salida, saltamos al siguiente automáticamente
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             
-            // Esperamos un poquito (1.2 seg) para que no lleguen todos los mensajes de golpe
-            await new Promise(r => setTimeout(r, 1200)); 
+            // Esperamos 1.5 segundos para que no lleguen todos los mensajes pegados
+            await new Promise(r => setTimeout(r, 1500)); 
             
-            // Llamamos a la función otra vez para enviar el siguiente mensaje
+            // Llamamos recursivamente para procesar el siguiente nodo (tu Lista)
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
     } catch (err) { 
