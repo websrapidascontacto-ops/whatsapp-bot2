@@ -63,7 +63,6 @@ window.addListNode = function() {
     });
 };
 
-/* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS */
 /* FUNCIÓN UNIVERSAL PARA AÑADIR FILAS - CORREGIDA */
 window.addRowDynamic = function(button) {
     const nodeElement = button.closest('.drawflow-node');
@@ -71,25 +70,21 @@ window.addRowDynamic = function(button) {
     const container = nodeElement.querySelector('.items-container');
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
-    // Contamos cuántos grupos de filas hay para saber el índice (row2, row3...)
     const count = container.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
 
-    // 1. Solo añadimos salida si el grupo nuevo no tiene una salida asignada
     const currentOutputs = Object.keys(editor.drawflow.drawflow.Home.data[nodeId].outputs).length;
     if (count > currentOutputs) {
         editor.addNodeOutput(nodeId);
     }
 
-    // 2. Crear el contenedor del grupo (Título + Comentario)
     const group = document.createElement("div");
     group.className = "row-group mb-2";
     group.style.borderBottom = "1px solid #444";
     group.style.paddingBottom = "8px";
     group.style.marginTop = "10px";
 
-    // 3. Crear Input de Título (Fila)
     const inputRow = document.createElement("input");
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
@@ -97,7 +92,6 @@ window.addRowDynamic = function(button) {
     inputRow.setAttribute(`df-${keyRow}`, "");
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
 
-    // 4. Crear Input de Comentario (Descripción)
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
     inputDesc.style.fontFamily = "Montserrat, sans-serif";
@@ -109,18 +103,42 @@ window.addRowDynamic = function(button) {
     inputDesc.setAttribute(`df-${keyDesc}`, "");
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
-    // 5. Unir todo
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     container.appendChild(group);
 
-    // Inicializar datos
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
     
     editor.updateConnectionNodes(`node-${nodeId}`);
+}; // Aquí termina correctamente addRowDynamic
+
+// === FUNCIÓN DE GUARDAR (FUERA DE OTRAS FUNCIONES) ===
+window.saveFlow = function() {
+    const data = editor.export();
+    console.log("Exportando datos:", data);
+
+    fetch('/api/save-flow', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(data) 
+    })
+    .then(response => {
+        if (response.ok) {
+            alert("✅ Flujo Guardado correctamente (Títulos y Comentarios)");
+        } else {
+            alert("❌ Error al guardar en el servidor");
+        }
+    })
+    .catch(err => {
+        console.error("Error en Fetch:", err);
+        alert("❌ Error de conexión con el servidor");
+    });
 };
-window.addEventListener('message', e => { if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); });
+
+window.addEventListener('message', e => { 
+    if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
+});
 
 /* MEDIA NODE */
 window.addMediaNode = () => {
@@ -188,35 +206,45 @@ document.getElementById('import_file').addEventListener('change', function(e) {
             // 1. Cargar los datos al editor visual
             editor.import(flowData);
             
-            // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS (Con retraso de seguridad)
+            // 2. RECONSTRUCCIÓN DE FILAS Y COMENTARIOS
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
                     
                     if (node.name === "whatsapp_list") {
-                        // Buscamos el botón de "+ Fila" dentro del nodo renderizado
                         const btn = document.querySelector(`#node-${nodeId} .btn-success`);
                         
                         if (btn) {
-                            // Empezamos desde i=2 porque la row1 es parte del HTML base
                             let i = 2;
                             while (node.data[`row${i}`] !== undefined) {
-                                // Ejecuta la función que crea el input visual
+                                // Creamos visualmente el grupo (Título + Comentario)
                                 window.addRowDynamic(btn);
                                 
-                                // Buscamos el input recién creado para ponerle su texto
-                                const input = document.querySelector(`#node-${nodeId} [df-row${i}]`);
-                                if (input) {
-                                    input.value = node.data[`row${i}`];
+                                // Rellenamos el Título
+                                const inputRow = document.querySelector(`#node-${nodeId} [df-row${i}]`);
+                                if (inputRow) {
+                                    inputRow.value = node.data[`row${i}`];
+                                }
+
+                                // Rellenamos el Comentario (desc)
+                                const inputDesc = document.querySelector(`#node-${nodeId} [df-desc${i}]`);
+                                if (inputDesc) {
+                                    inputDesc.value = node.data[`desc${i}`] || "";
                                 }
                                 i++;
+                            }
+
+                            // No olvidar rellenar el comentario de la Fila 1 (que ya existe por defecto)
+                            const desc1 = document.querySelector(`#node-${nodeId} [df-desc1]`);
+                            if (desc1 && node.data.desc1) {
+                                desc1.value = node.data.desc1;
                             }
                         }
                     }
                 });
-                alert("✅ Flujo cargado y filas reconstruidas correctamente.");
-            }, 150); // 150ms asegura que el DOM de Drawflow esté listo
+                alert("✅ Flujo cargado con comentarios correctamente.");
+            }, 150);
 
         } catch (err) {
             alert("❌ Error: El archivo no es un JSON de flujo válido.");
