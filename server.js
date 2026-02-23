@@ -305,11 +305,15 @@ app.post("/webhook-yape", async (req, res) => {
                     set_paid: true,
                     billing: { phone: waiting.chatId },
                     line_items: [{ 
-                        product_id: waiting.productId, 
+                       product_id: waiting.productId, 
                         quantity: 1,
                         meta_data: [
                             {
-                                key: "Link del Perfil", // Clave exacta para tu sistema SMM
+                                key: "Link del Perfil", // Para visualización Admin
+                                value: waiting.profileLink
+                            },
+                            {
+                                key: "Link del perfil", // Clave específica que activa el SMM según imagen 2
                                 value: waiting.profileLink
                             }
                         ]
