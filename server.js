@@ -17,7 +17,7 @@ const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 
 // Configuración de WooCommerce (Usa tus llaves de websrapidas.com)
 const WooCommerce = new WooCommerceRestApi({
-  url: "https://www.websrapidas.com", 
+  url: "https://www.aumentar-seguidores.com", 
   consumerKey: process.env.WC_KEY, 
   consumerSecret: process.env.WC_SECRET,
   version: "wc/v3"
