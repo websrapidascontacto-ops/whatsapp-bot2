@@ -313,14 +313,49 @@ window.openFlowsModal = async function() {
 window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
-        const data = await res.json();
-        editor.clear();
-        editor.import(data.data);
-        editor.zoom_reset();
-        document.getElementById('flowsModal').style.display = 'none';
-        alert("✅ Flujo cargado correctamente");
-    } catch (e) { alert("❌ Error al cargar"); }
-}
+        const responseData = await res.json();
+        
+        if (typeof editor !== 'undefined') {
+            editor.clear();
+
+            // --- LÓGICA DE EXTRACCIÓN SEGURA ---
+            let finalData;
+
+            // Caso 1: Los datos están dentro de una propiedad 'data' (común en respuestas de API)
+            if (responseData.data && responseData.data.drawflow) {
+                finalData = responseData.data;
+            } 
+            // Caso 2: El objeto ya es el JSON de Drawflow directamente
+            else if (responseData.drawflow) {
+                finalData = responseData;
+            }
+            // Caso 3: Es un JSON plano (posiblemente subido por error o estructura vieja)
+            else {
+                // Si llegamos aquí, intentamos reconstruir la estructura mínima de Drawflow
+                finalData = {
+                    "drawflow": {
+                        "Home": {
+                            "data": responseData.data || responseData
+                        }
+                    }
+                };
+            }
+
+            // Verificación final antes de importar
+            if (finalData && finalData.drawflow) {
+                editor.import(finalData);
+                editor.zoom_reset();
+                closeFlowsModal();
+                alert("✅ Flujo cargado correctamente");
+            } else {
+                throw new Error("Estructura de datos inválida");
+            }
+        }
+    } catch (e) {
+        console.error("Error al cargar:", e);
+        alert("❌ Error: Los datos del flujo están corruptos o incompletos.");
+    }
+};
 
 // 3. Borrar flujo (Arregla el error 404 de la ruta)
 window.deleteFlow = async function(id) {
