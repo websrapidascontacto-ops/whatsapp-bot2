@@ -90,13 +90,14 @@ async function downloadMedia(mediaId, fileName) {
     }
 }
 
-/* ========================= WEBHOOK PRINCIPAL (CORREGIDO) ========================= */
+/* ========================= WEBHOOK PRINCIPAL (VERSIÓN FINAL COMPLETA) ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
             
+            // 1. DETERMINAR EL TEXTO SEGÚN EL TIPO DE MENSAJE
             let incomingText = (
                 msg.text?.body || 
                 msg.interactive?.list_reply?.title || 
@@ -104,17 +105,37 @@ app.post("/webhook", async (req, res) => {
                 ""
             ).trim();
 
-            // AGREGADO: Guardar el mensaje del CLIENTE en la BD y avisar al frontend
-            if (incomingText) {
+            let mediaPath = null;
+
+            // 2. MANEJO DE IMÁGENES (Sin omitir la descarga)
+            if (msg.type === "image") {
+                try {
+                    const mediaId = msg.image.id;
+                    const fileName = `whatsapp_${Date.now()}.jpg`;
+                    // Esperamos la descarga antes de continuar
+                    mediaPath = await downloadMedia(mediaId, fileName);
+                    
+                    if (!incomingText) {
+                        incomingText = msg.image.caption || "📷 Imagen recibida";
+                    }
+                } catch (err) {
+                    console.error("❌ Error descargando imagen:", err.message);
+                }
+            }
+
+            // 3. GUARDADO OBLIGATORIO EN MONGO (Para ver el chat en el panel)
+            if (incomingText || mediaPath) {
                 const savedIncoming = await Message.create({ 
                     chatId: sender, 
                     from: sender, 
-                    text: incomingText 
+                    text: incomingText,
+                    media: mediaPath 
                 });
+                // Avisamos al frontend por WebSocket
                 broadcast({ type: "new_message", message: savedIncoming });
             }
 
-            // 1. INTERCEPTOR DE PAGOS Y LINKS
+            // 4. INTERCEPTOR DE PAGOS (Tu lógica de negocio)
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
             
             if (waiting) {
@@ -139,6 +160,7 @@ app.post("/webhook", async (req, res) => {
                     return res.sendStatus(200);
                 }
 
+                // Si manda imagen pero estamos esperando pago automático por MacroDroid
                 await processSequence(sender, { 
                     name: "message", 
                     data: { info: `⏳ Seguimos esperando la confirmación de tu Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. ✨` } 
@@ -146,11 +168,14 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(200);
             }
 
-            // 2. PROCESAMIENTO NORMAL DE FLUJOS
+            // 5. DISPARADOR DE FLUJOS (Main Flow)
             const flowDoc = await Flow.findOne({ name: "Main Flow" });
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
-                const triggerNode = Object.values(nodes).find(n => n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase());
+                const triggerNode = Object.values(nodes).find(n => 
+                    n.name === "trigger" && 
+                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                );
                 
                 if (triggerNode) {
                     const nextNodeId = triggerNode.outputs?.output_1?.connections?.[0]?.node;
@@ -279,11 +304,9 @@ async function processSequence(to, node, allNodes) {
     }
 }
 
-/* ========================= WEBHOOK YAPE (MACRODROID) ========================= */
+/* ========================= WEBHOOK YAPE (INTEGRACIÓN LTB API) ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
-    console.log(`📢 Texto recibido de MacroDroid: "${texto}"`);
-
     if (!texto) return res.sendStatus(200);
 
     try {
@@ -294,40 +317,45 @@ app.post("/webhook-yape", async (req, res) => {
             const montoEsperado = waiting.amount.match(/\d+/)?.[0]; 
 
             if (montoRecibido && montoRecibido === montoEsperado) {
-                console.log(`✅ ¡Match! Procesando pedido para ${waiting.chatId}`);
-                
                 await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
-                // Sincronización con functions.php (Meta Data del Item)
-                /* ========================= WEBHOOK YAPE (VERSION SMM COMPLETA) ========================= */
-                // ... dentro de tu bucle de waiting ...
-                                await WooCommerce.post("orders", {
-                                    payment_method: "bacs", 
-                                    payment_method_title: "Yape Automático ✅",
-                                    set_paid: true, // Esto dispara el hook de pago completado
-                                    billing: { phone: waiting.chatId },
-                                    line_items: [{ 
-                                        product_id: waiting.productId, 
-                                        quantity: 1,
-                                        meta_data: [
-                                            { key: "Link del Perfil", value: waiting.profileLink }, // Visual Admin
-                                            { key: "Link del perfil", value: waiting.profileLink }, // Activador SMM
-                                            { key: "profile_link", value: waiting.profileLink }     // Clave interna del functions.php
-                                        ]
-                                    }],
-                                    customer_note: `Bot: Pedido SMM activado para ${waiting.profileLink}`
-                                });
-                // ... resto del código ...
+                // 1. Obtenemos la info del producto desde WooCommerce para sacar los campos ACF
+                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                const product = productRes.data;
+
+                // Buscamos los campos ACF que tu plugin necesita (bulk_service_id y bulk_quantity)
+                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+
+                // 2. Creamos el pedido inyectando los metadatos ocultos que disparan el plugin
+                await WooCommerce.post("orders", {
+                    payment_method: "bacs",
+                    payment_method_title: "Yape Automático ✅",
+                    status: "processing", // Dispara el hook 'woocommerce_order_status_processing' de tu plugin
+                    billing: { phone: waiting.chatId },
+                    line_items: [{ 
+                        product_id: waiting.productId, 
+                        quantity: 1,
+                        meta_data: [
+                            { key: "_ltb_id", value: serviceId },    // ID de la API (REQUERIDO POR PLUGIN)
+                            { key: "_ltb_qty", value: bulkQty },      // Cantidad (REQUERIDO POR PLUGIN)
+                            { key: "Link del perfil", value: waiting.profileLink }, // URL (REQUERIDO POR PLUGIN)
+                            { key: "Link del Perfil", value: waiting.profileLink }  // Visual para el Admin
+                        ]
+                    }],
+                    customer_note: `🤖 Pedido automático vía WhatsApp. Link: ${waiting.profileLink}`
+                });
 
                 await processSequence(waiting.chatId, { 
                     name: "message", 
-                    data: { info: "✅ ¡Yape verificado! 🚀 Tu pedido ya está en proceso en aumentar-seguidores.com. ✨" } 
+                    data: { info: "✅ ¡Yape verificado! 🚀 Tu pedido ya está en proceso en el sistema central. ✨" } 
                 }, {});
+                
                 return res.sendStatus(200);
             }
         }
     } catch (err) {
-        console.error("❌ Error Yape:", err.message);
+        console.error("❌ Error Integración LTB:", err.message);
     }
     res.sendStatus(200);
 });
