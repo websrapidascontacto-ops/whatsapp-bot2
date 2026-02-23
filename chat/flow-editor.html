@@ -40,18 +40,24 @@
 <button onclick="document.getElementById('import_file').click()" class="btn-import">
     📥 Importar Flujo
 </button>
-<input type="text" id="flow_name" placeholder="Nombre del flujo..." style="font-family: 'Montserrat'; border-radius: 5px; border: 1px solid #444; padding: 5px 10px; background: #1a1b26; color: white; margin-right: 10px;">
-
+<input type="text" id="flow_name" placeholder="Nombre del flujo" style="font-family:'Montserrat'; border-radius:5px; padding:5px; background:#1a1b26; color:white; border:1px solid #444;">
 <button class="btn-import" onclick="openFlowsModal()"><i class="fa-solid fa-folder-open"></i> MIS FLUJOS</button>
 
-<div id="flowsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center;">
-    <div style="background:#161c2d; padding:25px; border-radius:15px; width:500px; max-height:80vh; overflow-y:auto; border: 1px solid #2563eb;">
-        <h3 style="font-family:'Montserrat'; color:white; margin-bottom:20px;">Mis Flujos Guardados 📁</h3>
-        <div id="flowsList" style="display:grid; gap:10px;">
-            </div>
-        <button onclick="closeFlowsModal()" style="margin-top:20px; width:100%; padding:10px; background:#ef4444; border:none; color:white; border-radius:5px; font-family:'Montserrat';">Cerrar</button>
+<div id="flowsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
+    <div style="background:#161c2d; padding:25px; border-radius:15px; width:450px; border:1px solid #2563eb;">
+        <h3 style="color:white; font-family:'Montserrat';">Mis Flujos</h3>
+        <div id="flowsList" style="margin: 20px 0; max-height:300px; overflow-y:auto;"></div>
+        <button onclick="closeFlowsModal()" class="btn btn-danger w-100">Cerrar</button>
     </div>
 </div>
+
+<style>
+.flow-card {
+    background: #1a1b26; padding: 10px; border-radius: 8px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; color: white;
+}
+.flow-card button { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; }
+</style>
 
 <script>
 function downloadFlow() {

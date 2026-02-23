@@ -453,3 +453,22 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
         res.status(500).json({ error: e.message });
     }
 });
+const FLOWS_PATH = './db/flows'; // Asegúrate que esta carpeta exista
+if (!fs.existsSync(FLOWS_PATH)) fs.mkdirSync(FLOWS_PATH, { recursive: true });
+
+app.get('/api/get-flows', (req, res) => {
+    const files = fs.readdirSync(FLOWS_PATH);
+    const list = files.map(f => ({ id: f, name: JSON.parse(fs.readFileSync(`${FLOWS_PATH}/${f}`)).name }));
+    res.json(list);
+});
+
+app.get('/api/get-flow/:id', (req, res) => {
+    res.json(JSON.parse(fs.readFileSync(`${FLOWS_PATH}/${req.params.id}`)));
+});
+
+app.post('/api/save-flow', (req, res) => {
+    const { name, data } = req.body;
+    const id = `${name.replace(/\s+/g, '_').toLowerCase()}.json`;
+    fs.writeFileSync(`${FLOWS_PATH}/${id}`, JSON.stringify({ name, data }));
+    res.send("ok");
+});
