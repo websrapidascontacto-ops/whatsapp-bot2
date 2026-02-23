@@ -299,27 +299,25 @@ app.post("/webhook-yape", async (req, res) => {
                 await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
                 // Sincronización con functions.php (Meta Data del Item)
-                await WooCommerce.post("orders", {
-                    payment_method: "yape_automation",
-                    payment_method_title: "Yape Automático ✅",
-                    set_paid: true,
-                    billing: { phone: waiting.chatId },
-                    line_items: [{ 
-                       product_id: waiting.productId, 
-                        quantity: 1,
-                        meta_data: [
-                            {
-                                key: "Link del Perfil", // Para visualización Admin
-                                value: waiting.profileLink
-                            },
-                            {
-                                key: "Link del perfil", // Clave específica que activa el SMM según imagen 2
-                                value: waiting.profileLink
-                            }
-                        ]
-                    }],
-                    customer_note: `🔗 Link del Perfil: ${waiting.profileLink}`
-                });
+                /* ========================= WEBHOOK YAPE (VERSION SMM COMPLETA) ========================= */
+                // ... dentro de tu bucle de waiting ...
+                                await WooCommerce.post("orders", {
+                                    payment_method: "bacs", 
+                                    payment_method_title: "Yape Automático ✅",
+                                    set_paid: true, // Esto dispara el hook de pago completado
+                                    billing: { phone: waiting.chatId },
+                                    line_items: [{ 
+                                        product_id: waiting.productId, 
+                                        quantity: 1,
+                                        meta_data: [
+                                            { key: "Link del Perfil", value: waiting.profileLink }, // Visual Admin
+                                            { key: "Link del perfil", value: waiting.profileLink }, // Activador SMM
+                                            { key: "profile_link", value: waiting.profileLink }     // Clave interna del functions.php
+                                        ]
+                                    }],
+                                    customer_note: `Bot: Pedido SMM activado para ${waiting.profileLink}`
+                                });
+                // ... resto del código ...
 
                 await processSequence(waiting.chatId, { 
                     name: "message", 
