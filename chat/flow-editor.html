@@ -102,37 +102,54 @@ function downloadFlow() {
         const responseData = await res.json();
         
         if (typeof editor !== 'undefined') {
-            editor.clear(); // Limpia el rastro de flujos anteriores
+            editor.clear();
 
-            let rawData = responseData.data || responseData;
-            let finalData;
-
-            // Verificamos si ya tiene la estructura Home.data
-            if (rawData.drawflow && rawData.drawflow.Home) {
-                finalData = rawData;
-            } else {
-                // Reconstruimos la estructura si viene plana
-                finalData = {
-                    "drawflow": {
-                        "Home": {
-                            "data": rawData.drawflow ? rawData.drawflow.Home.data : rawData
-                        }
+            // 1. Extraer los datos puros (ignorando si vienen en .data o no)
+            let raw = responseData.data ? responseData.data : responseData;
+            
+            // 2. CONSTRUCCIÓN DE SEGURIDAD (Blindaje total)
+            let finalData = {
+                "drawflow": {
+                    "Home": {
+                        "data": {}
                     }
-                };
+                }
+            };
+
+            // Caso A: El JSON ya está perfecto (Estructura completa)
+            if (raw.drawflow && raw.drawflow.Home && raw.drawflow.Home.data) {
+                finalData = raw;
+            } 
+            // Caso B: El JSON tiene 'drawflow' pero le falta el nivel 'data'
+            else if (raw.drawflow && raw.drawflow.Home) {
+                finalData.drawflow.Home.data = raw.drawflow.Home;
+            }
+            // Caso C: El JSON son solo los nodos sueltos (muy común en errores de guardado)
+            else {
+                finalData.drawflow.Home.data = raw;
             }
 
+            // 3. Validación final antes de importar
+            if (Object.keys(finalData.drawflow.Home.data).length === 0) {
+                console.error("El flujo está vacío o el formato es irreconocible", raw);
+                alert("⚠️ El flujo parece estar vacío.");
+                return;
+            }
+
+            // 4. Importar y corregir visualización
             editor.import(finalData);
             
-            // Forzamos el redibujado de conexiones
-            editor.updateConnectionNodes('node-1'); 
-            
-            setTimeout(() => editor.zoom_reset(), 150);
+            // Damos un tiempo para que Drawflow procese los 51 nodos antes de centrar
+            setTimeout(() => {
+                editor.zoom_reset();
+                console.log("✅ Flujo cargado con éxito:", id);
+            }, 100);
+
             closeFlowsModal();
-            alert("✅ Flujo cargado y listo");
         }
     } catch (e) {
-        console.error("Error:", e);
-        alert("❌ Este flujo tiene un formato antiguo o incompatible.");
+        console.error("Error crítico en la carga:", e);
+        alert("❌ Error: No se pudo procesar este flujo.");
     }
 };
 
