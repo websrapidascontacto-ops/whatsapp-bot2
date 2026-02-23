@@ -157,46 +157,42 @@ app.post("/webhook", async (req, res) => {
             }
 
             const flowDoc = await Flow.findOne({ isMain: true }); 
-if (flowDoc && incomingText) {
-    const nodes = flowDoc.data.drawflow.Home.data;
+            if (flowDoc && incomingText) {
+                const nodes = flowDoc.data.drawflow.Home.data;
 
-    // 1. Primero buscamos si es un TRIGGER (ej: "Hola")
-    let targetNode = Object.values(nodes).find(n => 
-        n.name === "trigger" && 
-        n.data.val?.toLowerCase() === incomingText.toLowerCase()
-    );
+                // 1. Primero buscamos si es un TRIGGER (ej: "Hola")
+                let targetNode = Object.values(nodes).find(n => 
+                    n.name === "trigger" && 
+                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                );
 
-    // 2. Si no es un trigger, buscamos si es una respuesta a una LISTA
-    if (!targetNode) {
-        // Buscamos qué nodo de lista tiene una fila que coincida con el texto que llegó
-        const listNode = Object.values(nodes).find(n => {
-            if (n.name === "whatsapp_list") {
-                return Object.values(n.data).some(val => val?.toString().trim().toLowerCase() === incomingText.toLowerCase());
+                // 2. Si no es un trigger, buscamos si es una respuesta a una LISTA
+                if (!targetNode) {
+                    const listNode = Object.values(nodes).find(n => {
+                        if (n.name === "whatsapp_list") {
+                            return Object.values(n.data).some(val => val?.toString().trim().toLowerCase() === incomingText.toLowerCase());
+                        }
+                        return false;
+                    });
+
+                    if (listNode) {
+                        const rowKey = Object.keys(listNode.data).find(k => listNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase());
+                        const rowNum = rowKey.replace("row", "");
+                        const nextId = listNode.outputs[`output_${rowNum}`]?.connections?.[0]?.node;
+                        if (nextId) targetNode = nodes[nextId];
+                    }
+                }
+
+                // 3. Ejecutar el nodo encontrado
+                if (targetNode) {
+                    if (targetNode.name === "trigger") {
+                        const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
+                        if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
+                    } else {
+                        await processSequence(sender, targetNode, nodes);
+                    }
+                }
             }
-            return false;
-        });
-
-        if (listNode) {
-            // Encontramos el nodo de lista, ahora vemos qué salida (output) corresponde a esa fila
-            const rowKey = Object.keys(listNode.data).find(k => listNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase());
-            const rowNum = rowKey.replace("row", ""); // Ej: de "row1" saca "1"
-            const nextId = listNode.outputs[`output_${rowNum}`]?.connections?.[0]?.node;
-            
-            if (nextId) targetNode = nodes[nextId];
-        }
-    }
-
-    // 3. Ejecutar el nodo encontrado
-    if (targetNode) {
-        if (targetNode.name === "trigger") {
-            const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
-            if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
-        } else {
-            // Si es un mensaje directo tras la lista
-            await processSequence(sender, targetNode, nodes);
-        }
-    }
-}
         }
     }
     res.sendStatus(200);
@@ -244,44 +240,64 @@ async function processSequence(to, node, allNodes) {
         return; 
     }
     /* ========================= CORRECCIÓN DE LISTA FILTRADA ========================= */
-else if (node.name === "whatsapp_list") {
-    try {
-        // Filtramos solo las filas que tienen un nombre real (no vacías)
-        const rows = [];
-        
-        // WhatsApp permite hasta 10 filas. Recorremos las posibles 10 del nodo.
-        for (let i = 1; i <= 10; i++) {
-            const rowTitle = node.data[`row${i}`];
-            
-            // Si la fila tiene texto, la agregamos
-            if (rowTitle && rowTitle.toString().trim() !== "") {
-                const descriptionText = node.data[`desc${i}`] || "";
-                rows.push({
-                    id: `row_${node.id}_${i}`,
-                    title: rowTitle.toString().substring(0, 24).trim(),
-                    description: descriptionText.toString().substring(0, 72).trim()
-                });
+    else if (node.name === "whatsapp_list") {
+        try {
+            const rows = [];
+            for (let i = 1; i <= 10; i++) {
+                const rowTitle = node.data[`row${i}`];
+                if (rowTitle && rowTitle.toString().trim() !== "") {
+                    const descriptionText = node.data[`desc${i}`] || "";
+                    rows.push({
+                        id: `row_${node.id}_${i}`,
+                        title: rowTitle.toString().substring(0, 24).trim(),
+                        description: descriptionText.toString().substring(0, 72).trim()
+                    });
+                }
             }
+
+            if (rows.length === 0) return;
+
+            payload.type = "interactive";
+            payload.interactive = {
+                type: "list",
+                header: { type: "text", text: "Opciones Disponibles" },
+                body: { text: (node.data.body || "Selecciona una opción de la lista:").substring(0, 1024) },
+                footer: { text: "Webs Rápidas 🚀" },
+                action: { 
+                    button: (node.data.btn || "Ver Menú").substring(0, 20), 
+                    sections: [{ title: "Servicios", rows: rows }] 
+                }
+            };
+
+            botText = "📋 Menú de lista filtrado enviado";
+        } catch (e) { 
+            console.error("❌ Error en construcción de lista:", e.message); 
         }
-
-        if (rows.length === 0) return; // Si no hay filas válidas, no enviamos nada
-
-        payload.type = "interactive";
-        payload.interactive = {
-            type: "list",
-            header: { type: "text", text: "Opciones Disponibles" }, // Título superior
-            body: { text: (node.data.body || "Selecciona una opción de la lista:").substring(0, 1024) },
-            footer: { text: "Webs Rápidas 🚀" },
-            action: { 
-                button: (node.data.btn || "Ver Menú").substring(0, 20), 
-                sections: [{ title: "Servicios", rows: rows }] 
-            }
-        };
-
-        botText = "📋 Menú de lista filtrado enviado";
-    } catch (e) { 
-        console.error("❌ Error en construcción de lista:", e.message); 
     }
+    else if (node.name === "payment_validation") {
+            await PaymentWaiting.findOneAndUpdate(
+                { chatId: to },
+                { productId: node.data.product_id, amount: node.data.amount, active: true, waitingForLink: true },
+                { upsert: true }
+            );
+            botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
+            payload.type = "text";
+            payload.text = { body: botText };
+    }
+
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
+        broadcast({ type: "new_message", message: savedBot });
+        if (node.name === "whatsapp_list" || node.name === "payment_validation") return; 
+        if (node.outputs?.output_1?.connections?.[0]) {
+            const nextNodeId = node.outputs.output_1.connections[0].node;
+            await new Promise(r => setTimeout(r, 1500)); 
+            return await processSequence(to, allNodes[nextNodeId], allNodes);
+        }
+    } catch (err) { console.error("❌ Error en processSequence:", err.message); }
 }
 
 /* ========================= WEBHOOK YAPE ========================= */
@@ -326,13 +342,11 @@ app.post("/webhook-yape", async (req, res) => {
 
 /* ========================= APIS DE FLUJOS Y CHAT ========================= */
 
-// Obtener flujo activo para el bot
 app.get("/api/get-flow", async (req, res) => {
     const flow = await Flow.findOne({ isMain: true });
     res.json(flow ? flow.data : null);
 });
 
-// Obtener flujo por ID para el editor
 app.get("/api/get-flow-by-id/:id", async (req, res) => {
     try {
         const flow = await Flow.findById(req.params.id);
@@ -340,7 +354,6 @@ app.get("/api/get-flow-by-id/:id", async (req, res) => {
     } catch (e) { res.status(500).json(null); }
 });
 
-// Listar flujos
 app.get('/api/get-flows', async (req, res) => {
     try {
         const flows = await Flow.find({});
@@ -348,30 +361,24 @@ app.get('/api/get-flows', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
-// Guardar flujo
 app.post('/api/save-flow', async (req, res) => {
     try {
         const { id, name, data } = req.body;
-        const finalName = name || `Flujo_${Date.now()}`; // Evita el error de duplicado de Mongo
-
+        const finalName = name || `Flujo_${Date.now()}`;
         if (id && mongoose.Types.ObjectId.isValid(id)) {
             await Flow.findByIdAndUpdate(id, { name: finalName, data });
             res.json({ success: true, id });
         } else {
-            // Si el nombre ya existe, le añade un timestamp para no dar Error 500
             const existing = await Flow.findOne({ name: finalName });
             const safeName = existing ? `${finalName}_${Date.now()}` : finalName;
-            
             const newFlow = await Flow.create({ name: safeName, data, isMain: false });
             res.json({ success: true, id: newFlow._id });
         }
     } catch (e) { 
-        console.error("Error save-flow:", e);
         res.status(500).json({ error: e.message }); 
     }
 });
 
-// Activar flujo
 app.post('/api/activate-flow/:id', async (req, res) => {
     try {
         await Flow.updateMany({}, { isMain: false });
@@ -380,7 +387,6 @@ app.post('/api/activate-flow/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Eliminar flujo
 app.delete('/api/delete-flow/:id', async (req, res) => {
     try {
         const flow = await Flow.findById(req.params.id);
@@ -390,7 +396,6 @@ app.delete('/api/delete-flow/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// API para chats y mensajes
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
@@ -405,7 +410,6 @@ app.get("/messages/:chatId", async (req, res) => {
     res.json(messages);
 });
 
-/* ========================= MEDIA UPLOADS ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -440,7 +444,6 @@ app.post("/send-message", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Importación/Exportación
 app.get("/api/download-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ isMain: true });
@@ -459,7 +462,6 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ========================= INICIO DEL SERVIDOR ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
 });
