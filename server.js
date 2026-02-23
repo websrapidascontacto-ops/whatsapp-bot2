@@ -90,14 +90,13 @@ async function downloadMedia(mediaId, fileName) {
     }
 }
 
-/* ========================= WEBHOOK PRINCIPAL (SIN GMAIL) ========================= */
+/* ========================= WEBHOOK PRINCIPAL (CORREGIDO) ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
             
-            // Detectar texto de mensaje normal, de lista o de botón
             let incomingText = (
                 msg.text?.body || 
                 msg.interactive?.list_reply?.title || 
@@ -105,11 +104,20 @@ app.post("/webhook", async (req, res) => {
                 ""
             ).trim();
 
-            // 1. INTERCEPTOR DE PAGOS Y LINKS (Validación vía MacroDroid)
+            // AGREGADO: Guardar el mensaje del CLIENTE en la BD y avisar al frontend
+            if (incomingText) {
+                const savedIncoming = await Message.create({ 
+                    chatId: sender, 
+                    from: sender, 
+                    text: incomingText 
+                });
+                broadcast({ type: "new_message", message: savedIncoming });
+            }
+
+            // 1. INTERCEPTOR DE PAGOS Y LINKS
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
             
             if (waiting) {
-                // Si el bot está esperando el link del perfil
                 if (waiting.waitingForLink) {
                     const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
                     
@@ -131,7 +139,6 @@ app.post("/webhook", async (req, res) => {
                     return res.sendStatus(200);
                 }
 
-                // Si ya tenemos el link pero aún no paga, recordamos el Yape
                 await processSequence(sender, { 
                     name: "message", 
                     data: { info: `⏳ Seguimos esperando la confirmación de tu Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. ✨` } 
@@ -139,7 +146,7 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(200);
             }
 
-            // 2. PROCESAMIENTO NORMAL DE MENSAJES (Si no hay pagos pendientes)
+            // 2. PROCESAMIENTO NORMAL DE FLUJOS
             const flowDoc = await Flow.findOne({ name: "Main Flow" });
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
