@@ -338,41 +338,38 @@ else if (node.name === "notify") {
 }
 /* ========================= WEBHOOK YAPE (MACRODROID) ========================= */
 app.post("/webhook-yape", async (req, res) => {
-    const { texto, emisor } = req.body; 
-    console.log(`📢 Notificación de Yape: ${texto} de ${emisor}`);
+    const { texto } = req.body; 
+    console.log(`📢 Notificación de Yape recibida: ${texto}`);
 
     try {
-        // Buscamos si algún cliente está esperando validación
         const activeWaitings = await PaymentWaiting.find({ active: true });
 
         for (const waiting of activeWaitings) {
-            // Si el texto de la notificación contiene el monto (ej: "10.00")
-            if (texto.includes(waiting.amount)) {
-                console.log(`✅ ¡Pago confirmado para ${waiting.chatId}!`);
+            // Quitamos espacios y símbolos para comparar solo los números
+            const limpioNotificacion = texto.replace(/\s/g, ""); 
+            const montoBuscado = waiting.amount.replace(/\s/g, "");
 
-                // 1. Marcar como procesado
+            if (limpioNotificacion.includes(montoBuscado)) {
+                console.log(`✅ Pago de S/${waiting.amount} verificado!`);
                 await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
-                // 2. Crear pedido en WooCommerce (websrapidas.com)
                 await WooCommerce.post("orders", {
                     payment_method: "yape_automation",
-                    payment_method_title: "Yape Automático (MacroDroid)",
+                    payment_method_title: "Yape Automático ✅",
                     set_paid: true,
                     billing: { phone: waiting.chatId },
                     line_items: [{ product_id: waiting.productId, quantity: 1 }]
                 });
 
-                // 3. Respuesta automática al cliente
                 await processSequence(waiting.chatId, { 
                     name: "message", 
-                    data: { info: "✅ ¡Yape verificado! 🔝 Tu pedido de seguidores ha sido recibido y está en camino. ¡Gracias por tu compra! 😊✨" } 
+                    data: { info: "✅ ¡Yape verificado al instante! 🚀 Tu pedido de seguidores ya está en proceso en aumentar-seguidores.com. ¡Gracias! ✨" } 
                 }, {});
-                
-                break;
+                return res.sendStatus(200);
             }
         }
     } catch (err) {
-        console.error("❌ Error Webhook Yape:", err.message);
+        console.error("❌ Error en el Webhook de Yape:", err.message);
     }
     res.sendStatus(200);
 });
