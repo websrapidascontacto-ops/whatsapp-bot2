@@ -84,30 +84,41 @@ async function buscarPagoEnEmail(monto) {
     const config = {
         imap: {
             user: process.env.EMAIL_USER,
-            password: process.env.EMAIL_PASSWORD, // Contraseña de aplicación
-            host: 'imap.gmail.com', port: 993, tls: true, authTimeout: 3000
+            password: process.env.EMAIL_PASSWORD,
+            host: 'imap.gmail.com',
+            port: 993,
+            tls: true,
+            authTimeout: 3000,
+            // --- ESTO ELIMINA EL ERROR DE CERTIFICADO ---
+            tlsOptions: { rejectUnauthorized: false } 
         }
     };
 
     try {
         const connection = await imap.connect(config);
         await connection.openBox('INBOX');
-        const searchCriteria = ['UNSEEN']; // Solo correos no leídos
-        const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: true };
+        // Filtramos por correos no leídos que mencionen a Yape para ir más rápido
+        const searchCriteria = ['UNSEEN', ['TEXT', 'Yape']]; 
+        const fetchOptions = { bodies: ['TEXT'], markSeen: true };
         const messages = await connection.search(searchCriteria, fetchOptions);
 
         for (const item of messages) {
             const all = item.parts.find(part => part.which === 'TEXT');
             const mail = await simpleParser(all.body);
-            // Validamos que el monto aparezca en el texto del correo
-            if (mail.text.includes(monto)) {
+            
+            // Limpiamos el texto para encontrar el monto sin fallos por espacios
+            const textoLimpio = mail.text.replace(/\s/g, "");
+            if (textoLimpio.includes(monto)) {
                 connection.end();
                 return true;
             }
         }
         connection.end();
         return false;
-    } catch (e) { console.error("Error IMAP:", e); return false; }
+    } catch (e) { 
+        console.error("❌ Error IMAP Detallado:", e.message); 
+        return false; 
+    }
 }
 /* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
