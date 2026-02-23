@@ -214,32 +214,43 @@ async function processSequence(to, node, allNodes) {
         }
         return; 
     }
-    else if (node.name === "whatsapp_list") {
-        try {
-            const rows = Object.keys(node.data)
-                .filter(k => k.startsWith("row") && node.data[k])
-                .map((k) => {
-                    const rowNum = k.replace("row", ""); 
-                    const descriptionText = node.data[`desc${rowNum}`] || "";
-                    return { 
-                        id: `row_${node.id}_${rowNum}`, 
-                        title: node.data[k].toString().substring(0, 24),
-                        description: descriptionText.toString().substring(0, 72) 
+    /* ========================= CORRECCIÓN DE LISTA EN SERVER.JS ========================= */
+            else if (node.name === "whatsapp_list") {
+                try {
+                    // Solo tomamos filas que tengan contenido real y no excedan el límite de WhatsApp (10 filas)
+                    const rows = Object.keys(node.data)
+                        .filter(k => k.startsWith("row") && node.data[k] && node.data[k].toString().trim() !== "")
+                        .map((k) => {
+                            const rowNum = k.replace("row", ""); 
+                            const descriptionText = node.data[`desc${rowNum}`] || "";
+                            return { 
+                                id: `row_${node.id}_${rowNum}`, 
+                                title: node.data[k].toString().substring(0, 24).trim(),
+                                description: descriptionText.toString().substring(0, 72).trim() 
+                            };
+                        })
+                        .slice(0, 10); // WhatsApp solo permite máximo 10 filas
+
+                    if (rows.length === 0) return;
+
+                    payload.type = "interactive";
+                    payload.interactive = {
+                        type: "list",
+                        body: { text: (node.data.body || node.data.list_title || "Selecciona una opción:").substring(0, 1024) },
+                        action: { 
+                            button: (node.data.btn || node.data.button_text || "Ver opciones").substring(0, 20), 
+                            sections: [{ title: (node.data.title || "Servicios").substring(0, 24), rows }] 
+                        }
                     };
-                });
-            if (rows.length === 0) return;
-            payload.type = "interactive";
-            payload.interactive = {
-                type: "list",
-                body: { text: node.data.list_title || "Selecciona una de nuestras opciones:" },
-                action: { 
-                    button: (node.data.button_text || "Ver opciones").substring(0, 20), 
-                    sections: [{ title: "Servicios", rows }] 
-                }
-            };
-            botText = "📋 Menú enviado";
-        } catch (e) { console.error("❌ Error en lista:", e.message); }
-    }
+
+                    // Si hay un footer definido, lo agregamos (opcional pero mejora el diseño)
+                    if (node.data.footer) {
+                        payload.interactive.footer = { text: node.data.footer.substring(0, 60) };
+                    }
+
+                    botText = "📋 Menú de lista enviado";
+                } catch (e) { console.error("❌ Error en construcción de lista:", e.message); }
+            }
     else if (node.name === "payment_validation") {
             await PaymentWaiting.findOneAndUpdate(
                 { chatId: to },

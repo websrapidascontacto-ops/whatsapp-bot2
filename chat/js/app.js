@@ -374,40 +374,101 @@ window.openFlowsModal = async function() {
     } catch (e) { listContainer.innerHTML = '<div style="color:white;">Error al cargar flujos.</div>'; }
 };
 
+/* ========================= GESTIÓN DE FLUJOS (CORREGIDO) ========================= */
+
 window.activateFlow = async (id) => {
-    const res = await fetch(`/api/activate-flow/${id}`, { method: 'POST' });
-    if(res.ok) { alert("🚀 Flujo activado para el Bot"); openFlowsModal(); }
+    try {
+        const res = await fetch(`/api/activate-flow/${id}`, { method: 'POST' });
+        if(res.ok) {
+            alert("🚀 Flujo activado correctamente para el Bot");
+            // Refrescamos el modal para que el punto cambie a VERDE y el borde se actualice
+            if (typeof openFlowsModal === 'function') {
+                await openFlowsModal();
+            }
+        } else {
+            alert("❌ No se pudo activar el flujo");
+        }
+    } catch (error) {
+        console.error("Error en activateFlow:", error);
+    }
 };
 
 window.deleteFlow = async (id) => {
-    if(!confirm("⚠️ ¿Estás seguro de eliminar este flujo?")) return;
-    const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
-    if(res.ok) { alert("🗑️ Flujo eliminado"); openFlowsModal(); }
+    if(!confirm("⚠️ ¿Estás seguro de eliminar este flujo de forma permanente?")) return;
+    try {
+        const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
+        if(res.ok) {
+            alert("🗑️ Flujo eliminado con éxito");
+            if (typeof openFlowsModal === 'function') {
+                openFlowsModal();
+            }
+        }
+    } catch (error) {
+        console.error("Error en deleteFlow:", error);
+    }
 };
 
+/* MENÚ DE ROBOT 🤖 (LANZAR TRIGGERS AL CHAT ACTUAL) */
 window.toggleFlowMenu = async function() {
     const menu = document.getElementById('flow-menu');
     if(!menu) return;
+
     if (menu.style.display === 'none' || menu.style.display === '') {
         menu.style.display = 'block';
-        menu.innerHTML = '<div style="padding:10px; color:white; font-family:Montserrat; font-size:12px;">⌛ Cargando triggers...</div>';
+        menu.innerHTML = '<div style="padding:15px; color:white; font-family:Montserrat; font-size:12px; text-align:center;">⌛ Cargando triggers...</div>';
+        
         try {
+            // Buscamos el flujo que está marcado como principal (isMain: true)
             const response = await fetch('/api/get-flow');
             const data = await response.json();
+            
             menu.innerHTML = ""; 
-            if (data && data.drawflow.Home.data) {
+            
+            if (data && data.drawflow && data.drawflow.Home && data.drawflow.Home.data) {
                 const nodes = data.drawflow.Home.data;
+                let foundTriggers = false;
+
                 for (const id in nodes) {
                     if (nodes[id].name === 'trigger') {
+                        foundTriggers = true;
                         const val = nodes[id].data.val;
+                        
                         const item = document.createElement('div');
-                        item.style = "padding:12px; color:white; cursor:pointer; border-bottom:1px solid #4a5568; font-family:Montserrat; font-size:13px;";
-                        item.innerHTML = `🤖 <b>${val}</b>`;
-                        item.onclick = () => { sendFlowTrigger(val); menu.style.display = 'none'; };
+                        // Diseño mejorado con Montserrat y hover
+                        item.style = `
+                            padding: 12px 15px; 
+                            color: white; 
+                            cursor: pointer; 
+                            border-bottom: 1px solid #4a5568; 
+                            font-family: 'Montserrat', sans-serif; 
+                            font-size: 13px;
+                            transition: background 0.2s;
+                        `;
+                        item.onmouseover = () => item.style.background = "#3d4a5d";
+                        item.onmouseout = () => item.style.background = "transparent";
+                        
+                        item.innerHTML = `🤖 <span style="margin-left:8px;">${val}</span>`;
+                        
+                        item.onclick = () => { 
+                            sendFlowTrigger(val); 
+                            menu.style.display = 'none'; 
+                        };
                         menu.appendChild(item);
                     }
                 }
-            } else { menu.innerHTML = '<div style="padding:10px; color:white; font-size:12px;">No hay flujo activo</div>'; }
-        } catch (e) { menu.innerHTML = '<div style="padding:10px; color:white;">Error</div>'; }
-    } else { menu.style.display = 'none'; }
+
+                if (!foundTriggers) {
+                    menu.innerHTML = '<div style="padding:15px; color:#a0aec0; font-family:Montserrat; font-size:12px;">No se encontraron triggers en el flujo activo</div>';
+                }
+
+            } else {
+                menu.innerHTML = '<div style="padding:15px; color:#a0aec0; font-family:Montserrat; font-size:12px;">No hay un flujo principal activado</div>';
+            }
+        } catch (e) { 
+            console.error("Error cargando menú de triggers:", e);
+            menu.innerHTML = '<div style="padding:15px; color:#fc8181; font-family:Montserrat; font-size:12px;">❌ Error al conectar con el servidor</div>'; 
+        }
+    } else { 
+        menu.style.display = 'none'; 
+    }
 };
