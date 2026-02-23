@@ -117,7 +117,6 @@ app.post("/webhook", async (req, res) => {
             const sender = msg.from;
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
-                const sender = msg.from;
                             
                             // --- NUEVO: INTERCEPTOR DE PAGOS ---
                             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
