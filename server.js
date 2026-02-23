@@ -11,8 +11,6 @@ require("dotenv").config();
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-const imap = require('imap-simple');
-const { simpleParser } = require('mailparser');
 const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 
 // Configuración de WooCommerce (Usa tus llaves de websrapidas.com)
@@ -80,142 +78,45 @@ async function downloadMedia(mediaId, fileName) {
         return `/uploads/${fileName}`;
     } catch (e) { return null; }
 }
-async function buscarPagoEnEmail(monto) {
-    const config = {
-        imap: {
-            user: process.env.EMAIL_USER,
-            password: process.env.EMAIL_PASSWORD,
-            host: 'imap.gmail.com',
-            port: 993,
-            tls: true,
-            authTimeout: 3000,
-            // --- ESTO ELIMINA EL ERROR DE CERTIFICADO ---
-            tlsOptions: { rejectUnauthorized: false } 
-        }
-    };
 
-    try {
-        const connection = await imap.connect(config);
-        await connection.openBox('INBOX');
-        // Filtramos por correos no leídos que mencionen a Yape para ir más rápido
-        const searchCriteria = ['UNSEEN', ['TEXT', 'Yape']]; 
-        const fetchOptions = { bodies: ['TEXT'], markSeen: true };
-        const messages = await connection.search(searchCriteria, fetchOptions);
-
-        for (const item of messages) {
-            const all = item.parts.find(part => part.which === 'TEXT');
-            const mail = await simpleParser(all.body);
-            
-            // Limpiamos el texto para encontrar el monto sin fallos por espacios
-            const textoLimpio = mail.text.replace(/\s/g, "");
-            if (textoLimpio.includes(monto)) {
-                connection.end();
-                return true;
-            }
-        }
-        connection.end();
-        return false;
-    } catch (e) { 
-        console.error("❌ Error IMAP Detallado:", e.message); 
-        return false; 
-    }
-}
-/* ========================= WEBHOOK PRINCIPAL ========================= */
+/* ========================= WEBHOOK PRINCIPAL (SIN GMAIL) ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
         for (const msg of value.messages) {
             const sender = msg.from;
-            let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
-            let mediaUrl = null;
-                            
-                            // --- NUEVO: INTERCEPTOR DE PAGOS ---
-                            const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
-                            if (waiting && (msg.type === "image" || msg.text)) {
-                                console.log(`🧐 Validando pago de ${sender} por S/${waiting.amount}...`);
-                                
-                                const pagoConfirmado = await buscarPagoEnEmail(waiting.amount);
+            
+            // Detectar texto de mensaje normal, de lista o de botón
+            let incomingText = (
+                msg.text?.body || 
+                msg.interactive?.list_reply?.title || 
+                msg.interactive?.button_reply?.title || 
+                ""
+            ).trim();
 
-                                if (pagoConfirmado) {
-                                    await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
-                                    
-                                    // Crear pedido en WooCommerce (websrapidas.com)
-                                    try {
-                                        await WooCommerce.post("orders", {
-                                            payment_method: "bacs",
-                                            payment_method_title: "Validación Automática",
-                                            set_paid: true,
-                                            billing: { phone: sender },
-                                            line_items: [{ product_id: waiting.productId, quantity: 1 }]
-                                        });
-                                        
-                                        // Responder al cliente
-                                        await processSequence(sender, { name: "message", data: { info: "✅ ¡Pago verificado! Tu pedido de seguidores ha sido enviado a WooCommerce. 🚀" } }, {});
-                                    } catch (err) {
-                                        console.error("Error Woo:", err.message);
-                                    }
-                                } else {
-                                    await processSequence(sender, { name: "message", data: { info: "⏳ Aún no recibimos el correo de confirmación. Por favor, asegúrate de haber enviado el monto correcto o espera unos segundos y vuelve a intentarlo." } }, {});
-                                }
-                                return res.sendStatus(200); // Detiene el resto de la lógica para este mensaje
-                            }
-                            // --- FIN INTERCEPTOR ---
-            if (msg.type === "image") {
-                mediaUrl = await downloadMedia(msg.image.id, `${Date.now()}-${sender}.jpg`);
-                incomingText = msg.image.caption || "📷 Imagen recibida";
+            // 1. INTERCEPTOR DE PAGOS (Validación vía MacroDroid)
+            const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
+            
+            if (waiting) {
+                // Si estamos esperando un pago, cualquier cosa que envíe dispara el recordatorio
+                await processSequence(sender, { 
+                    name: "message", 
+                    data: { info: `⏳ Recibido. Estoy esperando que Yape nos confirme tu pago de S/${waiting.amount} para activar tu pedido automáticamente. ✨` } 
+                }, {});
+                return res.sendStatus(200);
             }
 
-            const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, media: mediaUrl });
-            broadcast({ type: "new_message", message: saved });
-            
-            try {
-                const flowDoc = await Flow.findOne({ name: "Main Flow" });
-                if (flowDoc && incomingText) {
-                    const nodes = flowDoc.data.drawflow.Home.data;
-
-                   // --- 1. LISTA (Prioridad) ---
-const activeListNode = Object.values(nodes).find(n => {
-    if (n.name !== "whatsapp_list") return false;
-    return Object.keys(n.data).some(k => 
-        k.startsWith("row") && n.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-    );
-});
-
-if (activeListNode) {
-    const rowKey = Object.keys(activeListNode.data).find(k => 
-        k.startsWith("row") && activeListNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-    );
-    
-    if (rowKey) {
-        // CORRECCIÓN: Usamos una expresión regular para extraer SOLO los números
-        const outNum = rowKey.match(/\d+/)[0]; 
-        const conn = activeListNode.outputs[`output_${outNum}`]?.connections[0];
-        
-        if (conn) {
-            console.log(`✅ Coincidencia: ${incomingText} -> Salida: ${outNum}`);
-            await processSequence(sender, nodes[conn.node], nodes);
-            return res.sendStatus(200);
-        }
-    }
-}
-
-                    // --- 2. TRIGGER ---
-                    const triggerNode = Object.values(nodes).find(n => 
-                        n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                    );
-                    
-                    if (triggerNode) {
-                        const firstConn = triggerNode.outputs?.output_1?.connections?.[0];
-                        if (firstConn) {
-                            const nextNode = nodes[firstConn.node];
-                            console.log("🚀 Trigger activado. Saltando a nodo:", nextNode.name);
-                            await processSequence(sender, nextNode, nodes);
-                            return res.sendStatus(200);
-                        }
-                    }
+            // 2. PROCESAMIENTO NORMAL DE MENSAJES (Si no hay pagos pendientes)
+            // Aquí continúa tu lógica de triggers y flujos...
+            const flowDoc = await Flow.findOne({ name: "Main Flow" });
+            if (flowDoc && incomingText) {
+                const nodes = flowDoc.data.drawflow.Home.data;
+                const triggerNode = Object.values(nodes).find(n => n.name === "trigger" && n.data.val?.toLowerCase() === incomingText.toLowerCase());
+                
+                if (triggerNode) {
+                    const nextNodeId = triggerNode.outputs?.output_1?.connections?.[0]?.node;
+                    if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
                 }
-            } catch (err) { 
-                console.error("❌ Error Webhook Logic:", err.message); 
             }
         }
     }
