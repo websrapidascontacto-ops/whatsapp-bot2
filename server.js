@@ -291,26 +291,23 @@ app.post("/webhook-yape", async (req, res) => {
                 
                 await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
-                // MODIFICACIÓN AQUÍ: Metadatos alineados con tu functions.php
+                // Sincronización con functions.php (Meta Data del Item)
                 await WooCommerce.post("orders", {
                     payment_method: "yape_automation",
                     payment_method_title: "Yape Automático ✅",
                     set_paid: true,
                     billing: { phone: waiting.chatId },
-                    line_items: [
-                        { 
-                            product_id: waiting.productId, 
-                            quantity: 1,
-                            meta_data: [
-                                {
-                                    key: "Link del Perfil", // Exactamente igual a como lo pide tu functions.php
-                                    value: waiting.profileLink
-                                }
-                            ]
-                        }
-                    ],
-                    // También lo dejamos como nota por si acaso
-                    customer_note: `🔗 Link procesado vía WhatsApp: ${waiting.profileLink}`
+                    line_items: [{ 
+                        product_id: waiting.productId, 
+                        quantity: 1,
+                        meta_data: [
+                            {
+                                key: "Link del Perfil", // Clave exacta para tu sistema SMM
+                                value: waiting.profileLink
+                            }
+                        ]
+                    }],
+                    customer_note: `🔗 Link del Perfil: ${waiting.profileLink}`
                 });
 
                 await processSequence(waiting.chatId, { 
