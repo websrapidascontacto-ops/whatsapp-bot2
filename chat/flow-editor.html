@@ -44,10 +44,10 @@
 <button class="btn-import" onclick="openFlowsModal()"><i class="fa-solid fa-folder-open"></i> MIS FLUJOS</button>
 
 <div id="flowsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
-    <div style="background:#161c2d; padding:25px; border-radius:15px; width:450px; border:1px solid #2563eb;">
-        <h3 style="color:white; font-family:'Montserrat';">Mis Flujos</h3>
+    <div style="background:#161c2d; padding:25px; border-radius:15px; margin-top: 33%; width:450px; border:1px solid #2563eb; font-family:'Montserrat', sans-serif;">
+        <h3 style="color:white; font-weight:700;">Mis Flujos 📁</h3>
         <div id="flowsList" style="margin: 20px 0; max-height:300px; overflow-y:auto;"></div>
-        <button onclick="closeFlowsModal()" class="btn btn-danger w-100">Cerrar</button>
+        <button onclick="document.getElementById('flowsModal').style.display='none'" class="btn btn-danger w-100" style="font-weight:600;">Cerrar</button>
     </div>
 </div>
 
@@ -72,58 +72,137 @@ function downloadFlow() {
     📤 Cargar Flujo
 </button>
     <div id="drawflow"></div>
-<script>
-async function handleImport(event) {
-    const file = event.target.files[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const flowData = JSON.parse(e.target.result);
-            
-            // IMPORTANTE: En lugar de recargar, limpiamos y cargamos en el momento
-            editor.clear(); 
-            editor.import(flowData);
-            editor.zoom_reset();
-            
-            // También lo guardamos en el servidor para que no se pierda
-            await fetch('/api/import-flow', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(flowData)
-            });
-
-            alert("✅ Flujo importado y visualizado correctamente.");
-        } catch (err) {
-            alert("❌ El archivo no es un JSON válido.");
-        }
-    };
-    reader.readAsText(file);
-}
-</script>
+    <div id="flowsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:#161c2d; padding:25px; border-radius:15px; width:450px; border:1px solid #2563eb; font-family:'Montserrat', sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <h3 style="color:white; font-weight:700; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-folder-open" style="color:#2563eb;"></i> Mis Flujos
+            </h3>
+            <div id="flowsList" style="margin: 20px 0; max-height:350px; overflow-y:auto; padding-right:5px;">
+                </div>
+            <button onclick="closeFlowsModal()" class="btn btn-danger w-100" style="font-weight:600; font-family:'Montserrat'; border-radius:8px;">
+                <i class="fa-solid fa-xmark"></i> CERRAR
+            </button>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
     <script src="flow-editor.js"></script>
+
     <script>
-    // Este listener escucha los mensajes de app.js
-    window.addEventListener('message', function(e) {
-        if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-            const flowData = e.data.data;
-            
-            // Verificamos que el objeto editor (de flow-editor.js) exista
-            if (typeof editor !== 'undefined') {
-                editor.clear(); // 🧹 Limpia el desorden previo
+        // 1. Cerrar Modal
+        window.closeFlowsModal = function() {
+            document.getElementById('flowsModal').style.display = 'none';
+        };
+
+        // 2. Cargar un flujo específico desde el servidor
+        window.loadSpecificFlow = async function(id) {
+            try {
+                const res = await fetch(`/api/get-flow-by-id/${id}`);
+                const data = await res.json();
                 
-                // Si la data viene del servidor puede traer .data, si es de archivo es directo
-                const finalData = flowData.drawflow ? flowData : (flowData.data || flowData);
-                
-                editor.import(finalData); // 📥 Carga el flujo nemo correctamente
-                editor.zoom_reset(); // 🔍 Centra la cámara
-                console.log("✅ Flujo importado limpiamente");
+                if (typeof editor !== 'undefined') {
+                    editor.clear();
+                    // Detectamos si la data viene envuelta en .data o es directa
+                    const finalData = data.drawflow ? data : (data.data || data);
+                    editor.import(finalData);
+                    editor.zoom_reset();
+                    
+                    closeFlowsModal();
+                    alert("✅ Flujo cargado correctamente");
+                }
+            } catch (e) {
+                console.error("Error al cargar:", e);
+                alert("❌ Error al obtener el flujo del servidor");
             }
+        };
+
+        // 3. Manejar Importación manual de archivos JSON (51 nodos)
+        async function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const flowData = JSON.parse(e.target.result);
+                    
+                    if (typeof editor !== 'undefined') {
+                        // Limpieza profunda antes de importar para evitar nodos amontonados
+                        editor.clear(); 
+                        editor.import(flowData);
+                        editor.zoom_reset();
+                        
+                        // Opcional: Guardar en el servidor automáticamente
+                        await fetch('/api/import-flow', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(flowData)
+                        });
+
+                        alert("✅ Flujo importado y sincronizado correctamente 🚀");
+                    }
+                } catch (err) {
+                    alert("❌ El archivo no es un JSON válido.");
+                }
+            };
+            reader.readAsText(file);
         }
-    });
-</script>
+
+        // 4. Listener para mensajes desde la APP principal (app.js)
+        window.addEventListener('message', function(e) {
+            // Escuchamos 'IMPORT_CLEAN' que es lo que envía app.js
+            if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+                const flowData = e.data.data;
+                
+                if (typeof editor !== 'undefined') {
+                    editor.clear(); // 🧹 Limpia el lienzo antes de meter los 51 nodos
+                    
+                    // Verificación de estructura de datos
+                    const finalData = flowData.drawflow ? flowData : (flowData.data || flowData);
+                    
+                    editor.import(finalData); 
+                    editor.zoom_reset();
+                    console.log("✅ Visualización limpia: Nodos cargados en sus posiciones originales.");
+                }
+            }
+        });
+
+        // 5. Función para abrir el modal (Asegura que esté disponible globalmente)
+        window.openFlowsModal = async function() {
+            const modal = document.getElementById('flowsModal');
+            const list = document.getElementById('flowsList');
+            modal.style.display = 'flex';
+            list.innerHTML = '<p style="color:white; text-align:center; font-family:Montserrat;">Cargando flujos...</p>';
+            
+            try {
+                const res = await fetch('/api/get-flows');
+                const flows = await res.json();
+                list.innerHTML = "";
+                
+                if (flows.length === 0) {
+                    list.innerHTML = '<p style="color:#666; text-align:center;">No hay flujos guardados.</p>';
+                    return;
+                }
+
+                flows.forEach(f => {
+                    const div = document.createElement('div');
+                    div.style = "background:#1a1b26; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333; transition: 0.3s;";
+                    div.innerHTML = `
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="color:white; font-weight:600; font-size:14px;">${f.name || 'Sin nombre'}</span>
+                            <small style="color:#555; font-size:10px;">ID: ${f.id.substring(0,8)}...</small>
+                        </div>
+                        <button onclick="loadSpecificFlow('${f.id}')" style="background:#2563eb; color:white; border:none; padding:6px 12px; border-radius:5px; font-size:12px; font-weight:600; cursor:pointer;">
+                            ABRIR
+                        </button>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch (e) {
+                list.innerHTML = '<p style="color:#ff4b2b; text-align:center;">Error al conectar con el servidor.</p>';
+            }
+        };
+    </script>
 </body>
 </html>

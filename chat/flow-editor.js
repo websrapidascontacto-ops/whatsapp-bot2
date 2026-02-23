@@ -281,17 +281,68 @@ window.openFlowsModal = async function() {
     } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
 };
 
-// FUNCIONES DE ACCIÓN
-window.activateFlow = async (id) => {
-    if(!confirm("¿Deseas activar este flujo para el bot de WhatsApp?")) return;
-    const res = await fetch(`/api/activate-flow/${id}`, { method: 'POST' });
-    if(res.ok) alert("🚀 Flujo activado correctamente");
-    openFlowsModal(); // Recargar lista
-};
+/* --- FUNCIONES DE GESTIÓN DE FLUJOS --- */
 
-window.deleteFlow = async (id) => {
-    if(!confirm("⚠️ ¿Estás seguro de eliminar este flujo? Esta acción no se puede deshacer.")) return;
-    const res = await fetch(`/api/get-flow/${id}`, { method: 'DELETE' });
-    if(res.ok) alert("🗑️ Flujo eliminado");
-    openFlowsModal(); // Recargar lista
-};
+// 1. Abrir el modal y cargar la lista
+window.openFlowsModal = async function() {
+    document.getElementById('flowsModal').style.display = 'flex';
+    const list = document.getElementById('flowsList');
+    list.innerHTML = '<p style="color:white;">Cargando...</p>';
+    
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        list.innerHTML = "";
+        flows.forEach(f => {
+            const div = document.createElement('div');
+            div.className = "flow-card";
+            div.style = "background:#1a1b26; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333;";
+            div.innerHTML = `
+                <span style="color:white; font-weight:500;">${f.name}</span>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="loadSpecificFlow('${f.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Cargar</button>
+                    <button onclick="deleteFlow('${f.id}')" style="background:#ff4b2b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🗑️</button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    } catch (e) { list.innerHTML = '<p style="color:red;">Error al cargar flujos</p>'; }
+}
+
+// 2. Cargar un flujo específico (Arregla el ReferenceError)
+window.loadSpecificFlow = async function(id) {
+    try {
+        const res = await fetch(`/api/get-flow-by-id/${id}`);
+        const data = await res.json();
+        editor.clear();
+        editor.import(data.data);
+        editor.zoom_reset();
+        document.getElementById('flowsModal').style.display = 'none';
+        alert("✅ Flujo cargado correctamente");
+    } catch (e) { alert("❌ Error al cargar"); }
+}
+
+// 3. Borrar flujo (Arregla el error 404 de la ruta)
+window.deleteFlow = async function(id) {
+    if(!confirm("¿Eliminar este flujo permanentemente?")) return;
+    try {
+        // CORRECCIÓN: La ruta debe ser /api/delete-flow/id
+        const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
+        if(res.ok) {
+            alert("🗑️ Eliminado");
+            openFlowsModal(); // Recarga la lista
+        }
+    } catch (e) { alert("❌ Error al eliminar"); }
+}
+
+/* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
+window.addEventListener('message', function(e) {
+    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        if (typeof editor !== 'undefined') {
+            editor.clear();
+            const flowData = e.data.data.drawflow ? e.data.data : (e.data.data.data || e.data.data);
+            editor.import(flowData);
+            editor.zoom_reset();
+        }
+    }
+});
