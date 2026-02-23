@@ -321,27 +321,46 @@ async function loadFlowDataIntoEditor(flowId) {
     } catch (e) { console.error("Error al cargar datos en editor:", e); }
 }
 
+// En tu app.js (donde manejas el SAVE_FLOW)
 window.addEventListener('message', async function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         let flowJson = event.data.data;
+        
+        // Si el JSON viene con la raíz .drawflow, lo mandamos directo
+        // Si no, le damos el formato correcto para que el servidor no explote
+        const finalExport = flowJson.drawflow ? flowJson : { drawflow: flowJson };
+
         let flowName = "Flujo Actualizado";
         if (!currentEditingFlowId) {
             flowName = prompt("Asigna un nombre a este nuevo flujo:", "Nuevo Flujo");
             if (!flowName) return;
         }
-        const payload = { id: currentEditingFlowId, name: flowName, data: flowJson };
+
+        const payload = { 
+            id: currentEditingFlowId, 
+            name: flowName, 
+            data: finalExport  // Enviamos la estructura completa
+        };
+
         try {
             const res = await fetch('/api/save-flow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            
             if(res.ok) {
                 const result = await res.json();
-                alert("✅ Flujo guardado correctamente");
+                alert("✅ Guardado con éxito en el servidor");
                 if (result.id) currentEditingFlowId = result.id;
-            } else { alert("❌ Error al guardar el flujo"); }
-        } catch (err) { console.error("Error fetch save-flow:", err); }
+            } else {
+                const errorText = await res.text();
+                console.error("Error del servidor:", errorText);
+                alert("❌ Error 500: El servidor no pudo procesar el flujo.");
+            }
+        } catch (err) {
+            console.error("Error fetch:", err);
+        }
     }
 });
 

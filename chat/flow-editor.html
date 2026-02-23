@@ -97,25 +97,44 @@ function downloadFlow() {
 
         // 2. Cargar un flujo específico desde el servidor
         window.loadSpecificFlow = async function(id) {
-            try {
-                const res = await fetch(`/api/get-flow-by-id/${id}`);
-                const data = await res.json();
-                
-                if (typeof editor !== 'undefined') {
-                    editor.clear();
-                    // Detectamos si la data viene envuelta en .data o es directa
-                    const finalData = data.drawflow ? data : (data.data || data);
-                    editor.import(finalData);
-                    editor.zoom_reset();
-                    
-                    closeFlowsModal();
-                    alert("✅ Flujo cargado correctamente");
-                }
-            } catch (e) {
-                console.error("Error al cargar:", e);
-                alert("❌ Error al obtener el flujo del servidor");
+    try {
+        const res = await fetch(`/api/get-flow-by-id/${id}`);
+        const responseData = await res.json();
+        
+        if (typeof editor !== 'undefined') {
+            editor.clear(); // Limpia el rastro de flujos anteriores
+
+            let rawData = responseData.data || responseData;
+            let finalData;
+
+            // Verificamos si ya tiene la estructura Home.data
+            if (rawData.drawflow && rawData.drawflow.Home) {
+                finalData = rawData;
+            } else {
+                // Reconstruimos la estructura si viene plana
+                finalData = {
+                    "drawflow": {
+                        "Home": {
+                            "data": rawData.drawflow ? rawData.drawflow.Home.data : rawData
+                        }
+                    }
+                };
             }
-        };
+
+            editor.import(finalData);
+            
+            // Forzamos el redibujado de conexiones
+            editor.updateConnectionNodes('node-1'); 
+            
+            setTimeout(() => editor.zoom_reset(), 150);
+            closeFlowsModal();
+            alert("✅ Flujo cargado y listo");
+        }
+    } catch (e) {
+        console.error("Error:", e);
+        alert("❌ Este flujo tiene un formato antiguo o incompatible.");
+    }
+};
 
         // 3. Manejar Importación manual de archivos JSON (51 nodos)
         async function handleImport(event) {
