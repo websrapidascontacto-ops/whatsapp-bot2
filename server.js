@@ -157,17 +157,46 @@ app.post("/webhook", async (req, res) => {
             }
 
             const flowDoc = await Flow.findOne({ isMain: true }); 
-            if (flowDoc && incomingText) {
-                const nodes = flowDoc.data.drawflow.Home.data;
-                const triggerNode = Object.values(nodes).find(n => 
-                    n.name === "trigger" && 
-                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                );
-                if (triggerNode) {
-                    const nextNodeId = triggerNode.outputs?.output_1?.connections?.[0]?.node;
-                    if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
-                }
+if (flowDoc && incomingText) {
+    const nodes = flowDoc.data.drawflow.Home.data;
+
+    // 1. Primero buscamos si es un TRIGGER (ej: "Hola")
+    let targetNode = Object.values(nodes).find(n => 
+        n.name === "trigger" && 
+        n.data.val?.toLowerCase() === incomingText.toLowerCase()
+    );
+
+    // 2. Si no es un trigger, buscamos si es una respuesta a una LISTA
+    if (!targetNode) {
+        // Buscamos qué nodo de lista tiene una fila que coincida con el texto que llegó
+        const listNode = Object.values(nodes).find(n => {
+            if (n.name === "whatsapp_list") {
+                return Object.values(n.data).some(val => val?.toString().trim().toLowerCase() === incomingText.toLowerCase());
             }
+            return false;
+        });
+
+        if (listNode) {
+            // Encontramos el nodo de lista, ahora vemos qué salida (output) corresponde a esa fila
+            const rowKey = Object.keys(listNode.data).find(k => listNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase());
+            const rowNum = rowKey.replace("row", ""); // Ej: de "row1" saca "1"
+            const nextId = listNode.outputs[`output_${rowNum}`]?.connections?.[0]?.node;
+            
+            if (nextId) targetNode = nodes[nextId];
+        }
+    }
+
+    // 3. Ejecutar el nodo encontrado
+    if (targetNode) {
+        if (targetNode.name === "trigger") {
+            const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
+            if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
+        } else {
+            // Si es un mensaje directo tras la lista
+            await processSequence(sender, targetNode, nodes);
+        }
+    }
+}
         }
     }
     res.sendStatus(200);
@@ -345,14 +374,23 @@ app.get('/api/get-flows', async (req, res) => {
 app.post('/api/save-flow', async (req, res) => {
     try {
         const { id, name, data } = req.body;
-        if (id) {
-            await Flow.findByIdAndUpdate(id, { name, data });
+        const finalName = name || `Flujo_${Date.now()}`; // Evita el error de duplicado de Mongo
+
+        if (id && mongoose.Types.ObjectId.isValid(id)) {
+            await Flow.findByIdAndUpdate(id, { name: finalName, data });
             res.json({ success: true, id });
         } else {
-            const newFlow = await Flow.create({ name: name || "Nuevo Flujo", data, isMain: (name === "Main Flow") });
+            // Si el nombre ya existe, le añade un timestamp para no dar Error 500
+            const existing = await Flow.findOne({ name: finalName });
+            const safeName = existing ? `${finalName}_${Date.now()}` : finalName;
+            
+            const newFlow = await Flow.create({ name: safeName, data, isMain: false });
             res.json({ success: true, id: newFlow._id });
         }
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Error save-flow:", e);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 // Activar flujo

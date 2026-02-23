@@ -126,33 +126,45 @@ window.addRowDynamic = function(button) {
 };
 
 /* === GUARDAR Y CARGAR (CORREGIDO) === */
-window.saveFlow = function() {
-    const nameInput = document.getElementById('flow_name');
-    const name = nameInput ? nameInput.value : null;
-    if (!name) return alert("⚠️ Ponle un nombre a tu flujo antes de guardar");
+window.saveFlow = async function() {
+    // 1. Obtener los datos actuales del editor
+    const exportData = editor.export();
+    
+    // 2. Obtener el nombre del flujo
+    const flowNameInput = document.getElementById('flow_name');
+    const flowName = flowNameInput ? flowNameInput.value : "Flujo sin nombre";
 
-    const nodes = editor.drawflow.drawflow.Home.data;
-    Object.keys(nodes).forEach(id => {
-        const el = document.getElementById(`node-${id}`);
-        if (el) {
-            el.querySelectorAll('input, textarea').forEach(input => {
-                const dfAttr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
-                if (dfAttr) {
-                    const key = dfAttr.name.replace('df-', '');
-                    nodes[id].data[key] = input.value;
-                }
-            });
+    // 3. Obtener el ID del flujo actual (si existe)
+    // Nota: Asegúrate de tener esta variable definida globalmente
+    const payload = {
+        id: typeof currentEditingFlowId !== 'undefined' ? currentEditingFlowId : null,
+        name: flowName,
+        data: exportData // Esto ya lleva la estructura drawflow.Home.data
+    };
+
+    console.log("Enviando flujo al servidor...", payload);
+
+    try {
+        const response = await fetch('/api/save-flow', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            alert("✅ ¡Guardado con éxito! El bot ya tiene las rutas actualizadas.");
+        } else {
+            const errorText = await response.text();
+            console.error("Error del servidor:", errorText);
+            alert("❌ Error 500: El servidor rechazó el flujo. Revisa que el nombre no tenga caracteres raros.");
         }
-    });
-
-    const data = editor.export();
-    fetch('/api/save-flow', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ name: name, data: data }) 
-    })
-    .then(res => res.ok ? alert("✅ Flujo '" + name + "' guardado") : alert("❌ Error servidor"))
-    .catch(err => console.error("Error:", err));
+    } catch (error) {
+        console.error("Error en la petición:", error);
+        alert("❌ Error de conexión al guardar.");
+    }
 };
 
 window.addEventListener('message', e => { 
