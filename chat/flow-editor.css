@@ -310,3 +310,31 @@ body {
 .drawflow-node {
     cursor: default;
 }
+#flowsList {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.flow-card {
+    background: #1a1b26;
+    border: 1px solid #2563eb;
+    padding: 15px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.flow-card:hover {
+    transform: translateY(-2px);
+    background: #24283b;
+}
+
+.flow-card span {
+    font-family: 'Montserrat';
+    color: #e0e0e0;
+    font-weight: 500;
+}

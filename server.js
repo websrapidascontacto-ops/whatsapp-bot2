@@ -61,8 +61,9 @@ const Message = mongoose.model("Message", new mongoose.Schema({
 }));
 
 const Flow = mongoose.model("Flow", new mongoose.Schema({
-    name: { type: String, default: "Main Flow" },
-    data: { type: Object, required: true }
+    name: { type: String, required: true, unique: true },
+    data: { type: Object, required: true },
+    isMain: { type: Boolean, default: false } 
 }));
 
 /* ========================= WEBSOCKET ========================= */
@@ -410,16 +411,40 @@ app.get("/messages/:chatId", async (req, res) => {
     res.json(messages);
 });
 
-app.post("/api/save-flow", async (req, res) => {
+app.post('/api/save-flow', async (req, res) => {
     try {
-        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
+        const { name, data } = req.body; // Extrae el nombre y los nodos
+        if(!name) return res.status(400).send("⚠️ Falta el nombre del flujo");
+
+        await Flow.findOneAndUpdate(
+            { name: name }, 
+            { data: data, isMain: (name === "Main Flow") }, 
+            { upsert: true }
+        );
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Para que el bot de WhatsApp siga funcionando con el principal
 app.get("/api/get-flow", async (req, res) => {
     const flow = await Flow.findOne({ name: "Main Flow" });
     res.json(flow ? flow.data : null);
+});
+
+// NUEVA: Para listar todos los flujos en el modal "Mis Flujos"
+app.get('/api/get-flows', async (req, res) => {
+    try {
+        const flows = await Flow.find({}, 'name _id'); // Solo trae nombre e ID
+        res.json(flows.map(f => ({ id: f._id, name: f.name })));
+    } catch (e) { res.status(500).json([]); }
+});
+
+// NUEVA: Para cargar un flujo específico cuando haces clic en "Editar"
+app.get('/api/get-flow/:id', async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+        res.json(flow);
+    } catch (e) { res.status(404).send("No encontrado"); }
 });
 
 /* ========================= INICIO DEL SERVIDOR ========================= */
