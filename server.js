@@ -243,67 +243,45 @@ async function processSequence(to, node, allNodes) {
         }
         return; 
     }
-    /* ========================= CORRECCIÓN DE LISTA EN SERVER.JS ========================= */
-            else if (node.name === "whatsapp_list") {
-                try {
-                    // Solo tomamos filas que tengan contenido real y no excedan el límite de WhatsApp (10 filas)
-                    const rows = Object.keys(node.data)
-                        .filter(k => k.startsWith("row") && node.data[k] && node.data[k].toString().trim() !== "")
-                        .map((k) => {
-                            const rowNum = k.replace("row", ""); 
-                            const descriptionText = node.data[`desc${rowNum}`] || "";
-                            return { 
-                                id: `row_${node.id}_${rowNum}`, 
-                                title: node.data[k].toString().substring(0, 24).trim(),
-                                description: descriptionText.toString().substring(0, 72).trim() 
-                            };
-                        })
-                        .slice(0, 10); // WhatsApp solo permite máximo 10 filas
-
-                    if (rows.length === 0) return;
-
-                    payload.type = "interactive";
-                    payload.interactive = {
-                        type: "list",
-                        body: { text: (node.data.body || node.data.list_title || "Selecciona una opción:").substring(0, 1024) },
-                        action: { 
-                            button: (node.data.btn || node.data.button_text || "Ver opciones").substring(0, 20), 
-                            sections: [{ title: (node.data.title || "Servicios").substring(0, 24), rows }] 
-                        }
-                    };
-
-                    // Si hay un footer definido, lo agregamos (opcional pero mejora el diseño)
-                    if (node.data.footer) {
-                        payload.interactive.footer = { text: node.data.footer.substring(0, 60) };
-                    }
-
-                    botText = "📋 Menú de lista enviado";
-                } catch (e) { console.error("❌ Error en construcción de lista:", e.message); }
-            }
-    else if (node.name === "payment_validation") {
-            await PaymentWaiting.findOneAndUpdate(
-                { chatId: to },
-                { productId: node.data.product_id, amount: node.data.amount, active: true, waitingForLink: true },
-                { upsert: true }
-            );
-            botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
-            payload.type = "text";
-            payload.text = { body: botText };
-    }
-
+    /* ========================= CORRECCIÓN DE LISTA FILTRADA ========================= */
+else if (node.name === "whatsapp_list") {
     try {
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
-        broadcast({ type: "new_message", message: savedBot });
-        if (node.name === "whatsapp_list" || node.name === "payment_validation") return; 
-        if (node.outputs?.output_1?.connections?.[0]) {
-            const nextNodeId = node.outputs.output_1.connections[0].node;
-            await new Promise(r => setTimeout(r, 1500)); 
-            return await processSequence(to, allNodes[nextNodeId], allNodes);
+        // Filtramos solo las filas que tienen un nombre real (no vacías)
+        const rows = [];
+        
+        // WhatsApp permite hasta 10 filas. Recorremos las posibles 10 del nodo.
+        for (let i = 1; i <= 10; i++) {
+            const rowTitle = node.data[`row${i}`];
+            
+            // Si la fila tiene texto, la agregamos
+            if (rowTitle && rowTitle.toString().trim() !== "") {
+                const descriptionText = node.data[`desc${i}`] || "";
+                rows.push({
+                    id: `row_${node.id}_${i}`,
+                    title: rowTitle.toString().substring(0, 24).trim(),
+                    description: descriptionText.toString().substring(0, 72).trim()
+                });
+            }
         }
-    } catch (err) { console.error("❌ Error en processSequence:", err.message); }
+
+        if (rows.length === 0) return; // Si no hay filas válidas, no enviamos nada
+
+        payload.type = "interactive";
+        payload.interactive = {
+            type: "list",
+            header: { type: "text", text: "Opciones Disponibles" }, // Título superior
+            body: { text: (node.data.body || "Selecciona una opción de la lista:").substring(0, 1024) },
+            footer: { text: "Webs Rápidas 🚀" },
+            action: { 
+                button: (node.data.btn || "Ver Menú").substring(0, 20), 
+                sections: [{ title: "Servicios", rows: rows }] 
+            }
+        };
+
+        botText = "📋 Menú de lista filtrado enviado";
+    } catch (e) { 
+        console.error("❌ Error en construcción de lista:", e.message); 
+    }
 }
 
 /* ========================= WEBHOOK YAPE ========================= */
