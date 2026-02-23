@@ -113,47 +113,30 @@ window.addRowDynamic = function(button) {
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
 
-    const currentOutputs = Object.keys(editor.drawflow.drawflow.Home.data[nodeId].outputs).length;
-    if (count > currentOutputs) {
-        editor.addNodeOutput(nodeId);
-    }
+    // ... (tu código de creación de inputs) ...
 
-    const group = document.createElement("div");
-    group.className = "row-group mb-2";
-    group.style.borderBottom = "1px solid #444";
-    group.style.paddingBottom = "8px";
-    group.style.marginTop = "10px";
-
-    const inputRow = document.createElement("input");
-    inputRow.className = "form-control mb-1";
-    inputRow.style.fontFamily = "Montserrat, sans-serif";
-    inputRow.placeholder = `Fila ${count} (Título)`;
-    inputRow.setAttribute(`df-${keyRow}`, "");
+    // AGREGA ESTO para cada input que crees:
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
-
-    const inputDesc = document.createElement("input");
-    inputDesc.className = "form-control";
-    inputDesc.style.fontFamily = "Montserrat, sans-serif";
-    inputDesc.style.fontSize = "11px";
-    inputDesc.style.height = "28px";
-    inputDesc.style.background = "#f0f0f0";
-    inputDesc.style.color = "#333";
-    inputDesc.placeholder = "Comentario opcional";
-    inputDesc.setAttribute(`df-${keyDesc}`, "");
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
-
-    group.appendChild(inputRow);
-    group.appendChild(inputDesc);
-    containerRows.appendChild(group);
-
+    
+    // Inicializa los valores en blanco si no existen
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
-    
-    editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
 /* === GUARDAR Y CARGAR === */
 window.saveFlow = function() {
+    // Sincronización forzada antes de exportar
+    const nodes = editor.drawflow.drawflow.Home.data;
+    Object.keys(nodes).forEach(id => {
+        const el = document.getElementById(`node-${id}`);
+        if (el) {
+            el.querySelectorAll('[df-*]').forEach(input => {
+                const key = Array.from(input.attributes).find(a => a.name.startsWith('df-')).name.replace('df-', '');
+                nodes[id].data[key] = input.value;
+            });
+        }
+    });
     const data = editor.export();
     console.log("Exportando datos:", data);
 
