@@ -362,127 +362,72 @@ app.post("/webhook-yape", async (req, res) => {
     res.sendStatus(200);
 });
 
-/* ========================= APIS Y SUBIDAS ========================= */
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsPath),
-    filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
-});
-const upload = multer({ storage });
+/* ========================= APIS DE FLUJOS (CORREGIDAS) ========================= */
 
-app.post("/api/upload-node-media", upload.single("file"), (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: "No hay archivo" });
-        res.json({ url: `/uploads/${req.file.filename}` });
-    } catch (err) { res.status(500).json({ error: "Error subida" }); }
-});
-
-app.post("/send-message", async (req, res) => {
-    const { to, text, mediaUrl } = req.body;
-    try {
-        let payload = { messaging_product: "whatsapp", to };
-        if (mediaUrl) {
-            const domain = process.env.RAILWAY_STATIC_URL || req.get('host');
-            const fullUrl = `https://${domain}${mediaUrl}`;
-            payload.type = "image";
-            payload.image = { link: fullUrl, caption: text || "" };
-        } else {
-            payload.type = "text";
-            payload.text = { body: text };
-        }
-        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
-            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-        });
-        const saved = await Message.create({ chatId: to, from: "me", text: text || "📷 Imagen", media: mediaUrl });
-        broadcast({ type: "new_message", message: saved });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } }, 
-        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
-        { $sort: { lastTime: -1 } }
-    ]);
-    res.json(chats);
-});
-
-app.get("/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
-});
-
-app.post('/api/save-flow', async (req, res) => {
-    try {
-        const { name, data } = req.body; // Extrae el nombre y los nodos
-        if(!name) return res.status(400).send("⚠️ Falta el nombre del flujo");
-
-        await Flow.findOneAndUpdate(
-            { name: name }, 
-            { data: data, isMain: (name === "Main Flow") }, 
-            { upsert: true }
-        );
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Para que el bot de WhatsApp siga funcionando con el principal
+// 1. OBTENER EL FLUJO ACTIVO (El que usa el Bot de WhatsApp)
 app.get("/api/get-flow", async (req, res) => {
-    const flow = await Flow.findOne({ name: "Main Flow" });
-    res.json(flow ? flow.data : null);
+    try {
+        const flow = await Flow.findOne({ isMain: true });
+        res.json(flow ? flow.data : null);
+    } catch (e) { res.status(500).json(null); }
 });
 
-// NUEVA: Para listar todos los flujos en el modal "Mis Flujos"
+// 2. OBTENER UN FLUJO ESPECÍFICO POR ID (Para el Editor)
+app.get("/api/get-flow-by-id/:id", async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+        res.json(flow ? flow.data : null);
+    } catch (e) { res.status(500).json(null); }
+});
+
+// 3. LISTAR TODOS LOS FLUJOS (Para el Modal)
 app.get('/api/get-flows', async (req, res) => {
     try {
-        const flows = await Flow.find({}, 'name _id'); // Solo trae nombre e ID
-        res.json(flows.map(f => ({ id: f._id, name: f.name })));
+        const flows = await Flow.find({});
+        res.json(flows.map(f => ({ 
+            id: f._id, 
+            name: f.name, 
+            active: f.isMain 
+        })));
     } catch (e) { res.status(500).json([]); }
 });
 
-// NUEVA: Para cargar un flujo específico cuando haces clic en "Editar"
-app.get('/api/get-flow/:id', async (req, res) => {
+// 4. GUARDAR O ACTUALIZAR FLUJO
+app.post('/api/save-flow', async (req, res) => {
     try {
-        const flow = await Flow.findById(req.params.id);
-        res.json(flow);
-    } catch (e) { res.status(404).send("No encontrado"); }
+        const { id, name, data } = req.body;
+        
+        if (id) {
+            // Si hay ID, actualizamos ese flujo específico
+            await Flow.findByIdAndUpdate(id, { name, data });
+            res.json({ success: true, id });
+        } else {
+            // Si no hay ID, creamos uno nuevo
+            const newFlow = await Flow.create({ 
+                name: name || `Flujo ${Date.now()}`, 
+                data 
+            });
+            res.json({ success: true, id: newFlow._id });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
-// ACTIVAR UN FLUJO (Marcar como isMain y renombrar para el Bot)
+
+// 5. ACTIVAR UN FLUJO (Quita isMain a todos y se lo pone a uno)
 app.post('/api/activate-flow/:id', async (req, res) => {
     try {
-        // 1. Quitamos la marca de 'isMain' a todos los flujos
         await Flow.updateMany({}, { isMain: false });
-
-        // 2. Buscamos el flujo seleccionado
-        const selectedFlow = await Flow.findById(req.params.id);
-        if (!selectedFlow) return res.status(404).send("Flujo no encontrado");
-
-        // 3. Lo marcamos como principal
-        selectedFlow.isMain = true;
-        await selectedFlow.save();
-
-        // 4. Sincronizamos con "Main Flow" para que el Webhook de WhatsApp lo reconozca
-        // Esto sobrescribe el contenido de "Main Flow" con el del flujo activado
-        await Flow.findOneAndUpdate(
-            { name: "Main Flow" }, 
-            { data: selectedFlow.data }, 
-            { upsert: true }
-        );
-
+        await Flow.findByIdAndUpdate(req.params.id, { isMain: true });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ELIMINAR UN FLUJO
+// 6. ELIMINAR UN FLUJO
 app.delete('/api/delete-flow/:id', async (req, res) => {
     try {
         const flowToDelete = await Flow.findById(req.params.id);
-        
-        // Evitar borrar el Main Flow por accidente si quieres
-        if (flowToDelete && flowToDelete.name === "Main Flow") {
-            return res.status(400).send("No puedes eliminar el flujo principal");
+        if (flowToDelete && flowToDelete.isMain) {
+            return res.status(400).send("No puedes eliminar el flujo que está activo");
         }
-
         await Flow.findByIdAndDelete(req.params.id);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }

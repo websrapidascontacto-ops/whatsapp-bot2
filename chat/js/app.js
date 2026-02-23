@@ -20,26 +20,36 @@ const DATA_FLUJO_NEMO = {
     }
 };
 
-// Función para asegurar que el flujo esté en el servidor
-async function inicializarFlujoPredeterminado() {
+// Obtener el flujo que el Bot de WhatsApp usará (el que tenga isMain: true)
+app.get("/api/get-flow", async (req, res) => {
     try {
-        const check = await fetch('/api/get-flow');
-        const data = await check.json();
-        if (!data || Object.keys(data).length === 0 || !data.drawflow) {
-            console.log("🤖 Inyectando flujo Nemo predeterminado...");
-            // Aquí cargamos el JSON completo que proporcionaste
-            // Busca esta línea en app.js y cámbiala:
-            const fullFlow = await fetch('/api/save-flow', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    name: "Main Flow", // AÑADE ESTO
-                    data: DATA_FLUJO_NEMO 
-                }) 
-            });
-        }
-    } catch (e) { console.error("Error inicializando flujo:", e); }
-}
+        const flow = await Flow.findOne({ isMain: true });
+        res.json(flow ? flow.data : null);
+    } catch (e) { res.status(500).json(null); }
+});
+
+// Listar todos los flujos para el Modal con su estado
+app.get('/api/get-flows', async (req, res) => {
+    try {
+        const flows = await Flow.find({});
+        res.json(flows.map(f => ({ 
+            id: f._id, 
+            name: f.name, 
+            active: f.isMain 
+        })));
+    } catch (e) { res.status(500).json([]); }
+});
+
+// Activar un flujo específico
+app.post('/api/activate-flow/:id', async (req, res) => {
+    try {
+        // Ponemos todos en false
+        await Flow.updateMany({}, { isMain: false });
+        // Activamos solo el seleccionado por ID
+        await Flow.findByIdAndUpdate(req.params.id, { isMain: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // Ejecutar al cargar la página
 inicializarFlujoPredeterminado();
@@ -304,62 +314,146 @@ async function deleteCurrentChat() {
     }
 }
 
-/* GESTIÓN DEL EDITOR */
-function openFlowEditor() {
+/* ========================= GESTIÓN DEL EDITOR (CORREGIDO) ========================= */
+
+// Variable para saber qué flujo estamos editando (null si es nuevo)
+let currentEditingFlowId = null;
+
+function openFlowEditor(flowId = null) {
+    currentEditingFlowId = flowId;
     const overlay = document.getElementById('flow-editor-overlay');
-    if(overlay) overlay.style.display = 'block';
-}
-function closeFlowEditor() {
-    if(confirm("¿Seguro de cerrar?")) document.getElementById('flow-editor-overlay').style.display = 'none';
+    if(overlay) {
+        overlay.style.display = 'block';
+        loadFlowDataIntoEditor(flowId);
+    }
 }
 
-window.addEventListener('message', function(event) {
+function closeFlowEditor() {
+    if(confirm("¿Seguro de cerrar el editor? Asegúrate de haber guardado.")) {
+        document.getElementById('flow-editor-overlay').style.display = 'none';
+        currentEditingFlowId = null;
+    }
+}
+
+// Carga los datos en el iframe
+async function loadFlowDataIntoEditor(flowId) {
+    try {
+        // Si no hay flowId, intentamos cargar el activo, si no, vacío
+        const url = flowId ? `/api/get-flow-by-id/${flowId}` : '/api/get-flow';
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        const iframe = document.getElementById('flow-iframe');
+        if(iframe && iframe.contentWindow) {
+            // Esperamos un poco a que el iframe esté listo
+            setTimeout(() => {
+                iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
+            }, 500);
+        }
+    } catch (e) { console.error("Error al cargar datos en editor:", e); }
+}
+
+// LISTENER DE GUARDADO (Captura el mensaje del Iframe)
+window.addEventListener('message', async function(event) {
     if (event.data.type === 'SAVE_FLOW') {
         let flowJson = event.data.data;
-        const iframe = document.querySelector('iframe'); 
-        if(iframe && iframe.contentDocument) {
-            const nodes = flowJson.drawflow.Home.data;
-            for (const id in nodes) {
-                const nodeEl = iframe.contentDocument.getElementById('node-' + id);
-                if (nodeEl) {
-                    const allInputs = nodeEl.querySelectorAll('input, textarea, select');
-                    allInputs.forEach(input => {
-                        for (let i = 0; i < input.attributes.length; i++) {
-                            const attr = input.attributes[i];
-                            if (attr.name.startsWith('df-')) {
-                                nodes[id].data[attr.name.replace('df-', '')] = input.value;
-                            }
-                        }
-                    });
-                }
-            }
+        
+        // Si es un flujo nuevo (sin ID previo), pedimos nombre
+        let flowName = "Flujo Actualizado";
+        if (!currentEditingFlowId) {
+            flowName = prompt("Asigna un nombre a este nuevo flujo:", "Nuevo Flujo");
+            if (!flowName) return;
         }
-        fetch('/api/save-flow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(flowJson)
-        }).then(() => alert("✅ Flujo Guardado"));
+
+        const payload = {
+            id: currentEditingFlowId, // Si es null, el servidor creará uno nuevo
+            name: flowName,
+            data: flowJson
+        };
+
+        try {
+            const res = await fetch('/api/save-flow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if(res.ok) {
+                const result = await res.json();
+                alert("✅ Flujo guardado correctamente");
+                if (result.id) currentEditingFlowId = result.id;
+            } else {
+                alert("❌ Error al guardar el flujo");
+            }
+        } catch (err) {
+            console.error("Error fetch save-flow:", err);
+        }
     }
 });
 
-async function loadFlowsList() {
-    try {
-        const response = await fetch('/api/get-flow');
-        const data = await response.json();
-        if (data) {
-            const iframe = document.getElementById('flow-iframe');
-            if(iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
-        }
-    } catch (e) { console.error(e); }
-}
+/* MODAL DE LISTADO DE FLUJOS (Para activar/eliminar/editar) */
+window.openFlowsModal = async function() {
+    const modal = document.getElementById('flows-modal'); // Asegúrate que este ID exista en tu HTML
+    if(modal) modal.style.display = 'flex';
+    
+    const listContainer = document.getElementById('flows-list-container');
+    if(!listContainer) return;
 
-/* MENÚ DE ROBOT 🤖 */
+    listContainer.innerHTML = '<div style="color:white; padding:20px;">Cargando flujos...</div>';
+
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        
+        listContainer.innerHTML = "";
+        flows.forEach(f => {
+            const div = document.createElement('div');
+            div.style = "background:#1e1e2e; padding:15px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333; font-family:'Montserrat', sans-serif;";
+            
+            div.innerHTML = `
+                <div>
+                    <div style="color:white; font-weight:700; font-size:14px;">${f.name}</div>
+                    <div style="font-size:10px; font-weight:bold; margin-top:4px; color:${f.active ? '#25D366' : '#ff4b2b'};">
+                        ${f.active ? '● ACTIVADO (Bot usando este)' : '○ DESACTIVADO'}
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    ${!f.active ? `<button onclick="activateFlow('${f.id}')" style="background:#25D366; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:700;">ACTIVAR</button>` : ''}
+                    <button onclick="openFlowEditor('${f.id}')" style="background:#007bff; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:700;">EDITAR</button>
+                    <button onclick="deleteFlow('${f.id}')" style="background:#ff4b2b; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:700;">BORRAR</button>
+                </div>
+            `;
+            listContainer.appendChild(div);
+        });
+    } catch (e) {
+        listContainer.innerHTML = '<div style="color:white;">Error al cargar flujos.</div>';
+    }
+};
+
+window.activateFlow = async (id) => {
+    const res = await fetch(`/api/activate-flow/${id}`, { method: 'POST' });
+    if(res.ok) {
+        alert("🚀 Flujo activado para el Bot");
+        openFlowsModal(); // Refrescar lista
+    }
+};
+
+window.deleteFlow = async (id) => {
+    if(!confirm("⚠️ ¿Estás seguro de eliminar este flujo?")) return;
+    const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
+    if(res.ok) {
+        alert("🗑️ Flujo eliminado");
+        openFlowsModal(); // Refrescar lista
+    }
+};
+
+/* MENÚ DE ROBOT 🤖 (Mantiene funcionalidad de lanzar flujos al chat) */
 window.toggleFlowMenu = async function() {
     const menu = document.getElementById('flow-menu');
     if(!menu) return;
     if (menu.style.display === 'none' || menu.style.display === '') {
         menu.style.display = 'block';
-        menu.innerHTML = '<div style="padding:10px; color:white;">⌛ Cargando...</div>';
+        menu.innerHTML = '<div style="padding:10px; color:white; font-family:Montserrat; font-size:12px;">⌛ Cargando triggers...</div>';
         try {
             const response = await fetch('/api/get-flow');
             const data = await response.json();
@@ -370,16 +464,15 @@ window.toggleFlowMenu = async function() {
                     if (nodes[id].name === 'trigger') {
                         const val = nodes[id].data.val;
                         const item = document.createElement('div');
-                        item.style.padding = "10px"; item.style.color = "white"; item.style.cursor = "pointer";
-                        item.style.borderBottom = "1px solid #4a5568";
+                        item.style = "padding:12px; color:white; cursor:pointer; border-bottom:1px solid #4a5568; font-family:Montserrat; font-size:13px;";
                         item.innerHTML = `🤖 <b>${val}</b>`;
                         item.onclick = () => { sendFlowTrigger(val); menu.style.display = 'none'; };
                         menu.appendChild(item);
                     }
                 }
+            } else {
+                menu.innerHTML = '<div style="padding:10px; color:white; font-size:12px;">No hay flujo activo</div>';
             }
-        } catch (e) { menu.innerHTML = 'Error'; }
+        } catch (e) { menu.innerHTML = '<div style="padding:10px; color:white;">Error</div>'; }
     } else { menu.style.display = 'none'; }
 };
-
-loadChats();

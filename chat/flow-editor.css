@@ -318,23 +318,21 @@ body {
 }
 
 .flow-card {
-    background: #1a1b26;
-    border: 1px solid #2563eb;
-    padding: 15px;
-    border-radius: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: transform 0.2s;
+    transition: all 0.3s ease;
+    border: 1px solid #333;
 }
-
 .flow-card:hover {
+    border-color: #007bff;
     transform: translateY(-2px);
-    background: #24283b;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
-
-.flow-card span {
-    font-family: 'Montserrat';
-    color: #e0e0e0;
-    font-weight: 500;
+/* Estilo para los botones dentro del modal */
+.flow-card button {
+    font-family: 'Montserrat', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s;
+}
+.flow-card button:hover {
+    opacity: 0.8;
 }
