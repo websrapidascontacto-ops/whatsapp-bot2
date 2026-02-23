@@ -252,6 +252,7 @@ window.openFlowsModal = async function() {
     const list = document.getElementById('flowsList');
     if(modal) modal.style.display = 'flex';
     if(list) list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
+    
     try {
         const res = await fetch('/api/get-flows');
         const flows = await res.json();
@@ -259,27 +260,38 @@ window.openFlowsModal = async function() {
             list.innerHTML = ""; 
             flows.forEach(flow => {
                 const card = document.createElement('div');
-                card.style = "background:#1a1b26; padding:15px; border-radius:8px; border:1px solid #444; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;";
-                card.innerHTML = `<span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span><button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 15px; border-radius:5px; font-size:12px; font-family:'Montserrat'; cursor:pointer;">Editar ✏️</button>`;
+                card.className = "flow-card"; // Asegúrate de tener este CSS
+                card.style = "background:#1a1b26; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;";
+                
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:11px; cursor:pointer;">EDITAR ✏️</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="activateFlow('${flow.id}')" style="flex:1; background:#10b981; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ACTIVAR ✅</button>
+                        <button onclick="deleteFlow('${flow.id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ELIMINAR 🗑️</button>
+                    </div>
+                `;
                 list.appendChild(card);
             });
         }
     } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
 };
 
-window.closeFlowsModal = () => {
-    const m = document.getElementById('flowsModal');
-    if(m) m.style.display = 'none';
+// FUNCIONES DE ACCIÓN
+window.activateFlow = async (id) => {
+    if(!confirm("¿Deseas activar este flujo para el bot de WhatsApp?")) return;
+    const res = await fetch(`/api/activate-flow/${id}`, { method: 'POST' });
+    if(res.ok) alert("🚀 Flujo activado correctamente");
+    openFlowsModal(); // Recargar lista
 };
 
-window.loadSpecificFlow = async function(id) {
-    try {
-        const res = await fetch(`/api/get-flow/${id}`);
-        const flow = await res.json();
-        editor.import(flow.data);
-        const nameInp = document.getElementById('flow_name');
-        if(nameInp) nameInp.value = flow.name;
-        closeFlowsModal();
-        alert("✅ Cargado: " + flow.name);
-    } catch (err) { alert("❌ Error al cargar"); }
+window.deleteFlow = async (id) => {
+    if(!confirm("⚠️ ¿Estás seguro de eliminar este flujo? Esta acción no se puede deshacer.")) return;
+    const res = await fetch(`/api/get-flow/${id}`, { method: 'DELETE' });
+    if(res.ok) alert("🗑️ Flujo eliminado");
+    openFlowsModal(); // Recargar lista
 };

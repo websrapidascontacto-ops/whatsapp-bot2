@@ -28,10 +28,14 @@ async function inicializarFlujoPredeterminado() {
         if (!data || Object.keys(data).length === 0 || !data.drawflow) {
             console.log("🤖 Inyectando flujo Nemo predeterminado...");
             // Aquí cargamos el JSON completo que proporcionaste
+            // Busca esta línea en app.js y cámbiala:
             const fullFlow = await fetch('/api/save-flow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(DATA_FLUJO_NEMO) // Usamos la constante definida arriba
+                body: JSON.stringify({ 
+                    name: "Main Flow", // AÑADE ESTO
+                    data: DATA_FLUJO_NEMO 
+                }) 
             });
         }
     } catch (e) { console.error("Error inicializando flujo:", e); }

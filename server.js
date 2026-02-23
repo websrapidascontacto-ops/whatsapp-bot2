@@ -169,8 +169,9 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(200);
             }
 
-            // 5. DISPARADOR DE FLUJOS (Main Flow)
-            const flowDoc = await Flow.findOne({ name: "Main Flow" });
+            // 5. DISPARADOR DE FLUJOS (Busca el que esté marcado como Activo)
+            const flowDoc = await Flow.findOne({ isMain: true }); 
+
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
                 const triggerNode = Object.values(nodes).find(n => 
@@ -446,8 +447,63 @@ app.get('/api/get-flow/:id', async (req, res) => {
         res.json(flow);
     } catch (e) { res.status(404).send("No encontrado"); }
 });
+// ACTIVAR UN FLUJO (Marcar como isMain y renombrar para el Bot)
+app.post('/api/activate-flow/:id', async (req, res) => {
+    try {
+        // 1. Quitamos la marca de 'isMain' a todos los flujos
+        await Flow.updateMany({}, { isMain: false });
 
+        // 2. Buscamos el flujo seleccionado
+        const selectedFlow = await Flow.findById(req.params.id);
+        if (!selectedFlow) return res.status(404).send("Flujo no encontrado");
+
+        // 3. Lo marcamos como principal
+        selectedFlow.isMain = true;
+        await selectedFlow.save();
+
+        // 4. Sincronizamos con "Main Flow" para que el Webhook de WhatsApp lo reconozca
+        // Esto sobrescribe el contenido de "Main Flow" con el del flujo activado
+        await Flow.findOneAndUpdate(
+            { name: "Main Flow" }, 
+            { data: selectedFlow.data }, 
+            { upsert: true }
+        );
+
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ELIMINAR UN FLUJO
+app.delete('/api/delete-flow/:id', async (req, res) => {
+    try {
+        const flowToDelete = await Flow.findById(req.params.id);
+        
+        // Evitar borrar el Main Flow por accidente si quieres
+        if (flowToDelete && flowToDelete.name === "Main Flow") {
+            return res.status(400).send("No puedes eliminar el flujo principal");
+        }
+
+        await Flow.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 /* ========================= INICIO DEL SERVIDOR ========================= */
+// RUTA PARA ACTIVAR: Quita el isMain a todos y se lo pone al seleccionado
+app.post('/api/activate-flow/:id', async (req, res) => {
+    try {
+        await Flow.updateMany({}, { isMain: false });
+        await Flow.findByIdAndUpdate(req.params.id, { isMain: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// RUTA PARA ELIMINAR
+app.delete('/api/delete-flow/:id', async (req, res) => {
+    try {
+        await Flow.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Carpeta uploads corregida");
 });
@@ -477,23 +533,4 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-});
-const FLOWS_PATH = './db/flows'; // Asegúrate que esta carpeta exista
-if (!fs.existsSync(FLOWS_PATH)) fs.mkdirSync(FLOWS_PATH, { recursive: true });
-
-app.get('/api/get-flows', (req, res) => {
-    const files = fs.readdirSync(FLOWS_PATH);
-    const list = files.map(f => ({ id: f, name: JSON.parse(fs.readFileSync(`${FLOWS_PATH}/${f}`)).name }));
-    res.json(list);
-});
-
-app.get('/api/get-flow/:id', (req, res) => {
-    res.json(JSON.parse(fs.readFileSync(`${FLOWS_PATH}/${req.params.id}`)));
-});
-
-app.post('/api/save-flow', (req, res) => {
-    const { name, data } = req.body;
-    const id = `${name.replace(/\s+/g, '_').toLowerCase()}.json`;
-    fs.writeFileSync(`${FLOWS_PATH}/${id}`, JSON.stringify({ name, data }));
-    res.send("ok");
 });
