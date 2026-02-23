@@ -345,14 +345,17 @@ app.post("/webhook-yape", async (req, res) => {
         const activeWaitings = await PaymentWaiting.find({ active: true });
 
         for (const waiting of activeWaitings) {
-            // Quitamos espacios y símbolos para comparar solo los números
-            const limpioNotificacion = texto.replace(/\s/g, ""); 
-            const montoBuscado = waiting.amount.replace(/\s/g, "");
+            // Extraemos solo los números de la notificación y de lo que espera el bot
+            const montoNotificacion = texto.match(/\d+/)?.[0]; 
+            const montoEsperado = waiting.amount.match(/\d+/)?.[0]; 
 
-            if (limpioNotificacion.includes(montoBuscado)) {
+            if (montoNotificacion && montoNotificacion === montoEsperado) {
                 console.log(`✅ Pago de S/${waiting.amount} verificado!`);
+                
+                // Desactivamos la espera para este chat
                 await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
+                // Creamos el pedido en la web correcta
                 await WooCommerce.post("orders", {
                     payment_method: "yape_automation",
                     payment_method_title: "Yape Automático ✅",
@@ -361,10 +364,12 @@ app.post("/webhook-yape", async (req, res) => {
                     line_items: [{ product_id: waiting.productId, quantity: 1 }]
                 });
 
+                // Enviamos confirmación al cliente
                 await processSequence(waiting.chatId, { 
                     name: "message", 
                     data: { info: "✅ ¡Yape verificado al instante! 🚀 Tu pedido de seguidores ya está en proceso en aumentar-seguidores.com. ¡Gracias! ✨" } 
                 }, {});
+                
                 return res.sendStatus(200);
             }
         }
