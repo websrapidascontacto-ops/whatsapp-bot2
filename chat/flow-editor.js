@@ -289,3 +289,22 @@ window.addButtonTriggerNode = () => {
     
     createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
 };
+window.addPaymentValidationNode = () => {
+    const html = `
+        <div class="node-wrapper">
+            <div class="node-header" style="background: #2ecc71; color: white; font-family: 'Montserrat'; padding: 10px; border-radius: 8px 8px 0 0;">
+                <i class="fa-solid fa-cash-register"></i> Validar Pago SMM
+            </div>
+            <div class="node-body" style="padding: 12px; background: #fff; font-family: 'Montserrat';">
+                <label style="font-size: 10px; font-weight: bold; color: #555;">ID PRODUCTO WOO:</label>
+                <input type="text" class="form-control mb-2" df-product_id placeholder="Ej: 125" style="font-size: 12px;">
+                
+                <label style="font-size: 10px; font-weight: bold; color: #555;">MONTO EXACTO (S/):</label>
+                <input type="text" class="form-control" df-amount placeholder="Ej: 20.00" style="font-size: 12px;">
+                
+                <p style="font-size: 9px; color: #888; margin-top: 8px;">* El bot esperará el comprobante tras este nodo.</p>
+            </div>
+        </div>
+    `;
+    editor.addNode('payment_validation', 1, 1, 150, 300, 'payment_validation', { product_id: '', amount: '' }, html);
+};

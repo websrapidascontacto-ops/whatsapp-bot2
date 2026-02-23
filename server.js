@@ -11,6 +11,25 @@ require("dotenv").config();
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+const imap = require('imap-simple');
+const { simpleParser } = require('mailparser');
+const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
+
+// Configuración de WooCommerce (Usa tus llaves de websrapidas.com)
+const WooCommerce = new WooCommerceRestApi({
+  url: "https://www.websrapidas.com", 
+  consumerKey: process.env.WC_KEY, 
+  consumerSecret: process.env.WC_SECRET,
+  version: "wc/v3"
+});
+
+// Esquema para rastrear quién está esperando validación de pago
+const PaymentWaiting = mongoose.model("PaymentWaiting", new mongoose.Schema({
+    chatId: String,
+    productId: String,
+    amount: String,
+    active: { type: Boolean, default: true }
+}));
 
 /* ========================= CONFIGURACIÓN ========================= */
 app.use(express.json({ limit: "50mb" }));
@@ -61,7 +80,35 @@ async function downloadMedia(mediaId, fileName) {
         return `/uploads/${fileName}`;
     } catch (e) { return null; }
 }
+async function buscarPagoEnEmail(monto) {
+    const config = {
+        imap: {
+            user: process.env.EMAIL_USER,
+            password: process.env.EMAIL_PASSWORD, // Contraseña de aplicación
+            host: 'imap.gmail.com', port: 993, tls: true, authTimeout: 3000
+        }
+    };
 
+    try {
+        const connection = await imap.connect(config);
+        await connection.openBox('INBOX');
+        const searchCriteria = ['UNSEEN']; // Solo correos no leídos
+        const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: true };
+        const messages = await connection.search(searchCriteria, fetchOptions);
+
+        for (const item of messages) {
+            const all = item.parts.find(part => part.which === 'TEXT');
+            const mail = await simpleParser(all.body);
+            // Validamos que el monto aparezca en el texto del correo
+            if (mail.text.includes(monto)) {
+                connection.end();
+                return true;
+            }
+        }
+        connection.end();
+        return false;
+    } catch (e) { console.error("Error IMAP:", e); return false; }
+}
 /* ========================= WEBHOOK PRINCIPAL ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
@@ -70,7 +117,39 @@ app.post("/webhook", async (req, res) => {
             const sender = msg.from;
             let incomingText = (msg.text?.body || msg.interactive?.list_reply?.title || msg.interactive?.button_reply?.title || "").trim();
             let mediaUrl = null;
+                const sender = msg.from;
+                            
+                            // --- NUEVO: INTERCEPTOR DE PAGOS ---
+                            const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
+                            if (waiting && (msg.type === "image" || msg.text)) {
+                                console.log(`🧐 Validando pago de ${sender} por S/${waiting.amount}...`);
+                                
+                                const pagoConfirmado = await buscarPagoEnEmail(waiting.amount);
 
+                                if (pagoConfirmado) {
+                                    await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+                                    
+                                    // Crear pedido en WooCommerce (websrapidas.com)
+                                    try {
+                                        await WooCommerce.post("orders", {
+                                            payment_method: "bacs",
+                                            payment_method_title: "Validación Automática",
+                                            set_paid: true,
+                                            billing: { phone: sender },
+                                            line_items: [{ product_id: waiting.productId, quantity: 1 }]
+                                        });
+                                        
+                                        // Responder al cliente
+                                        await processSequence(sender, { name: "message", data: { info: "✅ ¡Pago verificado! Tu pedido de seguidores ha sido enviado a WooCommerce. 🚀" } }, {});
+                                    } catch (err) {
+                                        console.error("Error Woo:", err.message);
+                                    }
+                                } else {
+                                    await processSequence(sender, { name: "message", data: { info: "⏳ Aún no recibimos el correo de confirmación. Por favor, asegúrate de haber enviado el monto correcto o espera unos segundos y vuelve a intentarlo." } }, {});
+                                }
+                                return res.sendStatus(200); // Detiene el resto de la lógica para este mensaje
+                            }
+                            // --- FIN INTERCEPTOR ---
             if (msg.type === "image") {
                 mediaUrl = await downloadMedia(msg.image.id, `${Date.now()}-${sender}.jpg`);
                 incomingText = msg.image.caption || "📷 Imagen recibida";
@@ -218,7 +297,17 @@ else if (node.name === "notify") {
             console.error("❌ Error construyendo payload de lista:", e.message);
         }
     }
-
+    else if (node.name === "payment_validation") {
+            // Activamos la espera de pago para este usuario
+            await PaymentWaiting.findOneAndUpdate(
+                { chatId: to },
+                { productId: node.data.product_id, amount: node.data.amount, active: true },
+                { upsert: true }
+            );
+            botText = `💳 Por favor, envía la captura de tu comprobante por S/${node.data.amount}. Validaremos tu pago automáticamente. ✨`;
+            payload.type = "text";
+            payload.text = { body: botText };
+    }
     try {
         // 1. Enviamos el mensaje al API de Facebook
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
@@ -248,7 +337,46 @@ else if (node.name === "notify") {
         console.error("❌ Error en processSequence:", err.response?.data || err.message); 
     }
 }
+/* ========================= WEBHOOK YAPE (MACRODROID) ========================= */
+app.post("/webhook-yape", async (req, res) => {
+    const { texto, emisor } = req.body; 
+    console.log(`📢 Notificación de Yape: ${texto} de ${emisor}`);
 
+    try {
+        // Buscamos si algún cliente está esperando validación
+        const activeWaitings = await PaymentWaiting.find({ active: true });
+
+        for (const waiting of activeWaitings) {
+            // Si el texto de la notificación contiene el monto (ej: "10.00")
+            if (texto.includes(waiting.amount)) {
+                console.log(`✅ ¡Pago confirmado para ${waiting.chatId}!`);
+
+                // 1. Marcar como procesado
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+
+                // 2. Crear pedido en WooCommerce (websrapidas.com)
+                await WooCommerce.post("orders", {
+                    payment_method: "yape_automation",
+                    payment_method_title: "Yape Automático (MacroDroid)",
+                    set_paid: true,
+                    billing: { phone: waiting.chatId },
+                    line_items: [{ product_id: waiting.productId, quantity: 1 }]
+                });
+
+                // 3. Respuesta automática al cliente
+                await processSequence(waiting.chatId, { 
+                    name: "message", 
+                    data: { info: "✅ ¡Yape verificado! 🔝 Tu pedido de seguidores ha sido recibido y está en camino. ¡Gracias por tu compra! 😊✨" } 
+                }, {});
+                
+                break;
+            }
+        }
+    } catch (err) {
+        console.error("❌ Error Webhook Yape:", err.message);
+    }
+    res.sendStatus(200);
+});
 /* ========================= APIS Y SUBIDAS ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
