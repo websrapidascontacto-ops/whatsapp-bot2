@@ -33,7 +33,6 @@ container.addEventListener('wheel', function(e) {
         if(map) {
             map.style.transform = `translate(${editor.pre_canvas_x}px, ${editor.pre_canvas_y}px) scale(${newZoom})`;
         }
-        // editor.updateZoom(); // Esta línea causaba TypeError, la comentamos para seguridad
     }
 }, { passive: false });
 
@@ -49,7 +48,7 @@ function createNode(type, inputs, outputs, html, data = {}) {
     // 2. Calculamos la posición del PRÓXIMO nodo
     lastNodeX += nodeWidth; 
 
-    // 3. Límite de ancho: Si llega de 2000px, vuelve a la izquierda y baja 400px
+    // 3. Límite de ancho: Si llega a 2000px, vuelve a la izquierda y baja 400px
     if (lastNodeX > 2000) { 
         lastNodeX = 50; 
         lastNodeY += 400; 
@@ -113,7 +112,6 @@ window.addRowDynamic = function(button) {
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
 
-    // Creamos los elementos que faltaban definir
     const group = document.createElement("div");
     group.className = "row-group mb-2";
     group.style.borderBottom = "1px solid #444";
@@ -136,7 +134,6 @@ window.addRowDynamic = function(button) {
     inputDesc.placeholder = "Comentario opcional";
     inputDesc.setAttribute(`df-${keyDesc}`, "");
 
-    // Sincronización de eventos
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
@@ -144,30 +141,28 @@ window.addRowDynamic = function(button) {
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    // Inicializa los valores
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
     
-    // Añadimos un output para la nueva fila
     editor.addNodeOutput(nodeId);
 };
 
-/* === GUARDAR Y CARGAR === */
+/* === GUARDAR Y CARGAR (CORREGIDO) === */
 window.saveFlow = function() {
     const nodes = editor.drawflow.drawflow.Home.data;
     Object.keys(nodes).forEach(id => {
         const el = document.getElementById(`node-${id}`);
         if (el) {
-            el.querySelectorAll('[df-*]').forEach(input => {
-                const attr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
-                if(attr) {
-                    const key = attr.name.replace('df-', '');
+            el.querySelectorAll('input, textarea').forEach(input => {
+                const dfAttr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
+                if (dfAttr) {
+                    const key = dfAttr.name.replace('df-', '');
                     nodes[id].data[key] = input.value;
                 }
             });
         }
     });
-    
+
     const data = editor.export();
     console.log("Exportando datos:", data);
 
@@ -180,7 +175,7 @@ window.saveFlow = function() {
         if (response.ok) {
             alert("✅ Flujo Guardado correctamente");
         } else {
-            alert("❌ Error al guardar");
+            alert("❌ Error al guardar en el servidor");
         }
     })
     .catch(err => {
@@ -275,7 +270,10 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
                     }
                 });
             }, 200);
-        } catch (err) { console.error("Error al importar:", err); }
+
+        } catch (err) {
+            console.error("Error al importar:", err);
+        }
     };
     reader.readAsText(file);
 });
@@ -288,10 +286,12 @@ window.addButtonTriggerNode = () => {
             <div class="node-body">
                 <p style="font-size: 10px; color: #666; margin-bottom: 5px;">Texto que verá el usuario:</p>
                 <input type="text" class="form-control mb-2" df-button_text placeholder="Ej: Ver Catálogo" style="font-family: 'Montserrat';">
+                
                 <p style="font-size: 10px; color: #666; margin-bottom: 5px;">Palabra que activa (Trigger):</p>
                 <input type="text" class="form-control" df-trigger_val placeholder="Ej: catalogo" style="font-family: 'Montserrat';">
             </div>
         </div>`;
+    
     createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
 };
 
@@ -305,8 +305,10 @@ window.addPaymentValidationNode = () => {
             <div class="node-body" style="padding: 12px; background: #fff; font-family: 'Montserrat';">
                 <label style="font-size: 10px; font-weight: bold; color: #555;">ID PRODUCTO WOO:</label>
                 <input type="text" class="form-control mb-2" df-product_id placeholder="Ej: 125" style="font-size: 12px;">
+                
                 <label style="font-size: 10px; font-weight: bold; color: #555;">MONTO EXACTO (S/):</label>
                 <input type="text" class="form-control" df-amount placeholder="Ej: 20.00" style="font-size: 12px;">
+                
                 <p style="font-size: 9px; color: #888; margin-top: 8px;">* El bot esperará el comprobante tras este nodo.</p>
             </div>
         </div>`;
