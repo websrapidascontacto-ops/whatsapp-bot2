@@ -15,18 +15,20 @@ const WooCommerceRestApi = require("@woocommerce/woocommerce-rest-api").default;
 
 // Configuración de WooCommerce (Usa tus llaves de websrapidas.com)
 const WooCommerce = new WooCommerceRestApi({
-  url: "https://www.aumentar-seguidores.com", 
-  consumerKey: process.env.WC_KEY, 
-  consumerSecret: process.env.WC_SECRET,
-  version: "wc/v3"
+    url: "https://www.aumentar-seguidores.com", 
+    consumerKey: process.env.WC_KEY, 
+    consumerSecret: process.env.WC_SECRET,
+    version: "wc/v3"
 });
 
-// Esquema para rastrear quién está esperando validación de pago
+// Esquema para rastrear quién está esperando validación de pago y link
 const PaymentWaiting = mongoose.model("PaymentWaiting", new mongoose.Schema({
     chatId: String,
     productId: String,
     amount: String,
-    active: { type: Boolean, default: true }
+    profileLink: String,
+    active: { type: Boolean, default: true },
+    waitingForLink: { type: Boolean, default: false }
 }));
 
 /* ========================= CONFIGURACIÓN ========================= */
@@ -44,13 +46,18 @@ if (!fs.existsSync(uploadsPath)) {
 // CAMBIO: Ahora sí, /uploads apuntará a la carpeta física correcta
 app.use("/uploads", express.static(uploadsPath));
 app.use(express.static(chatPath));
+
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Mongo conectado - Punto Nemo Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
 const Message = mongoose.model("Message", new mongoose.Schema({
-    chatId: String, from: String, text: String, media: String, timestamp: { type: Date, default: Date.now }
+    chatId: String, 
+    from: String, 
+    text: String, 
+    media: String, 
+    timestamp: { type: Date, default: Date.now }
 }));
 
 const Flow = mongoose.model("Flow", new mongoose.Schema({
@@ -60,7 +67,9 @@ const Flow = mongoose.model("Flow", new mongoose.Schema({
 
 /* ========================= WEBSOCKET ========================= */
 function broadcast(data) {
-    wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); });
+    wss.clients.forEach(c => { 
+        if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data)); 
+    });
 }
 
 /* ========================= WHATSAPP MEDIA DOWNLOADER ========================= */
@@ -76,7 +85,9 @@ async function downloadMedia(mediaId, fileName) {
         const filePath = path.join(uploadsPath, fileName);
         fs.writeFileSync(filePath, response.data);
         return `/uploads/${fileName}`;
-    } catch (e) { return null; }
+    } catch (e) { 
+        return null; 
+    }
 }
 
 /* ========================= WEBHOOK PRINCIPAL (SIN GMAIL) ========================= */
@@ -94,20 +105,41 @@ app.post("/webhook", async (req, res) => {
                 ""
             ).trim();
 
-            // 1. INTERCEPTOR DE PAGOS (Validación vía MacroDroid)
+            // 1. INTERCEPTOR DE PAGOS Y LINKS (Validación vía MacroDroid)
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
             
             if (waiting) {
-                // Si estamos esperando un pago, cualquier cosa que envíe dispara el recordatorio
+                // Si el bot está esperando el link del perfil
+                if (waiting.waitingForLink) {
+                    const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
+                    
+                    if (isLink) {
+                        waiting.profileLink = incomingText;
+                        waiting.waitingForLink = false;
+                        await waiting.save();
+                        
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: `✅ Link recibido correctamente. ✨\n\n💳 Ahora, para finalizar, por favor envía el Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. 🚀` } 
+                        }, {});
+                    } else {
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar con tu pedido. 🔗" } 
+                        }, {});
+                    }
+                    return res.sendStatus(200);
+                }
+
+                // Si ya tenemos el link pero aún no paga, recordamos el Yape
                 await processSequence(sender, { 
                     name: "message", 
-                    data: { info: `⏳ Recibido. Estoy esperando que Yape nos confirme tu pago de S/${waiting.amount} para activar tu pedido automáticamente. ✨` } 
+                    data: { info: `⏳ Seguimos esperando la confirmación de tu Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. ✨` } 
                 }, {});
                 return res.sendStatus(200);
             }
 
             // 2. PROCESAMIENTO NORMAL DE MENSAJES (Si no hay pagos pendientes)
-            // Aquí continúa tu lógica de triggers y flujos...
             const flowDoc = await Flow.findOne({ name: "Main Flow" });
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
@@ -122,6 +154,7 @@ app.post("/webhook", async (req, res) => {
     }
     res.sendStatus(200);
 });
+
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
@@ -140,7 +173,6 @@ async function processSequence(to, node, allNodes) {
         
         if (mediaPath) {
             const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-            // Limpiamos la ruta para que no tenga dobles slashes
             const cleanPath = mediaPath.startsWith('/uploads/') ? mediaPath : `/uploads/${mediaPath.split('/').pop()}`;
             const fullUrl = `https://${domain}${cleanPath}`;
 
@@ -149,50 +181,45 @@ async function processSequence(to, node, allNodes) {
             botText = `🖼️ Imagen: ${caption}`;
         }
     }
-else if (node.name === "notify") {
-    const myNumber = "51933425911"; 
-    const alertText = node.data.info || "Alguien llegó a este punto";
+    else if (node.name === "notify") {
+        const myNumber = "51933425911"; 
+        const alertText = node.data.info || "Alguien llegó a este punto";
 
-    let notifyPayload = {
-        messaging_product: "whatsapp",
-        to: myNumber,
-        type: "text",
-        text: { body: `🔔 *AVISO:* El cliente ${to} llegó al nodo: _${alertText}_` }
-    };
+        let notifyPayload = {
+            messaging_product: "whatsapp",
+            to: myNumber,
+            type: "text",
+            text: { body: `🔔 *AVISO:* El cliente ${to} llegó al nodo: _${alertText}_` }
+        };
 
-    axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, notifyPayload, {
-        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-    }).catch(e => console.error("Error aviso admin:", e.message));
+        axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, notifyPayload, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        }).catch(e => console.error("Error aviso admin:", e.message));
 
-    botText = "🔔 Aviso enviado al admin";
+        botText = "🔔 Aviso enviado al admin";
 
-    // --- ESTO ES LO QUE DEBES ASEGURARTE QUE ESTÉ ---
-    // Si el nodo notify tiene algo conectado, que siga al siguiente nodo inmediatamente
-    if (node.outputs?.output_1?.connections?.[0]) {
-        const nextNodeId = node.outputs.output_1.connections[0].node;
-        return await processSequence(to, allNodes[nextNodeId], allNodes);
+        if (node.outputs?.output_1?.connections?.[0]) {
+            const nextNodeId = node.outputs.output_1.connections[0].node;
+            return await processSequence(to, allNodes[nextNodeId], allNodes);
+        }
+        return; 
     }
-    return; // Si no hay conexión, se detiene aquí.
-}
-   else if (node.name === "whatsapp_list") {
-    try {
-        const rows = Object.keys(node.data)
-            .filter(k => k.startsWith("row") && node.data[k])
-            .map((k) => {
-                const rowNum = k.replace("row", ""); // Mantiene el número original (1, 2, 3...)
-                const descriptionText = node.data[`desc${rowNum}`] || "";
+    else if (node.name === "whatsapp_list") {
+        try {
+            const rows = Object.keys(node.data)
+                .filter(k => k.startsWith("row") && node.data[k])
+                .map((k) => {
+                    const rowNum = k.replace("row", ""); 
+                    const descriptionText = node.data[`desc${rowNum}`] || "";
 
-                return { 
-                    id: `row_${node.id}_${rowNum}`, // ID sincronizado con la salida
-                    title: node.data[k].toString().substring(0, 24),
-                    description: descriptionText.toString().substring(0, 72) // Ahora sí se envía
-                };
-            });
+                    return { 
+                        id: `row_${node.id}_${rowNum}`, 
+                        title: node.data[k].toString().substring(0, 24),
+                        description: descriptionText.toString().substring(0, 72) 
+                    };
+                });
 
-            if (rows.length === 0) {
-                console.error("❌ Error: La lista no tiene filas configuradas");
-                return;
-            }
+            if (rows.length === 0) return;
 
             payload.type = "interactive";
             payload.interactive = {
@@ -205,62 +232,55 @@ else if (node.name === "notify") {
             };
             botText = "📋 Menú enviado";
         } catch (e) {
-            console.error("❌ Error construyendo payload de lista:", e.message);
+            console.error("❌ Error en lista:", e.message);
         }
     }
     else if (node.name === "payment_validation") {
-            // Activamos la espera de pago para este usuario
+            // Activamos espera de link y pago
             await PaymentWaiting.findOneAndUpdate(
                 { chatId: to },
-                { productId: node.data.product_id, amount: node.data.amount, active: true },
+                { 
+                    productId: node.data.product_id, 
+                    amount: node.data.amount, 
+                    active: true,
+                    waitingForLink: true 
+                },
                 { upsert: true }
             );
-            botText = `💳 Por favor, envía la captura de tu comprobante por S/${node.data.amount}. Validaremos tu pago automáticamente. ✨`;
+            botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
             payload.type = "text";
             payload.text = { body: botText };
     }
+
     try {
-        // 1. Enviamos el mensaje al API de Facebook
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
 
-        // 2. Guardamos en la DB y avisamos al chat web
         const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
         broadcast({ type: "new_message", message: savedBot });
 
-        // --- LÓGICA DE AVANCE AUTOMÁTICO (CORREGIDA) ---
-        
-        // Si el nodo actual es una LISTA, nos detenemos aquí (esperamos respuesta del usuario)
-        if (node.name === "whatsapp_list") return; 
+        if (node.name === "whatsapp_list" || node.name === "payment_validation") return; 
 
-        // Si el nodo actual tiene una conexión de salida, saltamos al siguiente automáticamente
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
-            
-            // Esperamos 1.5 segundos para que no lleguen todos los mensajes pegados
             await new Promise(r => setTimeout(r, 1500)); 
-            
-            // Llamamos recursivamente para procesar el siguiente nodo (tu Lista)
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
     } catch (err) { 
-        console.error("❌ Error en processSequence:", err.response?.data || err.message); 
+        console.error("❌ Error en processSequence:", err.message); 
     }
 }
+
 /* ========================= WEBHOOK YAPE (MACRODROID) ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
     console.log(`📢 Texto recibido de MacroDroid: "${texto}"`);
 
-    if (!texto) {
-        console.log("⚠️ Error: El texto de la notificación llegó vacío.");
-        return res.sendStatus(200);
-    }
+    if (!texto) return res.sendStatus(200);
 
     try {
         const activeWaitings = await PaymentWaiting.find({ active: true });
-        // Extraemos solo los números del texto (ej: de "S/ 1.00" saca "1")
         const montoRecibido = texto.match(/\d+/)?.[0]; 
 
         for (const waiting of activeWaitings) {
@@ -276,7 +296,8 @@ app.post("/webhook-yape", async (req, res) => {
                     payment_method_title: "Yape Automático ✅",
                     set_paid: true,
                     billing: { phone: waiting.chatId },
-                    line_items: [{ product_id: waiting.productId, quantity: 1 }]
+                    line_items: [{ product_id: waiting.productId, quantity: 1 }],
+                    customer_note: `🔗 Link del Perfil: ${waiting.profileLink}`
                 });
 
                 await processSequence(waiting.chatId, { 
@@ -286,12 +307,12 @@ app.post("/webhook-yape", async (req, res) => {
                 return res.sendStatus(200);
             }
         }
-        console.log("ℹ️ No se encontró ninguna espera activa para este monto.");
     } catch (err) {
-        console.error("❌ Error:", err.message);
+        console.error("❌ Error Yape:", err.message);
     }
     res.sendStatus(200);
 });
+
 /* ========================= APIS Y SUBIDAS ========================= */
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
