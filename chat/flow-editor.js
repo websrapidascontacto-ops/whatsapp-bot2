@@ -314,3 +314,83 @@ window.addPaymentValidationNode = () => {
         </div>`;
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
+/* === GESTIÓN DE MÚLTIPLES FLUJOS (AL FINAL DEL ARCHIVO) === */
+
+// MODIFICACIÓN: Guardar con nombre (Sustituye o actualiza tu saveFlow anterior)
+window.saveFlow = function() {
+    const name = document.getElementById('flow_name').value;
+    if (!name) return alert("⚠️ Ponle un nombre a tu flujo antes de guardar");
+
+    const nodes = editor.drawflow.drawflow.Home.data;
+    
+    // Sincronización manual de seguridad antes de exportar
+    Object.keys(nodes).forEach(id => {
+        const el = document.getElementById(`node-${id}`);
+        if (el) {
+            el.querySelectorAll('input, textarea').forEach(input => {
+                const dfAttr = Array.from(input.attributes).find(a => a.name.startsWith('df-'));
+                if (dfAttr) {
+                    const key = dfAttr.name.replace('df-', '');
+                    nodes[id].data[key] = input.value;
+                }
+            });
+        }
+    });
+
+    const data = editor.export();
+    
+    fetch('/api/save-flow', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ name: name, data: data }) 
+    })
+    .then(res => {
+        if(res.ok) alert("✅ Flujo '" + name + "' guardado correctamente");
+        else alert("❌ Error al guardar en el servidor");
+    })
+    .catch(err => console.error("Error:", err));
+};
+
+// Abrir el modal y listar flujos desde la DB
+window.openFlowsModal = async function() {
+    const modal = document.getElementById('flowsModal');
+    const list = document.getElementById('flowsList');
+    modal.style.display = 'flex';
+    list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
+
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        
+        list.innerHTML = ""; 
+        flows.forEach(flow => {
+            const card = document.createElement('div');
+            card.style = "background:#1a1b26; padding:15px; border-radius:8px; border:1px solid #444; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;";
+            card.innerHTML = `
+                <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
+                <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 15px; border-radius:5px; font-size:12px; font-family:'Montserrat'; cursor:pointer;">Editar ✏️</button>
+            `;
+            list.appendChild(card);
+        });
+    } catch (err) {
+        list.innerHTML = "<p style='color:red; font-family:Montserrat;'>Error al conectar con el servidor</p>";
+    }
+};
+
+window.closeFlowsModal = () => document.getElementById('flowsModal').style.display = 'none';
+
+// Cargar un flujo específico al editor
+window.loadSpecificFlow = async function(id) {
+    try {
+        const res = await fetch(`/api/get-flow/${id}`);
+        const flow = await res.json();
+        
+        editor.import(flow.data);
+        document.getElementById('flow_name').value = flow.name;
+        
+        closeFlowsModal();
+        alert("✅ Flujo cargado: " + flow.name);
+    } catch (err) {
+        alert("❌ Error al cargar el flujo");
+    }
+};
