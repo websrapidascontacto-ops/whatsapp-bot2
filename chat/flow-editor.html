@@ -82,18 +82,19 @@ async function handleImport(event) {
         try {
             const flowData = JSON.parse(e.target.result);
             
-            const response = await fetch('/api/import-flow', {
+            // IMPORTANTE: En lugar de recargar, limpiamos y cargamos en el momento
+            editor.clear(); 
+            editor.import(flowData);
+            editor.zoom_reset();
+            
+            // También lo guardamos en el servidor para que no se pierda
+            await fetch('/api/import-flow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(flowData)
             });
 
-            if (response.ok) {
-                alert("✅ Flujo cargado con éxito. La página se recargará.");
-                location.reload(); // Recargamos para que Drawflow pinte el nuevo flujo
-            } else {
-                alert("❌ Error al importar el flujo.");
-            }
+            alert("✅ Flujo importado y visualizado correctamente.");
         } catch (err) {
             alert("❌ El archivo no es un JSON válido.");
         }
@@ -104,5 +105,25 @@ async function handleImport(event) {
 
     <script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
     <script src="flow-editor.js"></script>
+    <script>
+    // Este listener escucha los mensajes de app.js
+    window.addEventListener('message', function(e) {
+        if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+            const flowData = e.data.data;
+            
+            // Verificamos que el objeto editor (de flow-editor.js) exista
+            if (typeof editor !== 'undefined') {
+                editor.clear(); // 🧹 Limpia el desorden previo
+                
+                // Si la data viene del servidor puede traer .data, si es de archivo es directo
+                const finalData = flowData.drawflow ? flowData : (flowData.data || flowData);
+                
+                editor.import(finalData); // 📥 Carga el flujo nemo correctamente
+                editor.zoom_reset(); // 🔍 Centra la cámara
+                console.log("✅ Flujo importado limpiamente");
+            }
+        }
+    });
+</script>
 </body>
 </html>

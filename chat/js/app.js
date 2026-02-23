@@ -312,8 +312,10 @@ async function loadFlowDataIntoEditor(flowId) {
         
         const iframe = document.getElementById('flow-iframe');
         if(iframe && iframe.contentWindow) {
+            // Esperamos un momento a que el iframe esté listo
             setTimeout(() => {
-                iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
+                // IMPORTANTE: Enviamos el tipo 'IMPORT_CLEAN' para que el iframe borre lo anterior
+                iframe.contentWindow.postMessage({ type: 'IMPORT_CLEAN', data: data }, '*');
             }, 500);
         }
     } catch (e) { console.error("Error al cargar datos en editor:", e); }
@@ -471,4 +473,26 @@ window.toggleFlowMenu = async function() {
     } else { 
         menu.style.display = 'none'; 
     }
+};
+/* --- Función para el botón de "Subir JSON" --- */
+window.importFlow = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const flowData = JSON.parse(e.target.result);
+            const iframe = document.getElementById('flow-iframe');
+            
+            if(iframe && iframe.contentWindow) {
+                // Esto limpia el lienzo y pone los 51 nodos en su sitio
+                iframe.contentWindow.postMessage({ type: 'IMPORT_CLEAN', data: flowData }, '*');
+                alert("✅ Flujo importado y lienzo optimizado.");
+            }
+        } catch (err) {
+            alert("❌ Error: El archivo no es un JSON válido");
+        }
+    };
+    reader.readAsText(file);
 };
