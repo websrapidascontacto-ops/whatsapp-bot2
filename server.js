@@ -76,7 +76,7 @@ app.post("/webhook", async (req, res) => {
                 incomingText = msg.image.caption || "📷 Imagen recibida";
             }
 
-<<<<<<< HEAD
+
             const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, media: mediaUrl });
             broadcast({ type: "new_message", message: saved });
             
@@ -118,7 +118,7 @@ app.post("/webhook", async (req, res) => {
                             await processSequence(sender, nextNode, nodes);
                             return res.sendStatus(200);
                         }
-=======
+
             if (incomingText || mediaPath) {
                 const savedIncoming = await Message.create({ 
                     chatId: sender, 
@@ -147,14 +147,13 @@ app.post("/webhook", async (req, res) => {
                             name: "message", 
                             data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar con tu pedido. 🔗" } 
                         }, {});
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
+
                     }
                 }
             } catch (err) { 
                 console.error("❌ Error Webhook Logic:", err.message); 
             }
-<<<<<<< HEAD
-=======
+
 
             const flowDoc = await Flow.findOne({ isMain: true }); 
             if (flowDoc && incomingText) {
@@ -193,7 +192,7 @@ app.post("/webhook", async (req, res) => {
                     }
                 }
             }
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
+
         }
     }
     res.sendStatus(200);
@@ -248,7 +247,7 @@ else if (node.name === "notify") {
         const nextNodeId = node.outputs.output_1.connections[0].node;
         return await processSequence(to, allNodes[nextNodeId], allNodes);
     }
-<<<<<<< HEAD
+
     return; // Si no hay conexión, se detiene aquí.
 }
     else if (node.name === "whatsapp_list") {
@@ -287,7 +286,7 @@ else if (node.name === "notify") {
         } catch (e) {
             console.error("❌ Error construyendo payload de lista:", e.message);
         }
-=======
+
     /* ========================= CORRECCIÓN DE LISTA FILTRADA ========================= */
     else if (node.name === "whatsapp_list") {
         try {
@@ -332,7 +331,7 @@ else if (node.name === "notify") {
             botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
             payload.type = "text";
             payload.text = { body: botText };
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
+
     }
 
     try {
@@ -365,9 +364,9 @@ else if (node.name === "notify") {
     }
 }
 
-<<<<<<< HEAD
+
 /* ========================= APIS Y SUBIDAS ========================= */
-=======
+
 /* ========================= WEBHOOK YAPE ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
@@ -496,7 +495,7 @@ app.get("/messages/:chatId", async (req, res) => {
     res.json(messages);
 });
 
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -532,7 +531,7 @@ app.post("/send-message", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-<<<<<<< HEAD
+
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
@@ -565,8 +564,7 @@ server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
 });
 
 // Rutas de Descarga e Importación
-=======
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
+
 app.get("/api/download-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ name: "Main Flow" });
@@ -587,17 +585,17 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
             return res.status(400).json({ error: "Formato de flujo inválido" });
         }
         await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: flowData }, { upsert: true });
-<<<<<<< HEAD
+
         res.json({ success: true, message: "Flujo importado correctamente" });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-=======
+
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
+
 });
