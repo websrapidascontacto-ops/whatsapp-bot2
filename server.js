@@ -569,7 +569,7 @@ server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
 /* ========================= CONFIGURACIÓN DE RUTAS ESTATICAS ========================= */
 // Asegúrate de que esta carpeta coincida con el nombre en tu proyecto
 
-const uploadsPath = path.join(__dirname, "uploads");
+
 
 app.use("/uploads", express.static(uploadsPath));
 
