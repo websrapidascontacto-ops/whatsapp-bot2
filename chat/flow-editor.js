@@ -127,43 +127,34 @@ window.addRowDynamic = function(button) {
 
 /* === GUARDAR Y CARGAR (CORREGIDO) === */
 window.saveFlow = async function() {
-    // 1. Obtener los datos actuales del editor
     const exportData = editor.export();
     
-    // 2. Obtener el nombre del flujo
-    const flowNameInput = document.getElementById('flow_name');
-    const flowName = flowNameInput ? flowNameInput.value : "Flujo sin nombre";
+    // Forzamos el nombre a "Main Flow" para que el bot lo reconozca de inmediato
+    const flowName = document.getElementById('flow_name')?.value || "Main Flow";
 
-    // 3. Obtener el ID del flujo actual (si existe)
-    // Nota: Asegúrate de tener esta variable definida globalmente
     const payload = {
-        id: typeof currentEditingFlowId !== 'undefined' ? currentEditingFlowId : null,
+        id: window.currentEditingFlowId || null,
         name: flowName,
-        data: exportData // Esto ya lleva la estructura drawflow.Home.data
+        data: exportData
     };
-
-    console.log("Enviando flujo al servidor...", payload);
 
     try {
         const response = await fetch('/api/save-flow', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (response.ok) {
-            const result = await response.json();
-            alert("✅ ¡Guardado con éxito! El bot ya tiene las rutas actualizadas.");
+        const result = await response.json();
+        if (result.success) {
+            window.currentEditingFlowId = result.id; // Guardamos el ID para la próxima edición
+            alert("✅ Guardado en base de datos. ¡Triggers actualizados!");
         } else {
-            const errorText = await response.text();
-            console.error("Error del servidor:", errorText);
-            alert("❌ Error 500: El servidor rechazó el flujo. Revisa que el nombre no tenga caracteres raros.");
+            alert("❌ Error al guardar: " + result.error);
         }
     } catch (error) {
-        console.error("Error en la petición:", error);
-        alert("❌ Error de conexión al guardar.");
+        console.error("Error:", error);
+        alert("❌ Error de conexión con Railway.");
     }
 };
 

@@ -364,17 +364,35 @@ app.get('/api/get-flows', async (req, res) => {
 app.post('/api/save-flow', async (req, res) => {
     try {
         const { id, name, data } = req.body;
-        const finalName = name || `Flujo_${Date.now()}`;
-        if (id && mongoose.Types.ObjectId.isValid(id)) {
-            await Flow.findByIdAndUpdate(id, { name: finalName, data });
-            res.json({ success: true, id });
-        } else {
-            const existing = await Flow.findOne({ name: finalName });
-            const safeName = existing ? `${finalName}_${Date.now()}` : finalName;
-            const newFlow = await Flow.create({ name: safeName, data, isMain: false });
-            res.json({ success: true, id: newFlow._id });
+        const finalName = name || "Main Flow";
+
+        // Si es el flujo principal, nos aseguramos de que sea el único isMain
+        const shouldBeMain = (finalName === "Main Flow");
+
+        if (shouldBeMain) {
+            await Flow.updateMany({}, { isMain: false });
         }
+
+        let updatedFlow;
+        if (id && mongoose.Types.ObjectId.isValid(id)) {
+            updatedFlow = await Flow.findByIdAndUpdate(
+                id, 
+                { name: finalName, data, isMain: shouldBeMain }, 
+                { new: true, upsert: true }
+            );
+        } else {
+            // Buscamos por nombre para evitar duplicar el "Main Flow"
+            updatedFlow = await Flow.findOneAndUpdate(
+                { name: finalName },
+                { data, isMain: shouldBeMain },
+                { new: true, upsert: true }
+            );
+        }
+
+        console.log(`✅ Flujo "${finalName}" guardado correctamente.`);
+        res.json({ success: true, id: updatedFlow._id });
     } catch (e) { 
+        console.error("❌ Error al guardar flujo:", e.message);
         res.status(500).json({ error: e.message }); 
     }
 });
