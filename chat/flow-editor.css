@@ -330,3 +330,15 @@ body {
 
     .header-phone { font-size: 10px; }
 }
+/* Agrega esto a tu CSS para mejorar el look */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap');
+
+* {
+    font-family: 'Montserrat', sans-serif !important;
+}
+
+.drawflow-node {
+    border-radius: 12px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+}
