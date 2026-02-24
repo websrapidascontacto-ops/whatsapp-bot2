@@ -134,49 +134,67 @@ app.post("/webhook", async (req, res) => {
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
             
             if (waiting) {
-                // PASO 1: Recibir el Link
-                // --- DENTRO DEL WEBHOOK /webhook, BUSCA ESTA PARTE ---
-                        if (waiting.waitingForLink) {
-                            const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
-                            if (isLink) {
-                                waiting.profileLink = incomingText;
-                                waiting.waitingForLink = false;
-                                waiting.waitingForCode = true; // Pasamos a esperar el código
-                                await waiting.save();
-                                
-                                // AQUÍ ES DONDE PONES TUS DATOS DE PAGO AUTOMÁTICOS
-                                await processSequence(sender, { 
-                                    name: "message", 
-                                    data: { info: `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n⚠️ *IMPORTANTE:* Una vez realizado el pago, **escribe aquí los 3 dígitos** del código de seguridad que aparece en tu Yape.\n\n🚫 No hace falta que envíes captura de pantalla, el sistema lo valida solo con el código. 🚀` } 
-                                }, {});
-                            } else {
-                                // ... mensaje de error de link
-                            }
-                            return res.sendStatus(200);
-                        }
+            // PASO 1: Recibir el Link
+            // PASO 1: Recibir el Link
+            if (waiting.waitingForLink) {
+                const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
+                
+                if (isLink) {
+                    waiting.profileLink = incomingText;
+                    waiting.waitingForLink = false;
+                    waiting.waitingForCode = true; 
+                    await waiting.save();
+                    
+                    // 1. Enviamos primero los datos de pago
+                    const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\nRealiza el pago y sigue las instrucciones de abajo. 👇`;
 
-                // --- PASO 2: Recibir el Código de 3 dígitos (Ajustado) ---
-                        if (waiting.waitingForCode) {
-                            const code = incomingText.match(/\d+/)?.[0]; 
-                            
-                            // Ahora validamos que tenga exactamente 3 o más (para cubrir el código de seguridad)
-                            if (code && code.length >= 3) { 
-                                waiting.yapeCode = code;
-                                waiting.waitingForCode = false;
-                                await waiting.save();
-                                
-                                await processSequence(sender, { 
-                                    name: "message", 
-                                    data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente al detectar tu Yape. ¡No hace falta que envíes foto del comprobante! 🚀` } 
-                                }, {});
-                            } else {
-                                await processSequence(sender, { 
-                                    name: "message", 
-                                    data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad de tu Yape para validar el pago. 📑" } 
-                                }, {});
-                            }
-                            return res.sendStatus(200);
+                    await processSequence(sender, { 
+                        name: "message", 
+                        data: { info: mensajePago } 
+                    }, {});
+
+                    // 2. Enviamos la imagen con texto explicativo "anti-errores"
+                    const nodeMedia = {
+                        name: "media",
+                        data: {
+                            val: "https://www.websrapidas.com/wp-content/uploads/2026/02/imagen_2026-02-24_044650360.png",
+                            caption: "⚠️ FIJATE AQUÍ: Al terminar tu Yape, busca los 3 dígitos (Código de Seguridad) como se ve en la imagen. \n\nCada Yape tiene un código DIFERENTE. Escribe el tuyo aquí abajo. 👇"
                         }
+                    };
+                    await processSequence(sender, nodeMedia, {});
+
+                } else {
+                    await processSequence(sender, { 
+                        name: "message", 
+                        data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar. 🔗" } 
+                    }, {});
+                }
+                return res.sendStatus(200);
+            }
+
+            // PASO 2: Recibir el Código de 3 dígitos
+            if (waiting.waitingForCode) {
+                // Buscamos un número de exactamente 3 dígitos
+                const codeMatch = incomingText.match(/\b\d{3}\b/);
+                const code = codeMatch ? codeMatch[0] : null;
+
+                if (code) {
+                    waiting.yapeCode = code;
+                    waiting.waitingForCode = false; // Ya no esperamos más entrada manual
+                    await waiting.save();
+                    
+                    await processSequence(sender, { 
+                        name: "message", 
+                        data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente en cuanto recibamos la notificación de Yape de Lorena M. ¡No cierres este chat! 🚀` } 
+                    }, {});
+                } else {
+                    await processSequence(sender, { 
+                        name: "message", 
+                        data: { info: "⚠️ Por favor, ingresa únicamente los *3 dígitos* del código de seguridad de tu Yape. 📑" } 
+                    }, {});
+                }
+                return res.sendStatus(200);
+            }
 
                         // --- WEBHOOK YAPE (Escaneo de 3 dígitos) ---
                         app.post("/webhook-yape", async (req, res) => {
