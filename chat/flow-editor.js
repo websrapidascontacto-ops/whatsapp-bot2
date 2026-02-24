@@ -283,16 +283,50 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTAR ARCHIVO LOCAL === */
+/* === IMPORTACIÓN TOTAL DE NEMO (CÓDIGO CORREGIDO) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function(event) {
         try {
-            rebuildFlowData(JSON.parse(e.target.result));
-            alert("✅ Flujo importado.");
-        } catch (err) { alert("❌ Error al importar."); }
+            const flowData = JSON.parse(event.target.result);
+            
+            // 1. Limpiamos el lienzo
+            editor.clear();
+            
+            // 2. Cargamos el esqueleto (aquí es donde se veían vacíos antes)
+            editor.import(flowData);
+
+            // 3. RECONSTRUCCIÓN: Forzamos a que aparezcan las filas de Nemo
+            setTimeout(() => {
+                const nodes = flowData.drawflow.Home.data;
+                Object.keys(nodes).forEach(nodeId => {
+                    const node = nodes[nodeId];
+                    if (node.name === "whatsapp_list") {
+                        const nodeElem = document.getElementById(`node-${nodeId}`);
+                        const btnAdd = nodeElem.querySelector('.btn-success');
+                        
+                        // Buscamos si hay fila 2, 3, 4... en tu archivo
+                        let i = 2;
+                        while (node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd); // Creamos la fila físicamente
+                            
+                            // Le ponemos el texto que viene en el JSON
+                            nodeElem.querySelector(`[df-row${i}]`).value = node.data[`row${i}`];
+                            nodeElem.querySelector(`[df-desc${i}]`).value = node.data[`desc${i}`] || "";
+                            i++;
+                        }
+                    }
+                });
+                editor.updateConnectionNodes('node-list');
+                alert("✅ ¡Flujo de Nemo cargado con todas sus filas!");
+            }, 500);
+
+        } catch (err) {
+            alert("❌ El archivo JSON no es válido");
+        }
     };
     reader.readAsText(file);
 });
