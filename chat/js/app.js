@@ -116,47 +116,51 @@ try {
 }
 
 /* ABRIR CHAT */
-async function openChat(chatId){
-currentChat=chatId;
-delete unreadCounts[chatId];
+async function openChat(chatId) {
+    currentChat = chatId;
+    delete unreadCounts[chatId];
 
-const headerInfo = document.querySelector(".chat-header-info");
-if(headerInfo) {
-    headerInfo.style.display = "flex";
-    headerInfo.style.alignItems = "center";
-    headerInfo.style.justifyContent = "space-between";
-    headerInfo.style.width = "100%";
-    headerInfo.innerHTML = `
-        <div style="display:flex; align-items:center;">
-            <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
-            <div>
-                <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px; color:white;">${chatId}</div>
-                <div style="font-size:11px; color:#25D366; font-family:'Montserrat';">● En línea</div>
+    // --- MODO MÓVIL: Oculta la lista y muestra el chat ---
+    document.body.classList.add('show-chat');
+
+    const headerInfo = document.querySelector(".chat-header-info");
+    if (headerInfo) {
+        headerInfo.style.display = "flex";
+        headerInfo.style.alignItems = "center";
+        headerInfo.style.justifyContent = "space-between";
+        headerInfo.style.width = "100%";
+        headerInfo.style.padding = "10px 15px";
+
+        headerInfo.innerHTML = `
+            <div style="display:flex; align-items:center;">
+                <button class="mobile-back-btn" onclick="document.body.classList.remove('show-chat')" style="margin-right:10px;">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                
+                <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
+                <div>
+                    <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px; color:white;">${chatId}</div>
+                    <div style="font-size:11px; color:#25D366; font-family:'Montserrat';">● En línea</div>
+                </div>
             </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:15px;">
-            <div class="flow-selector-container" style="position:relative;">
-                <div onclick="toggleFlowMenu()" style="cursor:pointer; font-size:22px;" title="Lanzar flujo">🤖</div>
-                <div id="flow-menu" class="flow-menu" style="display:none; position:absolute; right:0; top:40px; background:#2d3748; border:1px solid #4a5568; border-radius:8px; z-index:1000; min-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <div class="flow-selector-container" style="position:relative;">
+                    <div onclick="toggleFlowMenu()" style="cursor:pointer; font-size:22px;" title="Lanzar flujo">🤖</div>
+                    <div id="flow-menu" class="flow-menu" style="display:none; position:absolute; right:0; top:40px; background:#2d3748; border:1px solid #4a5568; border-radius:8px; z-index:1000; min-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
+                </div>
+                <div onclick="deleteCurrentChat()" style="cursor:pointer; font-size:18px;" title="Borrar chat">🗑️</div>
             </div>
-            <div onclick="deleteCurrentChat()" style="cursor:pointer; font-size:18px;" title="Borrar chat">🗑️</div>
-        </div>
-    `;
-}
+        `;
+    }
 
-if(messagesContainer) messagesContainer.innerHTML="";
+    if (messagesContainer) messagesContainer.innerHTML = "";
 
-if(window.innerWidth<=768 && chatListContainer && chatContent){
-    chatListContainer.style.display="none";
-    chatContent.classList.add("active-mobile");
-}
-
-try {
-    const res=await fetch("/messages/"+chatId);
-    const msgs=await res.json();
-    msgs.forEach(renderMessage);
-} catch(e) { console.error("Error al obtener mensajes:", e); }
-loadChats();
+    try {
+        const res = await fetch("/messages/" + chatId);
+        const msgs = await res.json();
+        msgs.forEach(renderMessage);
+    } catch (e) { console.error("Error al obtener mensajes:", e); }
+    loadChats();
 }
 
 function goBackMobile(){
@@ -496,3 +500,22 @@ window.importFlow = async (event) => {
     };
     reader.readAsText(file);
 };
+// Agrega esto al final de tu script actual para que la flecha de "Volver" funcione
+document.addEventListener('DOMContentLoaded', () => {
+    // Buscamos la barra de arriba del chat
+    const header = document.querySelector(".chat-header-info"); 
+    
+    if (header) {
+        // Si no existe el botón ya, lo creamos
+        if (!document.querySelector('.mobile-back-btn')) {
+            const backBtn = document.createElement('button');
+            backBtn.className = 'mobile-back-btn';
+            backBtn.innerHTML = '<i class="fa-solid fa-arrow-left"></i>'; // Solo flecha para que se vea limpio
+            backBtn.onclick = () => {
+                document.body.classList.remove('show-chat'); // Quita el modo enfoque
+            };
+            // Lo ponemos al principio del header
+            header.prepend(backBtn);
+        }
+    }
+});
