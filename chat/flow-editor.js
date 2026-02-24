@@ -204,7 +204,7 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTAR ARCHIVO LOCAL === */
+/* === IMPORTAR ARCHIVO LOCAL (CORREGIDO) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -213,27 +213,40 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
         try {
             const flowData = JSON.parse(e.target.result);
             editor.import(flowData);
+
+            // 💡 Truco mágico: Forzar la creación visual de filas dinámicas
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
                     if (node.name === "whatsapp_list") {
-                        const btn = document.querySelector(`#node-${nodeId} .btn-success`);
-                        if (btn) {
-                            let i = 2;
-                            while (node.data[`row${i}`] !== undefined) {
-                                window.addRowDynamic(btn);
-                                const rowInp = document.querySelector(`#node-${nodeId} [df-row${i}]`);
-                                if (rowInp) rowInp.value = node.data[`row${i}`];
-                                const descInp = document.querySelector(`#node-${nodeId} [df-desc${i}]`);
-                                if (descInp) descInp.value = node.data[`desc${i}`] || "";
-                                i++;
-                            }
+                        const nodeElement = document.getElementById(`node-${nodeId}`);
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        
+                        // Buscamos cuántas filas tenía guardadas (empezando desde la 2)
+                        let i = 2;
+                        while (node.data[`row${i}`] !== undefined) {
+                            // Llamamos a tu función para que cree el HTML de la fila
+                            window.addRowDynamic(btnAdd);
+                            
+                            // Llenamos los inputs con el texto que estaba guardado
+                            const inputRow = nodeElement.querySelector(`[df-row${i}]`);
+                            const inputDesc = nodeElement.querySelector(`[df-desc${i}]`);
+                            
+                            if (inputRow) inputRow.value = node.data[`row${i}`];
+                            if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
+                            
+                            i++;
                         }
                     }
                 });
-            }, 200);
-        } catch (err) { console.error("Error al importar:", err); }
+            }, 300); // Pequeño delay para que Drawflow termine de renderizar
+            
+            alert("✅ Flujo importado con todas sus listas. 🚀");
+        } catch (err) { 
+            console.error("Error al importar:", err);
+            alert("❌ El archivo no es un JSON de flujo válido.");
+        }
     };
     reader.readAsText(file);
 });
