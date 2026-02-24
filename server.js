@@ -159,25 +159,42 @@ app.post("/webhook", async (req, res) => {
                     const code = codeMatch ? codeMatch[0] : null;
 
                     if (code) {
-                        waiting.yapeCode = code;
-                        waiting.waitingForCode = false;
-                        await waiting.save();
+                        // Guardamos el código y dejamos de esperar entrada manual
+                        await PaymentWaiting.updateOne({ _id: waiting._id }, { 
+                            yapeCode: code, 
+                            waitingForCode: false 
+                        });
                         
-                        await processSequence(sender, { 
-                            name: "message", 
-                            data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente al recibir el Yape. 🚀` } 
-                        }, {});
+                        // --- SECUENCIA DE ESPERA VISUAL ---
+                        await processSequence(sender, { name: "message", data: { info: `⏳ Código *${code}* recibido. Iniciando validación...` } }, {});
+                        
+                        // Mensaje 1: 2 segundos después
+                        setTimeout(async () => {
+                            await processSequence(sender, { name: "message", data: { info: "🔍 Verificando transacción con el banco... 30%" } }, {});
+                        }, 2500);
+
+                        // Mensaje 2: 5 segundos después
+                        setTimeout(async () => {
+                            await processSequence(sender, { name: "message", data: { info: "⚙️ Procesando datos del servicio... 75%" } }, {});
+                        }, 5500);
+
+                        // Mensaje 3: 8 segundos después
+                        setTimeout(async () => {
+                            // Verificamos si aún sigue activo (si el Yape no ha llegado todavía)
+                            const check = await PaymentWaiting.findById(waiting._id);
+                            if (check && check.active) {
+                                await processSequence(sender, { name: "message", data: { info: "⏳ Casi listo, esperando la confirmación final de Yape... 📤" } }, {});
+                            }
+                        }, 8500);
+
                     } else {
-                        await processSequence(sender, { 
-                            name: "message", 
-                            data: { info: "⚠️ Por favor, ingresa los *3 dígitos* de seguridad. 📑" } 
-                        }, {});
+                        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad. 📑" } }, {});
                     }
-                    return res.sendStatus(200);
+                    return res.sendStatus(200); 
                 }
-                
-                return res.sendStatus(200);
-            }
+
+                return res.sendStatus(200); // Cierra el flujo si hay un waiting pero no es link ni código
+            } // <--- Aquí cierra el if (waiting)
 
             // --- Lógica de Flujos (Triggers / Listas) ---
             const flowDoc = await Flow.findOne({ isMain: true });
@@ -234,36 +251,33 @@ app.post("/webhook-yape", async (req, res) => {
     if (!texto) return res.sendStatus(200);
 
     try {
-        // Extraer código (3 dígitos) y monto
+        // Extraer código (3 dígitos)
         const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
         const codigoNotificacion = matchCod ? (matchCod[1] || matchCod[0]) : null;
 
-        const matchMonto = texto.match(/S\/\s?(\d+(\.\d{1,2})?)/i);
-        const montoNotificacion = matchMonto ? matchMonto[1] : null;
-
         if (codigoNotificacion) {
-            // Buscamos al cliente más reciente con ese código (más flexible)
+            console.log(`🔎 Buscando cliente para el código: ${codigoNotificacion}...`);
+
+            // CAMBIO CLAVE: Buscamos el registro más reciente que tenga este código,
+            // incluso si el bot ya lo marcó como no activo por error.
             const waiting = await PaymentWaiting.findOne({ 
-                yapeCode: codigoNotificacion, 
-                active: true 
+                yapeCode: codigoNotificacion 
             }).sort({ _id: -1 });
 
             if (waiting) {
-                console.log(`✅ Match para código ${codigoNotificacion}. Procediendo a WordPress...`);
+                console.log(`✅ Match encontrado para el chat: ${waiting.chatId}. Enviando a WordPress...`);
 
-                // 1. Desactivar inmediatamente para evitar bucles
-                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+                // 1. Desactivar para que no se use el mismo código dos veces
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false, yapeCode: "USADO" });
 
-                // 2. Obtener data del producto desde WordPress
+                // 2. Obtener data del producto
                 const productRes = await WooCommerce.get(`products/${waiting.productId}`);
                 const product = productRes.data;
                 
-                // Extraer IDs para el panel SMM (Metadatos de LTB)
                 const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
                 const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
 
                 // 3. CREAR PEDIDO EN WORDPRESS
-                // Usamos estado 'processing' porque es el que suele activar los plugins SMM
                 const orderData = {
                     payment_method: "bacs",
                     payment_method_title: "Yape Automático ✅",
@@ -282,24 +296,23 @@ app.post("/webhook-yape", async (req, res) => {
                 };
 
                 const wpResponse = await WooCommerce.post("orders", orderData);
-                console.log("🚀 Pedido creado en WP con ID:", wpResponse.data.id);
+                console.log("🚀 WordPress aceptó el pedido. ID:", wpResponse.data.id);
 
-                // 4. Notificar al sistema Rila (Panel interno)
+                // 4. Mensajes de éxito
                 const msgBot = await Message.create({ 
                     chatId: waiting.chatId, 
                     from: "bot", 
-                    text: `✅ ¡Pago verificado! Orden #${wpResponse.data.id} enviada al SMM.` 
+                    text: `✅ ¡Pago validado! Orden #${wpResponse.data.id} procesada.` 
                 });
                 broadcast({ type: "new_message", message: msgBot });
 
-                // 5. Mensaje de confirmación final al cliente por WhatsApp
                 await processSequence(waiting.chatId, { 
                     name: "message", 
-                    data: { info: `✅ *¡Pago verificado con éxito!* ✨\n\nHemos recibido tu Yape. Tu pedido ya está siendo procesado y recibira las notificaciones en su perfil ¡Gracias por tu compra! 🚀` } 
+                    data: { info: `✅ *¡Pago verificado con éxito!* ✨\n\nHemos recibido tu Yape. Tu pedido ya está siendo procesado por el sistema. ¡Gracias por tu compra! 🚀` } 
                 }, {});
 
             } else {
-                console.log("⚠️ Código", codigoNotificacion, "recibido pero no hay pedido activo esperando.");
+                console.log(`⚠️ No se encontró ningún cliente en la base de datos que haya escrito el código ${codigoNotificacion}.`);
             }
         }
     } catch (err) { 
