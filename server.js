@@ -92,71 +92,7 @@ async function downloadMedia(mediaId, fileName) {
     }
 }
 
-/* ========================= WEBHOOK YAPE (Escaneo de 3 dígitos) ========================= */
-// Este bloque va AFUERA para que MacroDroid pueda comunicarse con él directamente.
-app.post("/webhook-yape", async (req, res) => {
-    const { texto } = req.body; 
-    if (!texto) return res.sendStatus(200);
-
-    try {
-        // Buscamos cualquier grupo de 3 números en la notificación de MacroDroid
-        const codigoNotificacion = texto.match(/\d{3}/)?.[0]; 
-
-        if (codigoNotificacion) {
-            const waiting = await PaymentWaiting.findOne({ 
-                yapeCode: codigoNotificacion, 
-                active: true 
-            });
-
-            if (waiting) {
-                // Desactivamos el registro para evitar duplicados
-                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
-
-                // --- Lógica de WooCommerce ---
-                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                const product = productRes.data;
-                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
-
-                await WooCommerce.post("orders", {
-                    payment_method: "bacs",
-                    payment_method_title: "Yape Automático ✅",
-                    status: "processing",
-                    billing: { phone: waiting.chatId },
-                    line_items: [{
-                        product_id: waiting.productId,
-                        quantity: 1,
-                        meta_data: [
-                            { key: "_ltb_id", value: serviceId },
-                            { key: "_ltb_qty", value: bulkQty },
-                            { key: "Link del perfil", value: waiting.profileLink },
-                            { key: "Código Yape", value: codigoNotificacion }
-                        ]
-                    }]
-                });
-
-                // Mensaje al Cliente
-                await processSequence(waiting.chatId, { 
-                    name: "message", 
-                    data: { info: "✅ *¡Pago validado con éxito!* ✨\n\nTu pedido ha sido enviado al sistema. ¡Gracias por tu compra! 🚀" } 
-                }, {});
-
-                // NOTIFICACIÓN A TU NÚMERO PERSONAL 📱
-                await processSequence("51933425911", { 
-                    name: "message", 
-                    data: { info: `💰 *¡NUEVA VENTA CONFIRMADA!* 💰\n\n👤 Cliente: ${waiting.chatId}\n📑 Código: ${codigoNotificacion}\n🔗 Link: ${waiting.profileLink}` } 
-                }, {});
-
-                console.log(`✅ Pago validado con éxito: ${codigoNotificacion}`);
-            }
-        }
-    } catch (err) { 
-        console.error("❌ Error en Webhook Yape:", err.message); 
-    }
-    res.sendStatus(200);
-});
-
-/* ========================= WEBHOOK PRINCIPAL ========================= */
+/* ========================= WEBHOOK PRINCIPAL (WHATSAPP) ========================= */
 app.post("/webhook", async (req, res) => {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (value?.messages) {
@@ -210,16 +146,9 @@ app.post("/webhook", async (req, res) => {
                         
                         const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n--- \n\n⚠️ *INSTRUCCIONES IMPORTANTES* ⚠️\n\n1️⃣ Realiza el pago en tu App Yape.\n2️⃣ Al terminar, busca en tu pantalla el **"Código de Seguridad"** (son 3 dígitos).\n3️⃣ Escribe esos **3 números aquí abajo** para activar tu pedido.\n\n🚫 No envíes capturas, el sistema solo necesita los 3 dígitos. 🚀`;
 
-                        await processSequence(sender, { 
-                            name: "message", 
-                            data: { info: mensajePago } 
-                        }, {});
-
+                        await processSequence(sender, { name: "message", data: { info: mensajePago } }, {});
                     } else {
-                        await processSequence(sender, { 
-                            name: "message", 
-                            data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar. 🔗" } 
-                        }, {});
+                        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, envía un link válido. 🔗" } }, {});
                     }
                     return res.sendStatus(200);
                 }
@@ -231,39 +160,39 @@ app.post("/webhook", async (req, res) => {
 
                     if (code) {
                         waiting.yapeCode = code;
-                        waiting.waitingForCode = false; 
+                        waiting.waitingForCode = false;
                         await waiting.save();
                         
                         await processSequence(sender, { 
                             name: "message", 
-                            data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente en cuanto recibamos la notificación de Yape de Lorena M. ¡No cierres este chat! 🚀` } 
+                            data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente al recibir el Yape. 🚀` } 
                         }, {});
                     } else {
                         await processSequence(sender, { 
                             name: "message", 
-                            data: { info: "⚠️ Por favor, ingresa únicamente los *3 dígitos* del código de seguridad de tu Yape. 📑" } 
+                            data: { info: "⚠️ Por favor, ingresa los *3 dígitos* de seguridad. 📑" } 
                         }, {});
                     }
                     return res.sendStatus(200);
                 }
+                
+                return res.sendStatus(200);
             }
 
-            const flowDoc = await Flow.findOne({ isMain: true }); 
+            // --- Lógica de Flujos (Triggers / Listas) ---
+            const flowDoc = await Flow.findOne({ isMain: true });
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
-
-                // 1. TRIGGER
-                let targetNode = Object.values(nodes).find(n => 
-                    n.name === "trigger" && 
+                let targetNode = Object.values(nodes).find(n =>
+                    n.name === "trigger" &&
                     n.data.val?.toLowerCase() === incomingText.toLowerCase()
                 );
 
-                // 2. LISTAS
                 if (!targetNode) {
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name === "whatsapp_list") {
-                            return Object.keys(n.data).some(key => 
-                                key.startsWith('row') && 
+                            return Object.keys(n.data).some(key =>
+                                key.startsWith('row') &&
                                 n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
                             );
                         }
@@ -271,23 +200,18 @@ app.post("/webhook", async (req, res) => {
                     });
 
                     if (listNode) {
-                        const rowKey = Object.keys(listNode.data).find(k => 
-                            k.startsWith('row') && 
+                        const rowKey = Object.keys(listNode.data).find(k =>
+                            k.startsWith('row') &&
                             listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
                         );
-                        
                         if (rowKey) {
                             const rowNum = rowKey.replace("row", "");
                             const connection = listNode.outputs[`output_${rowNum}`]?.connections?.[0];
-                            if (connection) {
-                                targetNode = nodes[connection.node];
-                                console.log(`✅ Avance de lista: Fila ${rowNum} detectada.`);
-                            }
+                            if (connection) targetNode = nodes[connection.node];
                         }
                     }
                 }
 
-                // 3. Ejecutar Nodo
                 if (targetNode) {
                     if (targetNode.name === "trigger") {
                         const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
@@ -301,6 +225,68 @@ app.post("/webhook", async (req, res) => {
     }
     res.sendStatus(200);
 });
+
+/* ========================= WEBHOOK YAPE (EXTERNO - RECIBE DE MACRODROID) ========================= */
+app.post("/webhook-yape", async (req, res) => {
+    const { texto } = req.body; 
+    console.log("📩 Notificación Yape:", texto);
+
+    if (!texto) return res.sendStatus(200);
+
+    try {
+        const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
+        const codigoNotificacion = matchCod ? matchCod[1] || matchCod[0] : null;
+
+        const matchMonto = texto.match(/S\/\s?(\d+(\.\d{1,2})?)/i);
+        const montoNotificacion = matchMonto ? matchMonto[1] : null;
+
+        if (codigoNotificacion) {
+            const waiting = await PaymentWaiting.findOne({ yapeCode: codigoNotificacion, active: true });
+
+            if (waiting) {
+                if (montoNotificacion && parseFloat(montoNotificacion) >= parseFloat(waiting.amount)) {
+                    await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+
+                    // WooCommerce
+                    const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                    const product = productRes.data;
+                    const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                    const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+
+                    await WooCommerce.post("orders", {
+                        payment_method: "bacs",
+                        payment_method_title: "Yape Automático ✅",
+                        status: "processing",
+                        billing: { phone: waiting.chatId },
+                        line_items: [{
+                            product_id: waiting.productId,
+                            quantity: 1,
+                            meta_data: [
+                                { key: "_ltb_id", value: serviceId },
+                                { key: "_ltb_qty", value: bulkQty },
+                                { key: "Link del perfil", value: waiting.profileLink },
+                                { key: "Código Yape", value: codigoNotificacion }
+                            ]
+                        }]
+                    });
+
+                    // Notificación Rila
+                    const msgBot = await Message.create({ chatId: waiting.chatId, from: "bot", text: `✅ Pago verificado: S/${montoNotificacion}. Pedido creado.` });
+                    broadcast({ type: "new_message", message: msgBot });
+
+                    await processSequence(waiting.chatId, { 
+                        name: "message", 
+                        data: { info: `✅ ¡Pago verificado con éxito! ✨\n\nHemos recibido tu Yape por S/${montoNotificacion}.` } 
+                    }, {});
+                }
+            }
+        }
+    } catch (err) { console.error("❌ Error Webhook Yape:", err.message); }
+    res.sendStatus(200);
+});
+                          
+
+/* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
 
@@ -418,23 +404,26 @@ app.post("/webhook-yape", async (req, res) => {
     if (!texto) return res.sendStatus(200);
 
     try {
-        // 1. Buscamos el código de 3 dígitos
+        // 1. Buscamos el código de 3 dígitos (el que viene después de "seguridad es: ")
         const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
         const codigoNotificacion = matchCod ? matchCod[1] || matchCod[0] : null;
 
-        // 2. Buscamos el monto
-        const matchMonto = texto.match(/S\/\s?(\d+(\.\d{1,2})?)/i);
+        // 2. Buscamos el monto (S/ 5 en tu caso)
+        const matchMonto = texto.match(/S\/\s?(\d+)/i);
         const montoNotificacion = matchMonto ? matchMonto[1] : null;
 
         console.log(`🔍 Buscando match para Código: ${codigoNotificacion} y Monto: S/${montoNotificacion}`);
 
         if (codigoNotificacion) {
+            // Buscamos al cliente que está esperando con ese código
             const waiting = await PaymentWaiting.findOne({ 
                 yapeCode: codigoNotificacion, 
                 active: true 
             });
 
             if (waiting) {
+                // VALIDACIÓN DE SEGURIDAD (Monto)
+                // Si el Yape es de S/ 5 y el pedido es de S/ 5, procedemos.
                 if (montoNotificacion && parseFloat(montoNotificacion) >= parseFloat(waiting.amount)) {
                     
                     console.log("✅ ¡MATCH TOTAL! Procesando pedido en WooCommerce...");
@@ -463,18 +452,6 @@ app.post("/webhook-yape", async (req, res) => {
                             ]
                         }]
                     });
-
-                    // --- 🔔 NOTIFICACIÓN DE VENTA A TU CELULAR 🔔 ---
-                    const avisoVenta = `💰 *¡NUEVA VENTA!* 💰\n\n💵 *Monto:* S/${montoNotificacion}\n👤 *Cliente:* ${waiting.chatId}\n🔗 *Link:* ${waiting.profileLink}\n📑 *Código:* ${codigoNotificacion}`;
-                    await sendWhatsApp("51933425911", avisoVenta);
-
-                    // --- 💻 APARECER EN REAL-TIME (DASHBOARD) ---
-                    const msgBot = await Message.create({ 
-                        chatId: waiting.chatId, 
-                        from: "bot", 
-                        text: `✅ Pago validado: S/${montoNotificacion}. Pedido enviado a WooCommerce.` 
-                    });
-                    broadcast({ type: "new_message", message: msgBot });
 
                     // Mensaje de éxito al cliente
                     await processSequence(waiting.chatId, { 
