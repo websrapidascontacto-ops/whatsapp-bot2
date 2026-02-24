@@ -338,11 +338,9 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        // Determinamos si la data viene directa o dentro de un objeto .data
+        // Esto asegura que cargue aunque la estructura de Mongo varíe
         const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
         
-        // 1. Limpiamos el editor y cargamos el JSON
-        editor.clear();
         editor.import(flowToLoad);
 
         // 2. Ejecutamos la reconstrucción de filas dinámicas
