@@ -127,17 +127,15 @@ window.addRowDynamic = function(button) {
     editor.addNodeOutput(nodeId);
 };
 
-/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (CORREGIDA) === */
+/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (INYECTADA) === */
 function rebuildFlowData(flowData) {
     editor.clear();
     editor.import(flowData);
 
-    // Esperamos a que el HTML se cree en el navegador
     setTimeout(() => {
         const nodes = flowData.drawflow.Home.data;
         Object.keys(nodes).forEach(nodeId => {
             const node = nodes[nodeId];
-            
             if (node.name === "whatsapp_list") {
                 const nodeElement = document.getElementById(`node-${nodeId}`);
                 if (!nodeElement) return;
@@ -145,36 +143,20 @@ function rebuildFlowData(flowData) {
                 const btnAdd = nodeElement.querySelector('.btn-success');
                 const containerRows = nodeElement.querySelector('.items-container');
                 
-                // 1. Sincronizar Fila 1 (La que ya existe por defecto)
-                const firstRow = containerRows.querySelectorAll('.row-group:first-child input');
-                if (firstRow[0]) firstRow[0].value = node.data.row1 || "";
-                if (firstRow[1]) firstRow[1].value = node.data.desc1 || "";
+                // Llenar Fila 1
+                const firstRowInputs = containerRows.querySelectorAll('.row-group:first-child input');
+                if (firstRowInputs[0]) firstRowInputs[0].value = node.data.row1 || "";
+                if (firstRowInputs[1]) firstRowInputs[1].value = node.data.desc1 || "";
 
-                // 2. Crear y llenar el resto de filas (row2, row3...)
+                // Dibujar el resto de filas
                 let i = 2;
                 while (node.data[`row${i}`] !== undefined) {
-                    // Creamos la fila visualmente
-                    window.addRowDynamic(btnAdd); 
-                    
-                    // Buscamos los inputs que se acaban de crear
-                    const allGroups = containerRows.querySelectorAll('.row-group');
-                    const currentGroup = allGroups[i - 1]; // i-1 porque el array empieza en 0
-                    
-                    if (currentGroup) {
-                        const inputs = currentGroup.querySelectorAll('input');
-                        // Inyectamos el texto del JSON directamente al HTML
-                        if (inputs[0]) inputs[0].value = node.data[`row${i}`] || "";
-                        if (inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
-                    }
+                    window.addRowDynamic(btnAdd);
                     i++;
                 }
             }
         });
-        
-        // Refrescar las conexiones para que no se vean cortadas
-        editor.updateConnectionNodes('node-' + Object.keys(nodes)[0]);
-        console.log("✅ Reconstrucción de listas completada");
-    }, 500); 
+    }, 450);
 }
 
 /* === GUARDAR Y CARGAR === */
@@ -257,18 +239,14 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const flowData = JSON.parse(e.target.result);
-            rebuildFlowData(flowData);
-            alert("✅ Flujo e ítems importados con éxito.");
-        } catch (err) { 
-            console.error("Error al importar:", err);
-            alert("❌ Error al importar JSON."); 
-        }
+            rebuildFlowData(JSON.parse(e.target.result));
+            alert("✅ Flujo importado con éxito.");
+        } catch (err) { alert("❌ Error al importar JSON."); }
     };
     reader.readAsText(file);
 });
 
-/* === BOTONES Y VALIDACIÓN (SIN CAMBIOS EN TU LÓGICA) === */
+/* === BOTÓN TRIGGER Y PAGO === */
 window.addButtonTriggerNode = () => {
     const html = `<div class="node-wrapper"><div class="node-header" style="background: #9b59b6; color: white; font-family: 'Montserrat';">🔘 Botón en Chat</div><div class="node-body"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Texto que verá el usuario:</p><input type="text" class="form-control mb-2" df-button_text placeholder="Ej: Ver Catálogo" style="font-family: 'Montserrat';"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Palabra que activa (Trigger):</p><input type="text" class="form-control" df-trigger_val placeholder="Ej: catalogo" style="font-family: 'Montserrat';"></div></div>`;
     createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
@@ -279,7 +257,7 @@ window.addPaymentValidationNode = () => {
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
 
-/* === GESTIÓN DE MIS FLUJOS (MODAL) === */
+/* === GESTIÓN DE MIS FLUJOS (MODAL ÚNICO) === */
 window.openFlowsModal = async function() {
     const modal = document.getElementById('flowsModal');
     const list = document.getElementById('flowsList');
@@ -310,8 +288,7 @@ window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-        const dataToImport = responseData.drawflow ? responseData : (responseData.data || responseData);
-        rebuildFlowData(dataToImport);
+        rebuildFlowData(responseData.drawflow ? responseData : (responseData.data || responseData));
         closeFlowsModal();
         alert("✅ Cargado correctamente");
     } catch (e) { alert("❌ Error al cargar"); }
@@ -325,64 +302,8 @@ window.deleteFlow = async function(id) {
     } catch (e) { alert("❌ Error"); }
 };
 
-/* === ESCUCHA DE MENSAJES === */
 window.addEventListener('message', e => { 
     if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
         rebuildFlowData(e.data.data);
     }
 });
-
-/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (CORREGIDA PARA FILAS) === */
-function rebuildFlowData(flowData) {
-    editor.clear();
-    editor.import(flowData);
-
-    // Timeout de 500ms para asegurar que el DOM de Drawflow existe
-    setTimeout(() => {
-        const nodes = flowData.drawflow.Home.data;
-        Object.keys(nodes).forEach(nodeId => {
-            const node = nodes[nodeId];
-            
-            if (node.name === "whatsapp_list") {
-                const nodeElement = document.getElementById(`node-${nodeId}`);
-                if (!nodeElement) return;
-
-                const containerRows = nodeElement.querySelector('.items-container');
-                if (!containerRows) return;
-
-                // Limpiar filas por defecto para evitar duplicados
-                containerRows.innerHTML = '';
-
-                // Recorrer el objeto data del JSON para reconstruir cada fila
-                let i = 1;
-                while (node.data[`row${i}`] !== undefined) {
-                    const rowVal = node.data[`row${i}`];
-                    const descVal = node.data[`desc${i}`] || "";
-
-                    const group = document.createElement("div");
-                    group.className = "row-group mb-2";
-                    group.style = "border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;";
-
-                    group.innerHTML = `
-                        <input type="text" class="form-control mb-1" value="${rowVal}" placeholder="Fila ${i}" style="font-family: 'Montserrat';">
-                        <input type="text" class="form-control" value="${descVal}" placeholder="Comentario" style="font-family: 'Montserrat'; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;">
-                    `;
-
-                    // Asignar eventos para que si editas el texto se guarde en el nodo
-                    const inputs = group.querySelectorAll('input');
-                    const currentIdx = i;
-                    inputs[0].addEventListener('input', (e) => { 
-                        editor.drawflow.drawflow.Home.data[nodeId].data[`row${currentIdx}`] = e.target.value; 
-                    });
-                    inputs[1].addEventListener('input', (e) => { 
-                        editor.drawflow.drawflow.Home.data[nodeId].data[`desc${currentIdx}`] = e.target.value; 
-                    });
-
-                    containerRows.appendChild(group);
-                    i++;
-                }
-            }
-        });
-        editor.updateConnectionNodes('node-list');
-    }, 500);
-}
