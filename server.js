@@ -563,3 +563,43 @@ app.post("/send-message", async (req, res) => {
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Todo restaurado ✨");
 });
+/* ========================= CONFIGURACIÓN DE RUTAS ESTATICAS ========================= */
+// Asegúrate de que esta carpeta coincida con el nombre en tu proyecto
+const chatPath = path.join(__dirname, "chat"); 
+const uploadsPath = path.join(__dirname, "uploads");
+
+app.use("/uploads", express.static(uploadsPath));
+app.use(express.static(chatPath));
+
+// RUTA RAIZ: Para que al abrir la URL cargue el index.html
+app.get("/", (req, res) => {
+    res.sendFile(path.join(chatPath, "index.html"));
+});
+
+/* ========================= APIS PARA QUE CARGUEN LOS FLUJOS ========================= */
+
+// 1. Obtener el flujo principal (Para el bot)
+app.get("/api/get-flow", async (req, res) => {
+    const flow = await Flow.findOne({ isMain: true }) || await Flow.findOne({ name: "Main Flow" });
+    res.json(flow ? flow.data : null);
+});
+
+// 2. LISTAR todos los flujos (Para que aparezcan en tu panel de control)
+app.get("/api/get-flows", async (req, res) => {
+    try {
+        const flows = await Flow.find({}, { name: 1, isMain: 1 });
+        res.json(flows);
+    } catch (e) {
+        res.status(500).json([]);
+    }
+});
+
+// 3. Cargar un flujo específico por ID
+app.get("/api/get-flow-by-id/:id", async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+        res.json(flow ? flow.data : null);
+    } catch (e) {
+        res.status(500).json(null);
+    }
+});
