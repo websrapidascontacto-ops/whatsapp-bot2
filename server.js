@@ -139,7 +139,7 @@ app.post("/webhook", async (req, res) => {
                         await waiting.save();
                         await processSequence(sender, { 
                             name: "message", 
-                            data: { info: `✅ Link recibido correctamente. ✨\n\n💳 Ahora, para finalizar, por favor envía el Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. 🚀` } 
+                            data: { info: `✅ Link recibido correctamente. ✨\n\n💳 Ahora, para finalizar, por favor envía el Yape por S/${waiting.amount}. al numero 981514479 a nombre de Lorena M. El sistema se activará automáticamente al recibir la notificación. 🚀` } 
                         }, {});
                     } else {
                         await processSequence(sender, { 
