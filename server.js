@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(chatPath, 'index.html'));
 });
 
-/* ========================= MONGODB ========================= */
+/* ========================= MONGODB  ========================= */
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Mongo conectado - Punto Nemo Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
