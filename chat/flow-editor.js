@@ -101,7 +101,8 @@ window.addRowDynamic = function(button) {
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
-    // Corrección: Sincronización manual con el objeto de datos
+    // Asignar valor si ya existe (para carga)
+    if(nodeData[keyRow]) inputRow.value = nodeData[keyRow];
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     
     const inputDesc = document.createElement("input");
@@ -112,18 +113,69 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
-    // Corrección: Sincronización manual con el objeto de datos
+    // Asignar valor si ya existe (para carga)
+    if(nodeData[keyDesc]) inputDesc.value = nodeData[keyDesc];
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    // Inicializamos las llaves para que existan al exportar
-    nodeData[keyRow] = "";
-    nodeData[keyDesc] = "";
+    if (nodeData[keyRow] === undefined) nodeData[keyRow] = "";
+    if (nodeData[keyDesc] === undefined) nodeData[keyDesc] = "";
+    
     editor.addNodeOutput(nodeId);
 };
+
+/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (CORREGIDA) === */
+function rebuildFlowData(flowData) {
+    editor.clear();
+    editor.import(flowData);
+
+    // Esperamos a que el HTML se cree en el navegador
+    setTimeout(() => {
+        const nodes = flowData.drawflow.Home.data;
+        Object.keys(nodes).forEach(nodeId => {
+            const node = nodes[nodeId];
+            
+            if (node.name === "whatsapp_list") {
+                const nodeElement = document.getElementById(`node-${nodeId}`);
+                if (!nodeElement) return;
+
+                const btnAdd = nodeElement.querySelector('.btn-success');
+                const containerRows = nodeElement.querySelector('.items-container');
+                
+                // 1. Sincronizar Fila 1 (La que ya existe por defecto)
+                const firstRow = containerRows.querySelectorAll('.row-group:first-child input');
+                if (firstRow[0]) firstRow[0].value = node.data.row1 || "";
+                if (firstRow[1]) firstRow[1].value = node.data.desc1 || "";
+
+                // 2. Crear y llenar el resto de filas (row2, row3...)
+                let i = 2;
+                while (node.data[`row${i}`] !== undefined) {
+                    // Creamos la fila visualmente
+                    window.addRowDynamic(btnAdd); 
+                    
+                    // Buscamos los inputs que se acaban de crear
+                    const allGroups = containerRows.querySelectorAll('.row-group');
+                    const currentGroup = allGroups[i - 1]; // i-1 porque el array empieza en 0
+                    
+                    if (currentGroup) {
+                        const inputs = currentGroup.querySelectorAll('input');
+                        // Inyectamos el texto del JSON directamente al HTML
+                        if (inputs[0]) inputs[0].value = node.data[`row${i}`] || "";
+                        if (inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
+                    }
+                    i++;
+                }
+            }
+        });
+        
+        // Refrescar las conexiones para que no se vean cortadas
+        editor.updateConnectionNodes('node-' + Object.keys(nodes)[0]);
+        console.log("✅ Reconstrucción de listas completada");
+    }, 500); 
+}
 
 /* === GUARDAR Y CARGAR === */
 window.saveFlow = async function() {
@@ -198,37 +250,14 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTAR ARCHIVO LOCAL (ARREGLADO) === */
+/* === IMPORTAR ARCHIVO LOCAL === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const flowData = JSON.parse(e.target.result);
-            editor.import(flowData);
-
-            setTimeout(() => {
-                const nodes = flowData.drawflow.Home.data;
-                Object.keys(nodes).forEach(nodeId => {
-                    const node = nodes[nodeId];
-                    if (node.name === "whatsapp_list") {
-                        const nodeElement = document.getElementById(`node-${nodeId}`);
-                        const btnAdd = nodeElement.querySelector('.btn-success');
-                        const containerRows = nodeElement.querySelector('.items-container');
-                        
-                        let i = 2;
-                        while (node.data[`row${i}`] !== undefined) {
-                            window.addRowDynamic(btnAdd);
-                            const lastGroup = containerRows.lastElementChild;
-                            const inputs = lastGroup.querySelectorAll('input');
-                            if(inputs[0]) inputs[0].value = node.data[`row${i}`];
-                            if(inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
-                            i++;
-                        }
-                    }
-                });
-            }, 350); 
+            rebuildFlowData(JSON.parse(e.target.result));
             alert("✅ Flujo importado con éxito.");
         } catch (err) { alert("❌ Error al importar JSON."); }
     };
@@ -277,9 +306,7 @@ window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-        editor.clear();
-        let finalData = responseData.drawflow ? responseData : (responseData.data || responseData);
-        editor.import(finalData);
+        rebuildFlowData(responseData.drawflow ? responseData : (responseData.data || responseData));
         closeFlowsModal();
         alert("✅ Cargado correctamente");
     } catch (e) { alert("❌ Error al cargar"); }
@@ -295,7 +322,6 @@ window.deleteFlow = async function(id) {
 
 window.addEventListener('message', e => { 
     if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
-        editor.clear();
-        editor.import(e.data.data); 
+        rebuildFlowData(e.data.data);
     }
 });
