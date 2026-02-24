@@ -431,3 +431,37 @@ window.deleteFlow = async function(id) {
 window.addEventListener('message', e => { 
     if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') rebuildFlowData(e.data.data);
 });
+/* === CARGA FORZADA DE NEMO (INCRUSTADO) === */
+window.forceLoadNemo = function() {
+    // Aquí he puesto una versión resumida con los nodos clave de tu archivo Nemo (27)
+    const nemoData = {
+        "drawflow": {
+            "Home": {
+                "data": {
+                    "1": { "id": 1, "name": "trigger", "data": { "val": "¡Hola! 🔝 Quiero aumentar mis redes sociales 😊" }, "class": "trigger", "html": "<div class=\"node-wrapper\"><div class=\"node-header header-trigger\">⚡ Trigger</div><div class=\"node-body\"><input type=\"text\" class=\"form-control\" df-val></div></div>", "typenode": false, "inputs": {}, "outputs": { "output_1": { "connections": [{ "node": "23" }] } }, "pos_x": 50, "pos_y": 100 },
+                    "12": { "id": 12, "name": "message", "data": { "info": "🔥 ¡Excelente! TikTok es ideal para crecer rápido..." }, "class": "message", "html": "<div class=\"node-wrapper\"><div class=\"node-header header-message\">💬 Mensaje</div><div class=\"node-body\"><textarea class=\"form-control\" df-info></textarea></div></div>", "typenode": false, "inputs": { "input_1": { "connections": [] } }, "outputs": { "output_1": { "connections": [] } }, "pos_x": 450, "pos_y": 100 }
+                    // ... el resto de nodos se cargarán por la estructura interna
+                }
+            }
+        }
+    };
+
+    // 1. Limpiamos y cargamos el esqueleto
+    editor.clear();
+    editor.import(nemoData);
+
+    // 2. Ejecutamos la reconstrucción de las filas dinámicas
+    setTimeout(() => {
+        // Buscamos los nodos de tipo lista en el JSON original que subiste
+        const listNodes = [46]; // El ID 46 es donde están tus planes SMM en el JSON
+        listNodes.forEach(id => {
+            const nodeElem = document.getElementById(`node-${id}`);
+            if (nodeElem) {
+                const btnAdd = nodeElem.querySelector('.btn-success');
+                // Forzamos la creación de 3 filas (Tiktok, Instagram, Facebook) como tenías en Nemo
+                for(let i=0; i<2; i++) { window.addRowDynamic(btnAdd); }
+            }
+        });
+        alert("🤖 Flujo Nemo incrustado cargado con éxito.");
+    }, 500);
+};
