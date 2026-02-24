@@ -101,7 +101,8 @@ window.addRowDynamic = function(button) {
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
-    inputRow.setAttribute(`df-${keyRow}`, "");
+    // Corrección: Sincronización manual con el objeto de datos
+    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
@@ -111,25 +112,22 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
-    inputDesc.setAttribute(`df-${keyDesc}`, "");
-
-    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
+    // Corrección: Sincronización manual con el objeto de datos
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
+    // Inicializamos las llaves para que existan al exportar
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
     editor.addNodeOutput(nodeId);
 };
 
-/* === GUARDAR Y CARGAR (CORREGIDO) === */
+/* === GUARDAR Y CARGAR === */
 window.saveFlow = async function() {
     const exportData = editor.export();
-    
-    // Forzamos el nombre a "Main Flow" para que el bot lo reconozca de inmediato
     const flowName = document.getElementById('flow_name')?.value || "Main Flow";
 
     const payload = {
@@ -147,7 +145,7 @@ window.saveFlow = async function() {
 
         const result = await response.json();
         if (result.success) {
-            window.currentEditingFlowId = result.id; // Guardamos el ID para la próxima edición
+            window.currentEditingFlowId = result.id;
             alert("✅ Guardado en base de datos. ¡Triggers actualizados!");
         } else {
             alert("❌ Error al guardar: " + result.error);
@@ -157,10 +155,6 @@ window.saveFlow = async function() {
         alert("❌ Error de conexión con Railway.");
     }
 };
-
-window.addEventListener('message', e => { 
-    if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
-});
 
 /* === MEDIA NODE === */
 window.addMediaNode = () => {
@@ -204,7 +198,7 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTAR ARCHIVO LOCAL (CORREGIDO) === */
+/* === IMPORTAR ARCHIVO LOCAL (ARREGLADO) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -214,7 +208,6 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
             const flowData = JSON.parse(e.target.result);
             editor.import(flowData);
 
-            // 💡 Truco mágico: Forzar la creación visual de filas dinámicas
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
@@ -222,31 +215,22 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
                     if (node.name === "whatsapp_list") {
                         const nodeElement = document.getElementById(`node-${nodeId}`);
                         const btnAdd = nodeElement.querySelector('.btn-success');
+                        const containerRows = nodeElement.querySelector('.items-container');
                         
-                        // Buscamos cuántas filas tenía guardadas (empezando desde la 2)
                         let i = 2;
                         while (node.data[`row${i}`] !== undefined) {
-                            // Llamamos a tu función para que cree el HTML de la fila
                             window.addRowDynamic(btnAdd);
-                            
-                            // Llenamos los inputs con el texto que estaba guardado
-                            const inputRow = nodeElement.querySelector(`[df-row${i}]`);
-                            const inputDesc = nodeElement.querySelector(`[df-desc${i}]`);
-                            
-                            if (inputRow) inputRow.value = node.data[`row${i}`];
-                            if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
-                            
+                            const lastGroup = containerRows.lastElementChild;
+                            const inputs = lastGroup.querySelectorAll('input');
+                            if(inputs[0]) inputs[0].value = node.data[`row${i}`];
+                            if(inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
                             i++;
                         }
                     }
                 });
-            }, 300); // Pequeño delay para que Drawflow termine de renderizar
-            
-            alert("✅ Flujo importado con todas sus listas. 🚀");
-        } catch (err) { 
-            console.error("Error al importar:", err);
-            alert("❌ El archivo no es un JSON de flujo válido.");
-        }
+            }, 350); 
+            alert("✅ Flujo importado con éxito.");
+        } catch (err) { alert("❌ Error al importar JSON."); }
     };
     reader.readAsText(file);
 });
@@ -262,138 +246,56 @@ window.addPaymentValidationNode = () => {
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
 
-/* === GESTIÓN DE MIS FLUJOS (MODAL) === */
+/* === GESTIÓN DE MIS FLUJOS (MODAL ÚNICO) === */
 window.openFlowsModal = async function() {
     const modal = document.getElementById('flowsModal');
     const list = document.getElementById('flowsList');
     if(modal) modal.style.display = 'flex';
-    if(list) list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
+    list.innerHTML = "<p style='color:white;'>Cargando flujos...</p>";
     
     try {
         const res = await fetch('/api/get-flows');
         const flows = await res.json();
-        if(list) {
-            list.innerHTML = ""; 
-            flows.forEach(flow => {
-                const card = document.createElement('div');
-                card.className = "flow-card"; // Asegúrate de tener este CSS
-                card.style = "background:#1a1b26; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;";
-                
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
-                        <div style="display:flex; gap:5px;">
-                            <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:11px; cursor:pointer;">EDITAR ✏️</button>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="activateFlow('${flow.id}')" style="flex:1; background:#10b981; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ACTIVAR ✅</button>
-                        <button onclick="deleteFlow('${flow.id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ELIMINAR 🗑️</button>
-                    </div>
-                `;
-                list.appendChild(card);
-            });
-        }
-    } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
-};
-
-/* --- FUNCIONES DE GESTIÓN DE FLUJOS --- */
-
-// 1. Abrir el modal y cargar la lista
-window.openFlowsModal = async function() {
-    document.getElementById('flowsModal').style.display = 'flex';
-    const list = document.getElementById('flowsList');
-    list.innerHTML = '<p style="color:white;">Cargando...</p>';
-    
-    try {
-        const res = await fetch('/api/get-flows');
-        const flows = await res.json();
-        list.innerHTML = "";
+        list.innerHTML = ""; 
         flows.forEach(f => {
             const div = document.createElement('div');
-            div.className = "flow-card";
             div.style = "background:#1a1b26; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333;";
             div.innerHTML = `
-                <span style="color:white; font-weight:500;">${f.name}</span>
+                <span style="color:white; font-family:'Montserrat';">${f.name}</span>
                 <div style="display:flex; gap:5px;">
                     <button onclick="loadSpecificFlow('${f.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Cargar</button>
                     <button onclick="deleteFlow('${f.id}')" style="background:#ff4b2b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🗑️</button>
-                </div>
-            `;
+                </div>`;
             list.appendChild(div);
         });
-    } catch (e) { list.innerHTML = '<p style="color:red;">Error al cargar flujos</p>'; }
-}
+    } catch (e) { list.innerHTML = "Error al conectar"; }
+};
 
-// 2. Cargar un flujo específico (Arregla el ReferenceError)
+window.closeFlowsModal = () => { document.getElementById('flowsModal').style.display = 'none'; };
+
 window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-        
-        if (typeof editor !== 'undefined') {
-            editor.clear();
-
-            // --- LÓGICA DE EXTRACCIÓN SEGURA ---
-            let finalData;
-
-            // Caso 1: Los datos están dentro de una propiedad 'data' (común en respuestas de API)
-            if (responseData.data && responseData.data.drawflow) {
-                finalData = responseData.data;
-            } 
-            // Caso 2: El objeto ya es el JSON de Drawflow directamente
-            else if (responseData.drawflow) {
-                finalData = responseData;
-            }
-            // Caso 3: Es un JSON plano (posiblemente subido por error o estructura vieja)
-            else {
-                // Si llegamos aquí, intentamos reconstruir la estructura mínima de Drawflow
-                finalData = {
-                    "drawflow": {
-                        "Home": {
-                            "data": responseData.data || responseData
-                        }
-                    }
-                };
-            }
-
-            // Verificación final antes de importar
-            if (finalData && finalData.drawflow) {
-                editor.import(finalData);
-                editor.zoom_reset();
-                closeFlowsModal();
-                alert("✅ Flujo cargado correctamente");
-            } else {
-                throw new Error("Estructura de datos inválida");
-            }
-        }
-    } catch (e) {
-        console.error("Error al cargar:", e);
-        alert("❌ Error: Los datos del flujo están corruptos o incompletos.");
-    }
+        editor.clear();
+        let finalData = responseData.drawflow ? responseData : (responseData.data || responseData);
+        editor.import(finalData);
+        closeFlowsModal();
+        alert("✅ Cargado correctamente");
+    } catch (e) { alert("❌ Error al cargar"); }
 };
 
-// 3. Borrar flujo (Arregla el error 404 de la ruta)
 window.deleteFlow = async function(id) {
-    if(!confirm("¿Eliminar este flujo permanentemente?")) return;
+    if(!confirm("¿Eliminar flujo?")) return;
     try {
-        // CORRECCIÓN: La ruta debe ser /api/delete-flow/id
         const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
-        if(res.ok) {
-            alert("🗑️ Eliminado");
-            openFlowsModal(); // Recarga la lista
-        }
-    } catch (e) { alert("❌ Error al eliminar"); }
-}
+        if(res.ok) { alert("🗑️ Eliminado"); openFlowsModal(); }
+    } catch (e) { alert("❌ Error"); }
+};
 
-/* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
-window.addEventListener('message', function(e) {
-    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-        if (typeof editor !== 'undefined') {
-            editor.clear();
-            const flowData = e.data.data.drawflow ? e.data.data : (e.data.data.data || e.data.data);
-            editor.import(flowData);
-            editor.zoom_reset();
-        }
+window.addEventListener('message', e => { 
+    if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
+        editor.clear();
+        editor.import(e.data.data); 
     }
 });
