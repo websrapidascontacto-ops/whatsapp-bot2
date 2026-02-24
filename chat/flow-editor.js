@@ -82,37 +82,39 @@ window.addListNode = function() {
     createNode("whatsapp_list", 1, 1, html, { list_title: '', button_text: '', row1: '', desc1: '' });
 };
 
-window.addRowDynamic = function(button) {
+window.addRowDynamic = function(button, initialData = null) {
     const nodeElement = button.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
+    
+    // Contamos filas actuales para saber el índice (row2, row3...)
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
 
     const group = document.createElement("div");
     group.className = "row-group mb-2";
-    group.style.borderBottom = "1px solid #444";
-    group.style.paddingBottom = "8px";
-    group.style.marginTop = "10px";
+    group.style.cssText = "border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;";
 
+    // Input de Título (Fila)
     const inputRow = document.createElement("input");
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
     inputRow.setAttribute(`df-${keyRow}`, "");
+    // Si viene de una importación, le ponemos el valor
+    if(initialData && initialData.row) inputRow.value = initialData.row;
     
+    // Input de Descripción
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
-    inputDesc.style.fontFamily = "Montserrat, sans-serif";
-    inputDesc.style.fontSize = "11px";
-    inputDesc.style.height = "28px";
-    inputDesc.style.background = "#f0f0f0";
-    inputDesc.style.color = "#333";
+    inputDesc.style.cssText = "font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;";
     inputDesc.placeholder = "Comentario opcional";
     inputDesc.setAttribute(`df-${keyDesc}`, "");
+    if(initialData && initialData.desc) inputDesc.value = initialData.desc;
 
+    // Listeners para guardar en tiempo real
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
@@ -120,8 +122,11 @@ window.addRowDynamic = function(button) {
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    nodeData[keyRow] = "";
-    nodeData[keyDesc] = "";
+    // Actualizamos la data del editor
+    nodeData[keyRow] = inputRow.value;
+    nodeData[keyDesc] = inputDesc.value;
+
+    // Añadimos el puntito de conexión (Output) a la derecha del nodo
     editor.addNodeOutput(nodeId);
 };
 
@@ -167,8 +172,46 @@ window.saveFlow = async function() {
     }
 };
 
-window.addEventListener('message', e => { 
-    if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
+/* --- LISTENER PARA IMPORTACIÓN CON FILAS (CORREGIDO) --- */
+window.addEventListener('message', function(e) {
+    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        const flowData = e.data.data;
+        
+        // 1. Limpiar e importar lo básico
+        editor.clear();
+        editor.import(flowData);
+
+        // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS
+        setTimeout(() => {
+            const nodes = flowData.drawflow.Home.data;
+            Object.keys(nodes).forEach(id => {
+                const node = nodes[id];
+                
+                // Si el nodo es una lista (donde están tus planes SMM)
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${id}`);
+                    if (!nodeElement) return;
+
+                    const btnAdd = nodeElement.querySelector('.btn-success');
+                    
+                    // Empezamos desde la fila 2 (porque la 1 ya existe en el HTML base)
+                    let i = 2;
+                    while (node.data[`row${i}`] !== undefined) {
+                        // Llamamos a tu función arreglada pasando la data inicial
+                        window.addRowDynamic(btnAdd, {
+                            row: node.data[`row${i}`],
+                            desc: node.data[`desc${i}`] || ""
+                        });
+                        i++;
+                    }
+                }
+            });
+            
+            editor.updateConnectionNodes('node-list');
+            editor.zoom_reset();
+            console.log("✅ Flujo Nemo reconstruido con filas dinámicas");
+        }, 300); // 300ms es suficiente para que el DOM esté listo
+    }
 });
 
 /* === MEDIA NODE === */
@@ -327,45 +370,51 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        if (typeof editor !== 'undefined') {
-            editor.clear();
+        // Manejamos si la data viene envuelta o directa
+        const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
+        
+        // 1. Limpiamos e Importamos
+        editor.clear();
+        editor.import(flowToLoad);
 
-            // --- LÓGICA DE EXTRACCIÓN SEGURA ---
-            let finalData;
+        // 2. RECONSTRUCCIÓN DE FILAS (Lo que arregla tu problema)
+        setTimeout(() => {
+            const nodes = flowToLoad.drawflow.Home.data;
+            Object.keys(nodes).forEach(nodeId => {
+                const node = nodes[nodeId];
+                
+                // Si es un nodo de lista (como el de tus planes SMM)
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${nodeId}`);
+                    if (!nodeElement) return;
 
-            // Caso 1: Los datos están dentro de una propiedad 'data' (común en respuestas de API)
-            if (responseData.data && responseData.data.drawflow) {
-                finalData = responseData.data;
-            } 
-            // Caso 2: El objeto ya es el JSON de Drawflow directamente
-            else if (responseData.drawflow) {
-                finalData = responseData;
-            }
-            // Caso 3: Es un JSON plano (posiblemente subido por error o estructura vieja)
-            else {
-                // Si llegamos aquí, intentamos reconstruir la estructura mínima de Drawflow
-                finalData = {
-                    "drawflow": {
-                        "Home": {
-                            "data": responseData.data || responseData
+                    const btnAdd = nodeElement.querySelector('.btn-success');
+                    
+                    // Buscamos cuántas filas extras tiene el JSON (row2, row3, etc.)
+                    let i = 2;
+                    while (node.data[`row${i}`] !== undefined) {
+                        // Llamamos a tu función global para crear el HTML de la fila
+                        if (typeof window.addRowDynamic === 'function') {
+                            window.addRowDynamic(btnAdd);
+                            
+                            // Le asignamos el valor guardado a los nuevos inputs
+                            const rowInput = nodeElement.querySelector(`[df-row${i}]`);
+                            const descInput = nodeElement.querySelector(`[df-desc${i}]`);
+                            if (rowInput) rowInput.value = node.data[`row${i}`];
+                            if (descInput) descInput.value = node.data[`desc${i}`] || "";
                         }
+                        i++;
                     }
-                };
-            }
+                }
+            });
+            editor.updateConnectionNodes('node-list');
+        }, 500); // Pequeño delay para que Drawflow renderice el HTML primero
 
-            // Verificación final antes de importar
-            if (finalData && finalData.drawflow) {
-                editor.import(finalData);
-                editor.zoom_reset();
-                closeFlowsModal();
-                alert("✅ Flujo cargado correctamente");
-            } else {
-                throw new Error("Estructura de datos inválida");
-            }
-        }
+        closeFlowsModal();
+        alert("✅ Flujo cargado con todas sus filas");
     } catch (e) {
         console.error("Error al cargar:", e);
-        alert("❌ Error: Los datos del flujo están corruptos o incompletos.");
+        alert("❌ Error al cargar el flujo");
     }
 };
 
