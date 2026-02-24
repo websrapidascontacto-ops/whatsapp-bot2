@@ -257,11 +257,13 @@ function rebuildFlowData(flowData) {
     editor.clear();
     editor.import(flowData);
 
-    // Timeout para asegurar que el DOM de los nodos ya existe
+    // Timeout un poco más largo para asegurar que Drawflow termine de renderizar el HTML
     setTimeout(() => {
         const nodes = flowData.drawflow.Home.data;
         Object.keys(nodes).forEach(nodeId => {
             const node = nodes[nodeId];
+            
+            // Si es un nodo de lista, reconstruimos sus filas
             if (node.name === "whatsapp_list") {
                 const nodeElement = document.getElementById(`node-${nodeId}`);
                 if (!nodeElement) return;
@@ -269,25 +271,35 @@ function rebuildFlowData(flowData) {
                 const btnAdd = nodeElement.querySelector('.btn-success');
                 const containerRows = nodeElement.querySelector('.items-container');
                 
+                // 1. Llenamos la Fila 1 (que ya existe en el HTML base)
+                const firstRowInputs = containerRows.querySelectorAll('.row-group:first-child input');
+                if (firstRowInputs[0]) firstRowInputs[0].value = node.data.row1 || "";
+                if (firstRowInputs[1]) firstRowInputs[1].value = node.data.desc1 || "";
+
+                // 2. Reconstruimos visualmente las filas adicionales (2, 3, 4...)
                 let i = 2;
-                // Reconstruimos visualmente cada fila guardada en el data
                 while (node.data[`row${i}`] !== undefined) {
-                    window.addRowDynamic(btnAdd); 
-                    
-                    // Buscamos los inputs de la fila recién creada para asignarles el valor
-                    const allRows = containerRows.querySelectorAll('.row-group');
-                    const lastGroup = allRows[i - 1]; // i-1 porque el array es base 0
-                    
-                    if (lastGroup) {
-                        const inputs = lastGroup.querySelectorAll('input');
-                        if (inputs[0]) inputs[0].value = node.data[`row${i}`];
-                        if (inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
+                    if (window.addRowDynamic) {
+                        // Llamamos a la función que crea el HTML de la fila y el output
+                        window.addRowDynamic(btnAdd); 
+                        
+                        // Buscamos los inputs de esa nueva fila para asignarles el valor
+                        const allRows = containerRows.querySelectorAll('.row-group');
+                        const currentGroup = allRows[i - 1]; 
+                        
+                        if (currentGroup) {
+                            const inputs = currentGroup.querySelectorAll('input');
+                            if (inputs[0]) inputs[0].value = node.data[`row${i}`];
+                            if (inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
+                        }
                     }
                     i++;
                 }
             }
         });
-    }, 300);
+        // Actualizamos las conexiones para que se ajusten a los nuevos outputs
+        editor.updateConnectionNodes('node-list'); 
+    }, 400);
 }
 
 /* === BOTÓN TRIGGER Y PAGO === */
