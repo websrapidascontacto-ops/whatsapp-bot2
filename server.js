@@ -458,7 +458,7 @@ app.post("/webhook-yape", async (req, res) => {
                     });
                     broadcast({ type: "new_message", message: msgBot });
 
-                    // Mensaje final al cliente
+                    // Mensaje final al cliente 
                     await processSequence(waiting.chatId, { 
                         name: "message", 
                         data: { info: `✅ *¡Pago verificado!* ✨\n\nHemos recibido tu Yape por S/${montoNotificacion}. Tu pedido ya está en camino. Gracias por confiar en nosotros! 🚀` } 
