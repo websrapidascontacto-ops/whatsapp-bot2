@@ -196,6 +196,7 @@ app.post("/webhook", async (req, res) => {
         }
     }
     res.sendStatus(200);
+}
 });
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
@@ -432,8 +433,6 @@ app.post('/api/save-flow', async (req, res) => {
     try {
         const { id, name, data } = req.body;
         const finalName = name || "Main Flow";
-
-        // Si es el flujo principal, nos aseguramos de que sea el único isMain
         const shouldBeMain = (finalName === "Main Flow");
 
         if (shouldBeMain) {
@@ -448,14 +447,12 @@ app.post('/api/save-flow', async (req, res) => {
                 { new: true, upsert: true }
             );
         } else {
-            // Buscamos por nombre para evitar duplicar el "Main Flow"
             updatedFlow = await Flow.findOneAndUpdate(
                 { name: finalName },
                 { data, isMain: shouldBeMain },
                 { new: true, upsert: true }
             );
         }
-
         console.log(`✅ Flujo "${finalName}" guardado correctamente.`);
         res.json({ success: true, id: updatedFlow._id });
     } catch (e) { 
@@ -495,7 +492,6 @@ app.get("/messages/:chatId", async (req, res) => {
     res.json(messages);
 });
 
-
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -531,39 +527,7 @@ app.post("/send-message", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-
-app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } }, 
-        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
-        { $sort: { lastTime: -1 } }
-    ]);
-    res.json(chats);
-});
-
-app.get("/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
-});
-
-app.post("/api/save-flow", async (req, res) => {
-    try {
-        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: req.body }, { upsert: true });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get("/api/get-flow", async (req, res) => {
-    const flow = await Flow.findOne({ name: "Main Flow" });
-    res.json(flow ? flow.data : null);
-});
-
-/* ========================= INICIO DEL SERVIDOR ========================= */
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo Estable - Carpeta uploads corregida");
-});
-
-// Rutas de Descarga e Importación
+/* ========================= DESCARGA E IMPORTACIÓN ========================= */
 
 app.get("/api/download-flow", async (req, res) => {
     try {
@@ -585,17 +549,14 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
             return res.status(400).json({ error: "Formato de flujo inválido" });
         }
         await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: flowData }, { upsert: true });
-
         res.json({ success: true, message: "Flujo importado correctamente" });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
-
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ========================= INICIO DEL SERVIDOR ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
-
+    console.log("🚀 Server Punto Nemo Estable - Todo restaurado ✨");
 });
+``` 🤖✨
