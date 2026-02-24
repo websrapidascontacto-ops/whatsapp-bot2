@@ -46,7 +46,7 @@ function createNode(type, inputs, outputs, html, data = {}) {
     // 1. Creamos el nodo en la posición actual
     const nodeId = editor.addNode(type, inputs, outputs, lastNodeX, lastNodeY, type, data, html);
     
-    // 2. Calculamos la posición del PRÓXIMO nodo
+    // 2. Calculamos la posición del PRÓXIMO nodo (Siempre al lado del anterior)
     lastNodeX += nodeWidth; 
 
     // 3. Límite de ancho: Si llega a 2000px, vuelve a la izquierda y baja 400px
@@ -128,15 +128,8 @@ window.addRowDynamic = function(button) {
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
-<<<<<<< HEAD
-    inputRow.setAttribute(`df-${keyRow}`, "");
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
 
-=======
-    // Corrección: Sincronización manual con el objeto de datos
-    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
-    
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
     inputDesc.style.fontFamily = "Montserrat, sans-serif";
@@ -145,11 +138,6 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
-<<<<<<< HEAD
-    inputDesc.setAttribute(`df-${keyDesc}`, "");
-=======
-    // Corrección: Sincronización manual con el objeto de datos
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
@@ -163,34 +151,7 @@ window.addRowDynamic = function(button) {
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 /* === GUARDAR Y CARGAR === */
-window.saveFlow = function() {
-    const data = editor.export();
-    console.log("Exportando datos:", data);
-
-    fetch('/api/save-flow', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(data) 
-    })
-    .then(response => {
-        if (response.ok) {
-            alert("✅ Flujo Guardado correctamente (Títulos y Comentarios)");
-        } else {
-            alert("❌ Error al guardar en el servidor");
-        }
-    })
-    .catch(err => {
-        console.error("Error en Fetch:", err);
-        alert("❌ Error de conexión con el servidor");
-    });
-=======
-/* === GUARDAR Y CARGAR (CORREGIDO) === */
-=======
-/* === GUARDAR Y CARGAR === */
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
 window.saveFlow = async function() {
     const exportData = editor.export();
     const flowName = document.getElementById('flow_name')?.value || "Main Flow";
@@ -219,7 +180,6 @@ window.saveFlow = async function() {
         console.error("Error:", error);
         alert("❌ Error de conexión con Railway.");
     }
->>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 };
 
 /* === MEDIA NODE === */
@@ -273,13 +233,8 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 }
 
-<<<<<<< HEAD
-/* === IMPORTAR ARCHIVO Y RECONSTRUIR FILAS === */
-document.getElementById('import_file').addEventListener('change', function(e) {
-=======
 /* === IMPORTAR ARCHIVO LOCAL (ARREGLADO) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     const file = e.target.files[0];
     if (!file) return;
 
@@ -288,44 +243,12 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
         try {
             const flowData = JSON.parse(e.target.result);
             editor.import(flowData);
-<<<<<<< HEAD
-            
-=======
 
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
                     if (node.name === "whatsapp_list") {
-<<<<<<< HEAD
-                        const btn = document.querySelector(`#node-${nodeId} .btn-success`);
-                        if (btn) {
-                            let i = 2;
-                            while (node.data[`row${i}`] !== undefined) {
-                                window.addRowDynamic(btn);
-                                const inputRow = document.querySelector(`#node-${nodeId} [df-row${i}]`);
-                                if (inputRow) inputRow.value = node.data[`row${i}`];
-
-                                const inputDesc = document.querySelector(`#node-${nodeId} [df-desc${i}]`);
-                                if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
-                                i++;
-                            }
-                            const desc1 = document.querySelector(`#node-${nodeId} [df-desc1]`);
-                            if (desc1 && node.data.desc1) desc1.value = node.data.desc1;
-                        }
-                    }
-                });
-                alert("✅ Flujo cargado con comentarios correctamente.");
-            }, 150);
-
-        } catch (err) {
-            alert("❌ Error: El archivo no es un JSON de flujo válido.");
-            console.error("Error al importar:", err);
-        }
-    };
-    reader.readAsText(file);
-=======
                         const nodeElement = document.getElementById(`node-${nodeId}`);
                         const btnAdd = nodeElement.querySelector('.btn-success');
                         const containerRows = nodeElement.querySelector('.items-container');
@@ -406,10 +329,10 @@ window.deleteFlow = async function(id) {
     } catch (e) { alert("❌ Error"); }
 };
 
+/* === ESCUCHA DE MENSAJES DESDE EL CRM === */
 window.addEventListener('message', e => { 
     if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
         editor.clear();
         editor.import(e.data.data); 
     }
->>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
 });
