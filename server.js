@@ -135,7 +135,6 @@ app.post("/webhook", async (req, res) => {
             
             if (waiting) {
             // PASO 1: Recibir el Link
-            // PASO 1: Recibir el Link
             if (waiting.waitingForLink) {
                 const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
                 
@@ -145,23 +144,13 @@ app.post("/webhook", async (req, res) => {
                     waiting.waitingForCode = true; 
                     await waiting.save();
                     
-                    // 1. Enviamos primero los datos de pago
-                    const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\nRealiza el pago y sigue las instrucciones de abajo. 👇`;
+                    // Mensaje de Pago + Instrucción Visual en Texto
+                    const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n--- \n\n⚠️ *INSTRUCCIONES IMPORTANTES* ⚠️\n\n1️⃣ Realiza el pago en tu App Yape.\n2️⃣ Al terminar, busca en tu pantalla el **"Código de Seguridad"** (son 3 dígitos).\n3️⃣ Escribe esos **3 números aquí abajo** para activar tu pedido.\n\n🚫 No envíes capturas, el sistema solo necesita los 3 dígitos. 🚀`;
 
                     await processSequence(sender, { 
                         name: "message", 
                         data: { info: mensajePago } 
                     }, {});
-
-                    // 2. Enviamos la imagen con texto explicativo "anti-errores"
-                    const nodeMedia = {
-                        name: "media",
-                        data: {
-                            val: "https://www.websrapidas.com/wp-content/uploads/2026/02/imagen_2026-02-24_044650360.png",
-                            caption: "⚠️ FIJATE AQUÍ: Al terminar tu Yape, busca los 3 dígitos (Código de Seguridad) como se ve en la imagen. \n\nCada Yape tiene un código DIFERENTE. Escribe el tuyo aquí abajo. 👇"
-                        }
-                    };
-                    await processSequence(sender, nodeMedia, {});
 
                 } else {
                     await processSequence(sender, { 
