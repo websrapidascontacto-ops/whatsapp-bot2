@@ -74,18 +74,94 @@ function closeLightbox() {
     if(lightbox) lightbox.style.display = "none";
 }
 
-/* WEBSOCKET */
-const ws=new WebSocket(location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host);
+/* WEBSOCKET - CON INTELIGENCIA ARTIFICIAL AUTOMÁTICA */
+const ws = new WebSocket(location.protocol === "https:" ? "wss://" + location.host : "ws://" + location.host);
 
-ws.onmessage=(event)=>{
-    const data=JSON.parse(event.data);
-    if(data.type==="new_message"){
+ws.onmessage = async (event) => {
+    const data = JSON.parse(event.data);
+
+    if (data.type === "new_message") {
         const chatId = data.message.chatId;
-        if(chatId===currentChat){ renderMessage(data.message); } 
-        else { unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1; }
+        const userText = data.message.text ? data.message.text.trim() : "";
+
+        // 1. Renderizado normal en la interfaz
+        if (chatId === currentChat) {
+            renderMessage(data.message);
+        } else {
+            unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
+        }
         loadChats();
+
+        // 2. DISPARADOR DE IA (Solo si el mensaje NO es nuestro y estamos en el chat activo)
+        if (data.message.from !== "me" && chatId === currentChat && userText !== "") {
+            
+            // Verificamos si lo que escribió el cliente coincide con algún botón del flujo
+            const esBoton = verificarSiEsBoton(userText);
+
+            if (!esBoton) {
+                // Si no es un botón, es una duda: ejecutamos la IA con efecto "Escribiendo..."
+                procesarDudaConIA(data.message.text);
+            }
+        }
     }
 };
+
+/* FUNCIÓN PARA VERIFICAR SI EL TEXTO ES UN COMANDO DEL FLUJO */
+function verificarSiEsBoton(text) {
+    try {
+        const nodos = DATA_FLUJO_NEMO.drawflow.Home.data;
+        const textoLimpio = text.toLowerCase();
+        
+        for (let id in nodos) {
+            // Buscamos en nodos tipo 'trigger'
+            if (nodos[id].name === 'trigger' && nodos[id].data.val.toLowerCase() === textoLimpio) {
+                return true;
+            }
+            // También buscamos en los botones de las listas (rows) de WhatsApp
+            if (nodos[id].name === 'whatsapp_list') {
+                const d = nodos[id].data;
+                const botones = [d.row1, d.row2, d.row3, d.row4, d.row5].map(b => b ? b.toLowerCase() : "");
+                if (botones.includes(textoLimpio)) return true;
+            }
+        }
+    } catch (e) {
+        console.error("Error validando flujo:", e);
+    }
+    return false;
+}
+
+/* FUNCIÓN QUE LLAMA A LA IA Y MANEJA LOS PUNTITOS */
+async function procesarDudaConIA(textoDelUsuario) {
+    if (!currentChat) return;
+
+    showTypingIndicator(); // Muestra los 3 puntitos animados ✍️
+
+    try {
+        const response = await fetch('/api/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                message: textoDelUsuario, 
+                chatId: currentChat 
+            })
+        });
+
+        const data = await response.json();
+        
+        hideTypingIndicator(); // Quita los puntitos 
+
+        if (data.text) {
+            renderMessage({ 
+                from: "bot", 
+                text: data.text, 
+                timestamp: Date.now() 
+            });
+        }
+    } catch (error) {
+        hideTypingIndicator();
+        console.error("Error en el puente de IA:", error);
+    }
+}
 
 /* CARGAR CHATS */
 async function loadChats(){
@@ -192,6 +268,29 @@ function renderMessage(msg){
         messagesContainer.appendChild(div);
         messagesContainer.scrollTop=messagesContainer.scrollHeight;
     }
+}
+function showTypingIndicator() {
+    const messagesArea = document.getElementById("messages");
+    if (!messagesArea) return;
+    
+    // Evitar duplicados si ya está el indicador
+    if (document.getElementById("ai-typing")) return;
+
+    const typingDiv = document.createElement("div");
+    typingDiv.className = "typing-bubble";
+    typingDiv.id = "ai-typing"; 
+    typingDiv.innerHTML = `
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+    `;
+    messagesArea.appendChild(typingDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const indicator = document.getElementById("ai-typing");
+    if (indicator) indicator.remove();
 }
 
 async function sendMessage(){
@@ -519,3 +618,84 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+// 1. FUNCIÓN QUE LLAMA A LA IA Y DETECTA ACCIONES
+async function procesarDudaConIA(textoDelUsuario) {
+    if (!currentChat) return;
+
+    showTypingIndicator(); // Muestra los puntitos ✍️
+
+    try {
+        const response = await fetch('/api/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                message: textoDelUsuario, 
+                chatId: currentChat 
+            })
+        });
+
+        const data = await response.json();
+        hideTypingIndicator(); // Quita los puntitos 
+
+        if (data.text) {
+            let textoParaMostrar = data.text;
+
+            // Detectar si la IA envió un código de redirección
+            if (textoParaMostrar.includes("[ACTION:TIKTOK]")) {
+                textoParaMostrar = textoParaMostrar.replace("[ACTION:TIKTOK]", "");
+                ejecutarNodoPorNombre("Tik Tok ");
+            } 
+            else if (textoParaMostrar.includes("[ACTION:INSTAGRAM]")) {
+                textoParaMostrar = textoParaMostrar.replace("[ACTION:INSTAGRAM]", "");
+                ejecutarNodoPorNombre("Instagram ");
+            }
+            else if (textoParaMostrar.includes("[ACTION:FACEBOOK]")) {
+                textoParaMostrar = textoParaMostrar.replace("[ACTION:FACEBOOK]", "");
+                ejecutarNodoPorNombre("Facebook ");
+            }
+
+            // Renderizar el mensaje limpio en el CRM
+            renderMessage({ 
+                from: "bot", 
+                text: textoParaMostrar, 
+                timestamp: Date.now() 
+            });
+        }
+    } catch (error) {
+        hideTypingIndicator();
+        console.error("Error en el puente de IA:", error);
+    }
+}
+
+// 2. FUNCIÓN PARA DISPARAR EL FLUJO AUTOMÁTICAMENTE
+function ejecutarNodoPorNombre(nombreBoton) {
+    console.log("Redirigiendo flujo a:", nombreBoton);
+    
+    // Esta es la función que ya usa tu sistema para procesar botones.
+    // Al pasarle el nombre exacto (ej: "Tik Tok "), el sistema buscará el nodo
+    // hijo correspondiente en tu Drawflow y enviará el mensaje automático.
+    if (typeof procesarRespuestaFlujo === "function") {
+        procesarRespuestaFlujo(nombreBoton);
+    } else {
+        // Si tu función se llama distinto (ej: handleFlowResponse), cámbiala aquí:
+        console.warn("La función procesarRespuestaFlujo no está definida.");
+    }
+}
+
+// 3. INDICADORES VISUALES (Si no los habías pegado antes)
+function showTypingIndicator() {
+    const messagesArea = document.getElementById("messages");
+    if (!messagesArea || document.getElementById("ai-typing")) return;
+
+    const typingDiv = document.createElement("div");
+    typingDiv.className = "typing-bubble";
+    typingDiv.id = "ai-typing"; 
+    typingDiv.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
+    messagesArea.appendChild(typingDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const indicator = document.getElementById("ai-typing");
+    if (indicator) indicator.remove();
+}

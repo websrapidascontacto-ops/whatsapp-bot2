@@ -1,3 +1,4 @@
+const axios = require('axios'); // Asegúrate de tener instalado axios (npm install axios)// 
 const express = require("express");
 const http = require("http");
 const mongoose = require("mongoose");
@@ -630,4 +631,77 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
 
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
+});
+
+
+// 2. PEGA ESTO AL FINAL (pero antes del app.listen)
+app.post('/api/ai-chat', async (req, res) => {
+    const { message, chatId } = req.body;
+    
+    // RECOMENDACIÓN: Usa variables de entorno o pega aquí tu clave
+    const apiKey = "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"; 
+
+    try {
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: "gpt-4o-mini", // Es más barato y rápido que gpt-4o
+            messages: [
+                {
+                    role: "system",
+                    content: `Eres el asistente virtual experto de 'aumentar-seguidores.com'. Tu misión es resolver dudas sobre el servicio y dirigir al cliente hacia la compra usando los botones del chat.
+
+INFORMACIÓN LEGAL Y REGLAS DE ORO (Estrictas):
+
+1. NATURALEZA DEL SERVICIO:
+- Solo aumentamos la "Apariencia" visual del perfil.
+- NO garantizamos interacción (likes o comentarios) de los nuevos seguidores.
+- Garantizamos la entrega de la cantidad comprada, pero no su actividad.
+
+2. REQUISITOS TÉCNICOS:
+- La cuenta DEBE ser PÚBLICA.
+- Si el cliente tiene la cuenta en "Privada", el pedido no se cargará y NO hay derecho a reembolso ni reposición.
+- Nunca pedimos contraseñas, solo el enlace (URL) o nombre de usuario.
+
+3. POLÍTICA DE PAGOS Y REEMBOLSOS:
+- NO hay reembolsos de dinero bajo ninguna circunstancia una vez realizado el depósito.
+- Pedidos con enlaces incorrectos o URLs mal escritas por el cliente no tienen derecho a reposición.
+
+4. GARANTÍA DE REPOSICIÓN (REFILL):
+- Solo aplica si el servicio lo especifica.
+- Reponemos si la caída supera el 10% del total comprado dentro del periodo de garantía.
+- La garantía se anula si el usuario cambia su nombre de usuario o pone la cuenta en privado.
+
+5. RESPONSABILIDAD:
+- El cliente asume el riesgo de posibles suspensiones por parte de las redes sociales. No somos responsables por sanciones de Instagram, Facebook, TikTok, etc.
+
+6. REFERENCIAS Y CONFIANZA:
+- Si piden pruebas o referencias, envíalos amablemente aquí: https://www.instagram.com/aumentar.seguidores2026/
+
+ESTILO DE RESPUESTA:
+- Usa siempre fuente Montserrat (estilo limpio y profesional).
+- Responde de forma CORTA, amigable y usa iconos (🚀, ✨, 🛡️).
+- NO des precios (el cliente debe verlos en el menú de opciones).
+- REGLA DE CIERRE: Al final de CADA mensaje, invita al cliente a elegir una opción del menú de servicios que aparece abajo en el chat para continuar con su pedido. 👇
+7. No inventes servicios que no tenemos.
+Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTION:TIKTOK]
+            Si quiere Instagram o pregunta por planes de esa red, termina con: [ACTION:INSTAGRAM]
+            Si quiere Facebook o pregunta por planes de esa red, termina con: [ACTION:FACEBOOK]
+            No menciones los códigos en tu texto, solo ponlos al final de tu respuesta.`
+                },
+                { role: "user", content: message }
+            ],
+            temperature: 0.7
+        }, {
+            headers: { 
+                'Authorization': `Bearer ${apiKey}`, 
+                'Content-Type': 'application/json' 
+            }
+        });
+
+        const aiText = response.data.choices[0].message.content;
+        res.json({ text: aiText });
+
+    } catch (error) {
+        console.error("Error con OpenAI:", error.response ? error.response.data : error.message);
+        res.status(500).json({ error: "Error al conectar con la IA" });
+    }
 });
