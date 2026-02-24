@@ -152,6 +152,7 @@ window.addRowDynamic = function(button) {
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
+<<<<<<< HEAD
 /* === GUARDAR Y CARGAR === */
 window.saveFlow = function() {
     const data = editor.export();
@@ -173,6 +174,39 @@ window.saveFlow = function() {
         console.error("Error en Fetch:", err);
         alert("❌ Error de conexión con el servidor");
     });
+=======
+/* === GUARDAR Y CARGAR (CORREGIDO) === */
+window.saveFlow = async function() {
+    const exportData = editor.export();
+    
+    // Forzamos el nombre a "Main Flow" para que el bot lo reconozca de inmediato
+    const flowName = document.getElementById('flow_name')?.value || "Main Flow";
+
+    const payload = {
+        id: window.currentEditingFlowId || null,
+        name: flowName,
+        data: exportData
+    };
+
+    try {
+        const response = await fetch('/api/save-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            window.currentEditingFlowId = result.id; // Guardamos el ID para la próxima edición
+            alert("✅ Guardado en base de datos. ¡Triggers actualizados!");
+        } else {
+            alert("❌ Error al guardar: " + result.error);
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        alert("❌ Error de conexión con Railway.");
+    }
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 };
 
 window.addEventListener('message', e => { 

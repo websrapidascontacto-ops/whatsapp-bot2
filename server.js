@@ -122,6 +122,47 @@ app.post("/webhook", async (req, res) => {
             } catch (err) { 
                 console.error("❌ Error Webhook Logic:", err.message); 
             }
+<<<<<<< HEAD
+=======
+
+            const flowDoc = await Flow.findOne({ isMain: true }); 
+            if (flowDoc && incomingText) {
+                const nodes = flowDoc.data.drawflow.Home.data;
+
+                // 1. Primero buscamos si es un TRIGGER (ej: "Hola")
+                let targetNode = Object.values(nodes).find(n => 
+                    n.name === "trigger" && 
+                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                );
+
+                // 2. Si no es un trigger, buscamos si es una respuesta a una LISTA
+                if (!targetNode) {
+                    const listNode = Object.values(nodes).find(n => {
+                        if (n.name === "whatsapp_list") {
+                            return Object.values(n.data).some(val => val?.toString().trim().toLowerCase() === incomingText.toLowerCase());
+                        }
+                        return false;
+                    });
+
+                    if (listNode) {
+                        const rowKey = Object.keys(listNode.data).find(k => listNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase());
+                        const rowNum = rowKey.replace("row", "");
+                        const nextId = listNode.outputs[`output_${rowNum}`]?.connections?.[0]?.node;
+                        if (nextId) targetNode = nodes[nextId];
+                    }
+                }
+
+                // 3. Ejecutar el nodo encontrado
+                if (targetNode) {
+                    if (targetNode.name === "trigger") {
+                        const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
+                        if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
+                    } else {
+                        await processSequence(sender, targetNode, nodes);
+                    }
+                }
+            }
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
         }
     }
     res.sendStatus(200);
@@ -176,6 +217,7 @@ else if (node.name === "notify") {
         const nextNodeId = node.outputs.output_1.connections[0].node;
         return await processSequence(to, allNodes[nextNodeId], allNodes);
     }
+<<<<<<< HEAD
     return; // Si no hay conexión, se detiene aquí.
 }
     else if (node.name === "whatsapp_list") {
@@ -214,6 +256,52 @@ else if (node.name === "notify") {
         } catch (e) {
             console.error("❌ Error construyendo payload de lista:", e.message);
         }
+=======
+    /* ========================= CORRECCIÓN DE LISTA FILTRADA ========================= */
+    else if (node.name === "whatsapp_list") {
+        try {
+            const rows = [];
+            for (let i = 1; i <= 10; i++) {
+                const rowTitle = node.data[`row${i}`];
+                if (rowTitle && rowTitle.toString().trim() !== "") {
+                    const descriptionText = node.data[`desc${i}`] || "";
+                    rows.push({
+                        id: `row_${node.id}_${i}`,
+                        title: rowTitle.toString().substring(0, 24).trim(),
+                        description: descriptionText.toString().substring(0, 72).trim()
+                    });
+                }
+            }
+
+            if (rows.length === 0) return;
+
+            payload.type = "interactive";
+            payload.interactive = {
+                type: "list",
+                header: { type: "text", text: "Opciones Disponibles" },
+                body: { text: (node.data.body || "Selecciona una opción de la lista:").substring(0, 1024) },
+                footer: { text: "Webs Rápidas 🚀" },
+                action: { 
+                    button: (node.data.btn || "Ver Menú").substring(0, 20), 
+                    sections: [{ title: "Servicios", rows: rows }] 
+                }
+            };
+
+            botText = "📋 Menú de lista filtrado enviado";
+        } catch (e) { 
+            console.error("❌ Error en construcción de lista:", e.message); 
+        }
+    }
+    else if (node.name === "payment_validation") {
+            await PaymentWaiting.findOneAndUpdate(
+                { chatId: to },
+                { productId: node.data.product_id, amount: node.data.amount, active: true, waitingForLink: true },
+                { upsert: true }
+            );
+            botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
+            payload.type = "text";
+            payload.text = { body: botText };
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
     }
 
     try {
@@ -246,7 +334,138 @@ else if (node.name === "notify") {
     }
 }
 
+<<<<<<< HEAD
 /* ========================= APIS Y SUBIDAS ========================= */
+=======
+/* ========================= WEBHOOK YAPE ========================= */
+app.post("/webhook-yape", async (req, res) => {
+    const { texto } = req.body; 
+    if (!texto) return res.sendStatus(200);
+    try {
+        const activeWaitings = await PaymentWaiting.find({ active: true });
+        const montoRecibido = texto.match(/\d+/)?.[0]; 
+        for (const waiting of activeWaitings) {
+            const montoEsperado = waiting.amount.match(/\d+/)?.[0]; 
+            if (montoRecibido && montoRecibido === montoEsperado) {
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                const product = productRes.data;
+                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+                await WooCommerce.post("orders", {
+                    payment_method: "bacs", payment_method_title: "Yape Automático ✅", status: "processing",
+                    billing: { phone: waiting.chatId },
+                    line_items: [{ 
+                        product_id: waiting.productId, quantity: 1,
+                        meta_data: [
+                            { key: "_ltb_id", value: serviceId },
+                            { key: "_ltb_qty", value: bulkQty },
+                            { key: "Link del perfil", value: waiting.profileLink },
+                            { key: "Link del Perfil", value: waiting.profileLink }
+                        ]
+                    }],
+                    customer_note: `🤖 Pedido automático vía WhatsApp. Link: ${waiting.profileLink}`
+                });
+                await processSequence(waiting.chatId, { 
+                    name: "message", 
+                    data: { info: "✅ ¡Yape verificado! 🚀 Tu pedido ya está en proceso en el sistema central. ✨" } 
+                }, {});
+                return res.sendStatus(200);
+            }
+        }
+    } catch (err) { console.error("❌ Error Integración LTB:", err.message); }
+    res.sendStatus(200);
+});
+
+/* ========================= APIS DE FLUJOS Y CHAT ========================= */
+
+app.get("/api/get-flow", async (req, res) => {
+    const flow = await Flow.findOne({ isMain: true });
+    res.json(flow ? flow.data : null);
+});
+
+app.get("/api/get-flow-by-id/:id", async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+        res.json(flow ? flow.data : null);
+    } catch (e) { res.status(500).json(null); }
+});
+
+app.get('/api/get-flows', async (req, res) => {
+    try {
+        const flows = await Flow.find({});
+        res.json(flows.map(f => ({ id: f._id, name: f.name, active: f.isMain })));
+    } catch (e) { res.status(500).json([]); }
+});
+
+app.post('/api/save-flow', async (req, res) => {
+    try {
+        const { id, name, data } = req.body;
+        const finalName = name || "Main Flow";
+
+        // Si es el flujo principal, nos aseguramos de que sea el único isMain
+        const shouldBeMain = (finalName === "Main Flow");
+
+        if (shouldBeMain) {
+            await Flow.updateMany({}, { isMain: false });
+        }
+
+        let updatedFlow;
+        if (id && mongoose.Types.ObjectId.isValid(id)) {
+            updatedFlow = await Flow.findByIdAndUpdate(
+                id, 
+                { name: finalName, data, isMain: shouldBeMain }, 
+                { new: true, upsert: true }
+            );
+        } else {
+            // Buscamos por nombre para evitar duplicar el "Main Flow"
+            updatedFlow = await Flow.findOneAndUpdate(
+                { name: finalName },
+                { data, isMain: shouldBeMain },
+                { new: true, upsert: true }
+            );
+        }
+
+        console.log(`✅ Flujo "${finalName}" guardado correctamente.`);
+        res.json({ success: true, id: updatedFlow._id });
+    } catch (e) { 
+        console.error("❌ Error al guardar flujo:", e.message);
+        res.status(500).json({ error: e.message }); 
+    }
+});
+
+app.post('/api/activate-flow/:id', async (req, res) => {
+    try {
+        await Flow.updateMany({}, { isMain: false });
+        await Flow.findByIdAndUpdate(req.params.id, { isMain: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/delete-flow/:id', async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+        if (flow && flow.name === "Main Flow") return res.status(400).send("No puedes eliminar el flujo principal");
+        await Flow.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/chats", async (req, res) => {
+    const chats = await Message.aggregate([
+        { $sort: { timestamp: 1 } }, 
+        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
+        { $sort: { lastTime: -1 } }
+    ]);
+    res.json(chats);
+});
+
+app.get("/messages/:chatId", async (req, res) => {
+    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
+    res.json(messages);
+});
+
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsPath),
     filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -282,6 +501,7 @@ app.post("/send-message", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+<<<<<<< HEAD
 app.get("/chats", async (req, res) => {
     const chats = await Message.aggregate([
         { $sort: { timestamp: 1 } }, 
@@ -314,6 +534,8 @@ server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
 });
 
 // Rutas de Descarga e Importación
+=======
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 app.get("/api/download-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ name: "Main Flow" });
@@ -334,8 +556,17 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
             return res.status(400).json({ error: "Formato de flujo inválido" });
         }
         await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: flowData }, { upsert: true });
+<<<<<<< HEAD
         res.json({ success: true, message: "Flujo importado correctamente" });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+=======
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+    console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
+>>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 });

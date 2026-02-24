@@ -1,3 +1,4 @@
+/* === CÓDIGO ORIGINAL PRESERVADO (CONFIGURACIÓN Y VARIABLES) === */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
 
 :root {
@@ -10,11 +11,14 @@
     --media: #e67e22;
     --bg-main: #0b0f1a;
     --bg-secondary: #161c2d;
+    --bg-active: #1e293b; /* NUEVO: Resaltado chat activo */
     --border-color: rgba(255, 255, 255, 0.1);
     --text-main: #f1f5f9;
+    --text-dim: #94a3b8; /* NUEVO: Texto secundario */
 }
+
 .drawflow .parent-drawflow {
-    transition: none !important; /* El zoom manual debe ser instantáneo para ser preciso */
+    transition: none !important; 
 }
 
 /* FUENTE GLOBAL MONTSERRAT */
@@ -30,7 +34,7 @@ body {
     color: var(--text-main); 
 }
 
-/* ================= HEADER MODERNO ================= */
+/* ================= HEADER MODERNO (ORIGINAL) ================= */
 .editor-header {
     height: 85px; 
     background: rgba(22, 28, 45, 0.9);
@@ -60,7 +64,103 @@ body {
     object-fit: contain;
 }
 
-/* ================= BOTONES SUPERIORES CON GLOW ================= */
+/* ================= NUEVOS ESTILOS: SIDEBAR CHATS Y RESPONSIVE ================= */
+
+/* Contenedor de lista de chats a la izquierda */
+.chat-sidebar {
+    width: 350px;
+    height: 100vh;
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+    padding-top: 85px; /* Para no quedar debajo del header */
+}
+
+/* Chat Item con Resaltado de Activo */
+.chat-item {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.chat-item:hover { background: rgba(255,255,255,0.05); }
+
+/* RESALTADO CHAT ACTIVO */
+.chat-item.active {
+    background-color: var(--bg-active) !important;
+    border-left: 4px solid var(--primary);
+}
+
+/* FOTO DE PERFIL (NO SE DEFORMA) */
+.chat-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+.chat-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.chat-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+    display: block;
+    padding-right: 45px;
+    color: white;
+}
+
+/* TRUNCADO A 2 LÍNEAS */
+.chat-last-msg {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+
+/* ICONOS SUPERIORES DERECHA (BOT Y BORRAR) */
+.chat-actions-top {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+}
+
+.icon-bot { color: var(--success); font-size: 14px; }
+.icon-delete { color: var(--danger); font-size: 14px; cursor: pointer; opacity: 0.7; }
+.icon-delete:hover { opacity: 1; }
+
+/* BARRA SUPERIOR CON NÚMERO DE TELÉFONO */
+.chat-header-top {
+    display: flex;
+    flex-direction: column;
+    margin-left: 15px;
+}
+
+.header-phone {
+    font-size: 12px;
+    color: var(--success);
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+/* ================= BOTONES SUPERIORES (ORIGINAL) ================= */
 .header-buttons { 
     display: flex; 
     gap: 12px; 
@@ -68,56 +168,24 @@ body {
 }
 
 .header-buttons button {
-    border: none; 
-    padding: 10px 18px; 
-    border-radius: 12px; 
-    color: white;
-    font-weight: 700; 
-    font-size: 12px; 
-    cursor: pointer; 
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex; 
-    align-items: center; 
-    justify-content: center;
-    gap: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
+    border: none; padding: 10px 18px; border-radius: 12px; color: white;
+    font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
 }
 
-.header-buttons button i {
-    font-family: "Font Awesome 6 Free", "Font Awesome 6 Solid" !important;
-    font-weight: 900;
-    font-size: 14px;
-    pointer-events: none;
-    display: inline-block;
-}
-
-.header-buttons button::before {
-    content: none !important;
-}
-
-/* Colores por Clase */
 .btn-trigger { background: var(--warning); }
 .btn-message { background: var(--primary); }
 .btn-ia { background: var(--success); }
 .btn-list { background: var(--whatsapp); }
 .btn-media { background: var(--media); }
-.btn-save { 
-    background: transparent; 
-    border: 2px solid var(--indigo) !important; 
-    margin-left: 15px;
-}
+.btn-save { background: transparent; border: 2px solid var(--indigo) !important; margin-left: 15px; }
 
 .header-buttons button:hover {
-    transform: translateY(-3px);
-    filter: brightness(1.2);
-    box-shadow: 0 0 20px currentColor;
+    transform: translateY(-3px); filter: brightness(1.2); box-shadow: 0 0 20px currentColor;
 }
 
-.btn-save:hover { background: var(--indigo); }
-
-/* ================= CONEXIONES ANIMADAS ================= */
+/* ================= CONEXIONES ANIMADAS (ORIGINAL) ================= */
 .drawflow .connection .main-path {
     stroke: #6366f1; 
     stroke-width: 5px !important;
@@ -131,13 +199,17 @@ body {
     to { stroke-dashoffset: 0; }
 }
 
-/* ================= NODOS ESTILIZADOS ================= */
+/* ================= NODOS ESTILIZADOS (ORIGINAL) ================= */
 .drawflow-node {
     background: var(--bg-secondary) !important; 
     border-radius: 20px !important;
     border: 1px solid var(--border-color) !important; 
     width: 320px !important;
     box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    cursor: default;
+    height: auto !important;
+    min-height: 150px;
+    padding-bottom: 20px;
 }
 
 .drawflow-node.selected {
@@ -146,14 +218,8 @@ body {
 }
 
 .node-header { 
-    padding: 15px 20px; 
-    border-radius: 20px 20px 0 0; 
-    font-weight: 700; 
-    font-size: 14px; 
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: white;
+    padding: 15px 20px; border-radius: 20px 20px 0 0; 
+    font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 10px; color: white;
 }
 
 .header-trigger { background: linear-gradient(135deg, #f59e0b, #d97706); }
@@ -164,40 +230,27 @@ body {
 
 .node-body { padding: 20px; }
 
-.form-control {
-    background: #0b0f1a; 
-    border: 1px solid var(--border-color);
-    color: white; 
-    border-radius: 12px; 
-    padding: 12px; 
-    width: 100%;
-    font-size: 13px;
-    margin-bottom: 10px;
+.drawflow .drawflow-node input, 
+.drawflow .drawflow-node textarea {
+    width: 90%; margin: 5px auto; border-radius: 8px;
+    border: 1px solid var(--border-color); padding: 12px;
+    font-family: 'Montserrat', sans-serif; font-size: 13px;
+    background-color: #0b0f1a; color: white;
 }
 
-/* PUNTOS DE CONEXIÓN CON PULSO */
+/* PUNTOS DE CONEXIÓN CON PULSO (ORIGINAL) */
 .drawflow-node .input, .drawflow-node .output {
-    width: 18px !important; 
-    height: 18px !important;
+    width: 18px !important; height: 18px !important;
     border: 4px solid var(--bg-secondary) !important;
-    position: relative;
-    transition: all 0.3s;
-    cursor: crosshair;
-    z-index: 5;
+    position: relative; transition: all 0.3s; cursor: crosshair; z-index: 5;
 }
 
 .drawflow-node .output {
-    background: var(--indigo) !important;
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
-    animation: pulse-indigo 2s infinite;
-    right: -10px !important;
+    background: var(--indigo) !important; animation: pulse-indigo 2s infinite; right: -10px !important;
 }
 
 .drawflow-node .input {
-    background: #94a3b8 !important;
-    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.7);
-    animation: pulse-gray 2s infinite;
-    left: -10px !important;
+    background: #94a3b8 !important; animation: pulse-gray 2s infinite; left: -10px !important;
 }
 
 @keyframes pulse-indigo {
@@ -212,127 +265,68 @@ body {
     100% { box-shadow: 0 0 0 0 rgba(148, 163, 184, 0); }
 }
 
-.drawflow-node .input:hover, .drawflow-node .output:hover {
-    transform: scale(1.4);
-}
-
-/* CANVAS Y GRILLA */
+/* CANVAS Y GRILLA (ORIGINAL) */
 #drawflow {
-    position: absolute; 
-    top: 0; 
-    width: 100%; 
-    height: 100vh;
+    position: absolute; top: 0; width: 100%; height: 100vh;
     background-color: var(--bg-main);
     background-image: radial-gradient(rgba(255,255,255,0.05) 1.5px, transparent 1.5px);
     background-size: 35px 35px;
+    cursor: grab;
 }
+
+#drawflow:active { cursor: grabbing; }
 
 .node-close-btn {
-    position: absolute; 
-    top: -12px; 
-    right: -12px; 
-    background: var(--danger);
-    color: white; 
-    width: 28px; 
-    height: 28px; 
-    border-radius: 50%;
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    cursor: pointer;
-    font-weight: bold;
-    z-index: 10;
+    position: absolute; top: -12px; right: -12px; background: var(--danger);
+    color: white; width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; 
+    cursor: pointer; font-weight: bold; z-index: 10;
 }
 
-/* ================= ALINEACIÓN DE SALIDAS PARA LISTAS (LOGICA DE FLUJO) ================= */
+/* ALINEACIÓN LISTAS (ORIGINAL) */
 .drawflow-node.whatsapp_list .outputs {
-    display: flex;
-    flex-direction: column;
-    gap: 24px !important; /* Espacio calibrado con los inputs de fila */
-    padding-top: 146px !important; /* Salto exacto sobre el título y botón de agregar */
+    display: flex; flex-direction: column; gap: 24px !important; padding-top: 146px !important;
 }
 
-.drawflow-node.whatsapp_list .output {
-    margin-top: 6px; /* Centrado vertical con el input */
-}
-/* Asegura que el texto sea legible y editable */
-.drawflow .drawflow-node .parent-drawflow {
-    display: flex;
-    flex-direction: column;
-}
+.drawflow-node.whatsapp_list .output { margin-top: 6px; }
 
-.drawflow .drawflow-node input, 
-.drawflow .drawflow-node textarea {
-    width: 90%; /* Evita que el input se salga del borde */
-    margin: 5px auto;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-    padding: 8px;
-    font-family: 'Montserrat', sans-serif; /* Tu fuente preferida */
-    font-size: 14px;
-    background-color: #1a1b26; /* Color oscuro para que combine con tu UI */
-    color: white;
-}
+/* MODAL Y LISTAS (ORIGINAL) */
+#flowsList { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 15px; }
+.flow-card { transition: all 0.3s ease; border: 1px solid #333; }
+.flow-card:hover { border-color: #007bff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
-/* Evita que los nodos se vean cortados */
-.drawflow-node {
-    height: auto !important;
-    min-height: 150px;
-    padding-bottom: 20px;
-}
-.btn-import {
-    font-family: 'Montserrat', sans-serif;
-    background-color: #494949;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
+/* ================= SMARTPHONE RESPONSIVE (NUEVO) ================= */
+@media (max-width: 768px) {
+    .chat-sidebar {
+        width: 80px; /* Colapsado para mostrar solo avatares en móvil */
+    }
+    
+    .chat-info, .chat-actions-top {
+        display: none; /* Ocultar textos para ganar espacio */
+    }
 
-.btn-import:hover {
-    background-color: #666;
-}
-/* Cursor de manito abierta por defecto en el canvas */
-#drawflow {
-    cursor: grab;
-    background-image: radial-gradient(#222 1px, transparent 1px); /* Opcional: puntitos de guía */
-    background-size: 25px 25px;
-}
+    .editor-header {
+        padding: 0 15px;
+        height: 70px;
+    }
 
-/* Cursor de manito cerrada mientras arrastras */
-#drawflow:active {
-    cursor: grabbing;
-}
+    .logo-container { padding: 5px 10px; }
+    .logo { height: 30px; }
 
-/* Importante: Que los nodos mantengan el cursor de flecha para no confundir */
-.drawflow-node {
-    cursor: default;
-}
-#flowsList {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-top: 15px;
-}
+    .header-buttons {
+        gap: 5px;
+        overflow-x: auto; /* Scroll horizontal para botones en móvil */
+        padding-bottom: 5px;
+    }
 
-.flow-card {
-    transition: all 0.3s ease;
-    border: 1px solid #333;
-}
-.flow-card:hover {
-    border-color: #007bff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-/* Estilo para los botones dentro del modal */
-.flow-card button {
-    font-family: 'Montserrat', sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition: opacity 0.2s;
-}
-.flow-card button:hover {
-    opacity: 0.8;
+    .header-buttons button {
+        padding: 8px 12px;
+        font-size: 10px;
+    }
+
+    .drawflow-node {
+        width: 260px !important; /* Nodos más delgados */
+    }
+
+    .header-phone { font-size: 10px; }
 }
