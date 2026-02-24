@@ -4,6 +4,7 @@ const editor = new Drawflow(container);
 editor.reroute = true;
 editor.zoom_max = 1.6;
 editor.zoom_min = 0.5;
+
 editor.start();
 
 /* === ZOOM TOTAL AL PUNTERO (SIN CTRL) === */
@@ -86,8 +87,6 @@ window.addRowDynamic = function(button) {
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
     const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
-    
-    // Contamos las filas actuales para asignar el índice correcto
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
@@ -98,16 +97,12 @@ window.addRowDynamic = function(button) {
     group.style.paddingBottom = "8px";
     group.style.marginTop = "10px";
 
-    // Input del Título (Fila)
     const inputRow = document.createElement("input");
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
-    // CORRECCIÓN CLAVE: Asignar el atributo df- para que Drawflow lo reconozca
-    inputRow.setAttribute(`df-${keyRow}`, ""); 
-    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
+    inputRow.setAttribute(`df-${keyRow}`, "");
     
-    // Input del Comentario (Descripción)
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
     inputDesc.style.fontFamily = "Montserrat, sans-serif";
@@ -116,130 +111,65 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
-    // CORRECCIÓN CLAVE: Asignar el atributo df-
     inputDesc.setAttribute(`df-${keyDesc}`, "");
+
+    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    // Inicializamos los datos en el objeto del nodo
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
-    
-    // Añadimos la salida física al nodo en Drawflow
     editor.addNodeOutput(nodeId);
-    
-    // Forzamos la actualización visual del nodo y sus conexiones
-    editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
-/* === FUNCIÓN PARA RECONSTRUIR FILAS AL IMPORTAR/CARGAR (CORREGIDA) === */
-function rebuildFlowData(flowData) {
-    editor.clear();
-    // 1. Importamos el flujo (esto crea los nodos pero solo con la Fila 1 básica)
-    editor.import(flowData);
-
-    setTimeout(() => {
-        const nodes = flowData.drawflow.Home.data;
-        
-        Object.keys(nodes).forEach(nodeId => {
-            const node = nodes[nodeId];
-            
-            if (node.name === "whatsapp_list") {
-                const nodeElement = document.getElementById(`node-${nodeId}`);
-                if (!nodeElement) return;
-
-                const btnAdd = nodeElement.querySelector('.btn-success');
-                
-                // IMPORTANTE: No manipulamos .value directamente aquí.
-                // Drawflow ya llenó row1 y desc1 gracias a los atributos df-row1 y df-desc1
-                // que están en el HTML base del nodo.
-
-                // 2. Reconstruir Filas extras (2, 3, 4...)
-                let i = 2;
-                while (node.data[`row${i}`] !== undefined) {
-                    // Llamamos a addRowDynamic para crear visualmente la fila y el output
-                    window.addRowDynamic(btnAdd);
-                    
-                    // Buscamos los inputs recién creados para asegurar que tengan el valor
-                    const inputRow = nodeElement.querySelector(`[df-row${i}]`);
-                    const inputDesc = nodeElement.querySelector(`[df-desc${i}]`);
-                    
-                    if (inputRow) inputRow.value = node.data[`row${i}`];
-                    if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
-                    
-                    i++;
-                }
-            }
-        });
-        
-        // 3. Forzamos la actualización de todas las conexiones
-        editor.updateConnectionNodes('node-list'); 
-    }, 500); // Un pelín más de tiempo para seguridad
-}
-
-/* === LÓGICA DE FILAS DINÁMICAS (ASEGURADA) === */
-window.addRowDynamic = function(button) {
-    const nodeElement = button.closest('.drawflow-node');
-    const nodeId = nodeElement.id.replace('node-', '');
-    const containerRows = nodeElement.querySelector('.items-container');
-    const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
-    
-    const count = containerRows.querySelectorAll(".row-group").length + 1;
-    const keyRow = `row${count}`;
-    const keyDesc = `desc${count}`;
-
-    const group = document.createElement("div");
-    group.className = "row-group mb-2";
-    group.style = "border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;";
-
-    const inputRow = document.createElement("input");
-    inputRow.className = "form-control mb-1";
-    inputRow.style.fontFamily = "Montserrat, sans-serif";
-    inputRow.placeholder = `Fila ${count} (Título)`;
-    inputRow.setAttribute(`df-${keyRow}`, ""); // CRUCIAL
-    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
-    
-    const inputDesc = document.createElement("input");
-    inputDesc.className = "form-control";
-    inputDesc.style = "font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;";
-    inputDesc.placeholder = "Comentario opcional";
-    inputDesc.setAttribute(`df-${keyDesc}`, ""); // CRUCIAL
-    inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
-
-    group.appendChild(inputRow);
-    group.appendChild(inputDesc);
-    containerRows.appendChild(group);
-
-    // Solo inicializamos si el dato no existe (para no borrar datos al importar)
-    if (nodeData[keyRow] === undefined) nodeData[keyRow] = "";
-    if (nodeData[keyDesc] === undefined) nodeData[keyDesc] = "";
-    
-    editor.addNodeOutput(nodeId);
-    editor.updateConnectionNodes(`node-${nodeId}`);
-};
-
-/* === GUARDAR Y CARGAR === */
+/* === GUARDAR Y CARGAR (CORREGIDO) === */
 window.saveFlow = async function() {
+    // 1. Obtener los datos actuales del editor
     const exportData = editor.export();
-    const flowName = document.getElementById('flow_name')?.value || "Main Flow";
-    const payload = { id: window.currentEditingFlowId || null, name: flowName, data: exportData };
+    
+    // 2. Obtener el nombre del flujo
+    const flowNameInput = document.getElementById('flow_name');
+    const flowName = flowNameInput ? flowNameInput.value : "Flujo sin nombre";
+
+    // 3. Obtener el ID del flujo actual (si existe)
+    // Nota: Asegúrate de tener esta variable definida globalmente
+    const payload = {
+        id: typeof currentEditingFlowId !== 'undefined' ? currentEditingFlowId : null,
+        name: flowName,
+        data: exportData // Esto ya lleva la estructura drawflow.Home.data
+    };
+
+    console.log("Enviando flujo al servidor...", payload);
 
     try {
         const response = await fetch('/api/save-flow', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(payload)
         });
-        const result = await response.json();
-        if (result.success) {
-            window.currentEditingFlowId = result.id;
-            alert("✅ Guardado en base de datos.");
+
+        if (response.ok) {
+            const result = await response.json();
+            alert("✅ ¡Guardado con éxito! El bot ya tiene las rutas actualizadas.");
+        } else {
+            const errorText = await response.text();
+            console.error("Error del servidor:", errorText);
+            alert("❌ Error 500: El servidor rechazó el flujo. Revisa que el nombre no tenga caracteres raros.");
         }
-    } catch (error) { alert("❌ Error de conexión."); }
+    } catch (error) {
+        console.error("Error en la petición:", error);
+        alert("❌ Error de conexión al guardar.");
+    }
 };
+
+window.addEventListener('message', e => { 
+    if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
+});
 
 /* === MEDIA NODE === */
 window.addMediaNode = () => {
@@ -279,66 +209,52 @@ window.uploadNodeFile = async (event, nodeId) => {
 
 /* === NOTIFY NODE === */
 window.addNotifyNode = function() {
-    const html = `<div class="node-wrapper"><div class="node-header" style="background: #ff9800; color: white; padding: 8px; font-size: 12px; font-weight: bold;">🔔 Alerta Admin</div><div class="node-body"><p style="font-family: 'Montserrat'; font-size: 10px; color: #666;">Aviso:</p><input type="text" df-info placeholder="Ej: Cliente quiere hablar" class="form-control"></div></div>`;
+    const html = `<div class="node-wrapper"><div class="node-header" style="background: #ff9800; color: white; padding: 8px; border-radius: 5px 5px 0 0; font-size: 12px; font-weight: bold;">🔔 Alerta Admin</div><div class="node-body" style="padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 0 0 5px 5px;"><p style="font-family: 'Montserrat', sans-serif; font-size: 10px; margin-bottom: 5px; color: #666;">Aviso que recibirás:</p><input type="text" df-info placeholder="Ej: Cliente quiere hablar" style="width: 100%; font-family: 'Montserrat'; border: 1px solid #ccc; padding: 5px; border-radius: 3px; font-size: 12px;"></div></div>`;
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTACIÓN TOTAL DE NEMO (CÓDIGO CORREGIDO) === */
+/* === IMPORTAR ARCHIVO LOCAL === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = function(event) {
+    reader.onload = function(e) {
         try {
-            const flowData = JSON.parse(event.target.result);
-            
-            // 1. Limpiamos el lienzo
-            editor.clear();
-            
-            // 2. Cargamos el esqueleto (aquí es donde se veían vacíos antes)
+            const flowData = JSON.parse(e.target.result);
             editor.import(flowData);
-
-            // 3. RECONSTRUCCIÓN: Forzamos a que aparezcan las filas de Nemo
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
                     if (node.name === "whatsapp_list") {
-                        const nodeElem = document.getElementById(`node-${nodeId}`);
-                        const btnAdd = nodeElem.querySelector('.btn-success');
-                        
-                        // Buscamos si hay fila 2, 3, 4... en tu archivo
-                        let i = 2;
-                        while (node.data[`row${i}`] !== undefined) {
-                            window.addRowDynamic(btnAdd); // Creamos la fila físicamente
-                            
-                            // Le ponemos el texto que viene en el JSON
-                            nodeElem.querySelector(`[df-row${i}]`).value = node.data[`row${i}`];
-                            nodeElem.querySelector(`[df-desc${i}]`).value = node.data[`desc${i}`] || "";
-                            i++;
+                        const btn = document.querySelector(`#node-${nodeId} .btn-success`);
+                        if (btn) {
+                            let i = 2;
+                            while (node.data[`row${i}`] !== undefined) {
+                                window.addRowDynamic(btn);
+                                const rowInp = document.querySelector(`#node-${nodeId} [df-row${i}]`);
+                                if (rowInp) rowInp.value = node.data[`row${i}`];
+                                const descInp = document.querySelector(`#node-${nodeId} [df-desc${i}]`);
+                                if (descInp) descInp.value = node.data[`desc${i}`] || "";
+                                i++;
+                            }
                         }
                     }
                 });
-                editor.updateConnectionNodes('node-list');
-                alert("✅ ¡Flujo de Nemo cargado con todas sus filas!");
-            }, 500);
-
-        } catch (err) {
-            alert("❌ El archivo JSON no es válido");
-        }
+            }, 200);
+        } catch (err) { console.error("Error al importar:", err); }
     };
     reader.readAsText(file);
 });
 
 /* === BOTÓN TRIGGER Y PAGO === */
 window.addButtonTriggerNode = () => {
-    const html = `<div class="node-wrapper"><div class="node-header" style="background: #9b59b6; color: white; font-family: 'Montserrat';">🔘 Botón en Chat</div><div class="node-body"><p style="font-size: 10px; color: #666;">Texto:</p><input type="text" class="form-control mb-2" df-button_text><p style="font-size: 10px; color: #666;">Trigger:</p><input type="text" class="form-control" df-trigger_val></div></div>`;
+    const html = `<div class="node-wrapper"><div class="node-header" style="background: #9b59b6; color: white; font-family: 'Montserrat';">🔘 Botón en Chat</div><div class="node-body"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Texto que verá el usuario:</p><input type="text" class="form-control mb-2" df-button_text placeholder="Ej: Ver Catálogo" style="font-family: 'Montserrat';"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Palabra que activa (Trigger):</p><input type="text" class="form-control" df-trigger_val placeholder="Ej: catalogo" style="font-family: 'Montserrat';"></div></div>`;
     createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
 };
 
 window.addPaymentValidationNode = () => {
-    const html = `<div class="node-wrapper"><div class="node-header" style="background: #2ecc71; color: white; font-family: 'Montserrat'; padding: 10px; border-radius: 8px 8px 0 0;"><i class="fa-solid fa-cash-register"></i> Validar Pago SMM</div><div class="node-body" style="padding: 12px;"><label style="font-size: 10px; font-weight: bold;">ID PRODUCTO:</label><input type="text" class="form-control mb-2" df-product_id><label style="font-size: 10px; font-weight: bold;">MONTO (S/):</label><input type="text" class="form-control" df-amount></div></div>`;
+    const html = `<div class="node-wrapper"><div class="node-header" style="background: #2ecc71; color: white; font-family: 'Montserrat'; padding: 10px; border-radius: 8px 8px 0 0;"><i class="fa-solid fa-cash-register"></i> Validar Pago SMM</div><div class="node-body" style="padding: 12px; background: #fff; font-family: 'Montserrat';"><label style="font-size: 10px; font-weight: bold; color: #555;">ID PRODUCTO WOO:</label><input type="text" class="form-control mb-2" df-product_id placeholder="Ej: 125" style="font-size: 12px;"><label style="font-size: 10px; font-weight: bold; color: #555;">MONTO EXACTO (S/):</label><input type="text" class="form-control" df-amount placeholder="Ej: 20.00" style="font-size: 12px;"><p style="font-size: 9px; color: #888; margin-top: 8px;">* El bot esperará el comprobante tras este nodo.</p></div></div>`;
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
 
@@ -347,146 +263,133 @@ window.openFlowsModal = async function() {
     const modal = document.getElementById('flowsModal');
     const list = document.getElementById('flowsList');
     if(modal) modal.style.display = 'flex';
-    list.innerHTML = "Cargando...";
+    if(list) list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
+    
     try {
         const res = await fetch('/api/get-flows');
         const flows = await res.json();
-        list.innerHTML = ""; 
+        if(list) {
+            list.innerHTML = ""; 
+            flows.forEach(flow => {
+                const card = document.createElement('div');
+                card.className = "flow-card"; // Asegúrate de tener este CSS
+                card.style = "background:#1a1b26; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;";
+                
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:11px; cursor:pointer;">EDITAR ✏️</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="activateFlow('${flow.id}')" style="flex:1; background:#10b981; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ACTIVAR ✅</button>
+                        <button onclick="deleteFlow('${flow.id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ELIMINAR 🗑️</button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+    } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
+};
+
+/* --- FUNCIONES DE GESTIÓN DE FLUJOS --- */
+
+// 1. Abrir el modal y cargar la lista
+window.openFlowsModal = async function() {
+    document.getElementById('flowsModal').style.display = 'flex';
+    const list = document.getElementById('flowsList');
+    list.innerHTML = '<p style="color:white;">Cargando...</p>';
+    
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        list.innerHTML = "";
         flows.forEach(f => {
             const div = document.createElement('div');
+            div.className = "flow-card";
             div.style = "background:#1a1b26; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333;";
-            div.innerHTML = `<span style="color:white; font-family:'Montserrat';">${f.name}</span>
+            div.innerHTML = `
+                <span style="color:white; font-weight:500;">${f.name}</span>
                 <div style="display:flex; gap:5px;">
                     <button onclick="loadSpecificFlow('${f.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Cargar</button>
                     <button onclick="deleteFlow('${f.id}')" style="background:#ff4b2b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🗑️</button>
-                </div>`;
+                </div>
+            `;
             list.appendChild(div);
         });
-    } catch (e) { list.innerHTML = "Error al conectar"; }
-};
+    } catch (e) { list.innerHTML = '<p style="color:red;">Error al cargar flujos</p>'; }
+}
 
-window.closeFlowsModal = () => { document.getElementById('flowsModal').style.display = 'none'; };
-
+// 2. Cargar un flujo específico (Arregla el ReferenceError)
 window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        // Esto asegura que cargue aunque la estructura de Mongo varíe
-        const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
-        
-        editor.import(flowToLoad);
+        if (typeof editor !== 'undefined') {
+            editor.clear();
 
-        // 2. Ejecutamos la reconstrucción de filas dinámicas
-        // Usamos un tiempo de espera para que Drawflow termine de renderizar el HTML
-        setTimeout(() => {
-            const nodes = flowToLoad.drawflow.Home.data;
-            Object.keys(nodes).forEach(nodeId => {
-                const node = nodes[nodeId];
-                
-                // Si el nodo es una lista de WhatsApp
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${nodeId}`);
-                    if (!nodeElement) return;
+            // --- LÓGICA DE EXTRACCIÓN SEGURA ---
+            let finalData;
 
-                    const btnAdd = nodeElement.querySelector('.btn-success');
-                    
-                    // Buscamos si hay filas adicionales guardadas (row2, row3...)
-                    let i = 2;
-                    while (node.data[`row${i}`] !== undefined) {
-                        // Creamos la fila físicamente en el editor
-                        window.addRowDynamic(btnAdd); 
-                        
-                        // Buscamos los inputs recién creados para ponerles el texto de la DB
-                        const inputRow = nodeElement.querySelector(`[df-row${i}]`);
-                        const inputDesc = nodeElement.querySelector(`[df-desc${i}]`);
-                        
-                        if (inputRow) inputRow.value = node.data[`row${i}`];
-                        if (inputDesc) inputDesc.value = node.data[`desc${i}`] || "";
-                        
-                        i++;
+            // Caso 1: Los datos están dentro de una propiedad 'data' (común en respuestas de API)
+            if (responseData.data && responseData.data.drawflow) {
+                finalData = responseData.data;
+            } 
+            // Caso 2: El objeto ya es el JSON de Drawflow directamente
+            else if (responseData.drawflow) {
+                finalData = responseData;
+            }
+            // Caso 3: Es un JSON plano (posiblemente subido por error o estructura vieja)
+            else {
+                // Si llegamos aquí, intentamos reconstruir la estructura mínima de Drawflow
+                finalData = {
+                    "drawflow": {
+                        "Home": {
+                            "data": responseData.data || responseData
+                        }
                     }
-                }
-            });
-            // Refrescamos las flechas de conexión
-            editor.updateConnectionNodes('node-list');
-        }, 600); 
+                };
+            }
 
-        closeFlowsModal();
-        alert("✅ Flujo de Nemo cargado correctamente desde MongoDB.");
+            // Verificación final antes de importar
+            if (finalData && finalData.drawflow) {
+                editor.import(finalData);
+                editor.zoom_reset();
+                closeFlowsModal();
+                alert("✅ Flujo cargado correctamente");
+            } else {
+                throw new Error("Estructura de datos inválida");
+            }
+        }
     } catch (e) {
-        console.error("Error al cargar desde DB:", e);
-        alert("❌ Error al conectar con la base de datos.");
+        console.error("Error al cargar:", e);
+        alert("❌ Error: Los datos del flujo están corruptos o incompletos.");
     }
 };
 
+// 3. Borrar flujo (Arregla el error 404 de la ruta)
 window.deleteFlow = async function(id) {
-    if(!confirm("¿Eliminar?")) return;
+    if(!confirm("¿Eliminar este flujo permanentemente?")) return;
     try {
+        // CORRECCIÓN: La ruta debe ser /api/delete-flow/id
         const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
-        if(res.ok) openFlowsModal();
-    } catch (e) { alert("❌ Error"); }
-};
+        if(res.ok) {
+            alert("🗑️ Eliminado");
+            openFlowsModal(); // Recarga la lista
+        }
+    } catch (e) { alert("❌ Error al eliminar"); }
+}
 
-window.addEventListener('message', e => { 
-    if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') rebuildFlowData(e.data.data);
+/* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
+window.addEventListener('message', function(e) {
+    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        if (typeof editor !== 'undefined') {
+            editor.clear();
+            const flowData = e.data.data.drawflow ? e.data.data : (e.data.data.data || e.data.data);
+            editor.import(flowData);
+            editor.zoom_reset();
+        }
+    }
 });
-/* === CARGA FORZADA DE NEMO (INCRUSTADO) === */
-/* === CARGA MAESTRA INTEGRAL: NEMO (SMM) SIN OMISIONES === */
-window.forceLoadNemo = function() {
-    const nemoFullData = {
-        "drawflow": {
-            "Home": {
-                "data": {
-                    "1": { "id": 1, "name": "trigger", "data": { "val": "¡Hola! 🔝 Quiero aumentar mis redes sociales 😊" }, "class": "trigger", "html": "<div class=\"node-wrapper\"><div class=\"node-header header-trigger\">⚡ Trigger</div><div class=\"node-body\"><input type=\"text\" class=\"form-control\" df-val></div></div>", "typenode": false, "inputs": {}, "outputs": { "output_1": { "connections": [{ "node": "23", "output": "input_1" }] } }, "pos_x": -3298, "pos_y": 734 },
-                    "12": { "id": 12, "name": "message", "data": { "info": "🔥 ¡Excelente! TikTok es ideal para crecer rápido y volverte viral 🚀\n\nPara continuar elija el servicio que desea para su cuenta , una vez seleccione su plan le pediremos el link o usuario de su perfil" }, "class": "message", "html": "<div class=\"node-wrapper\"><div class=\"node-header header-message\">💬 Mensaje</div><div class=\"node-body\"><textarea class=\"form-control\" df-info></textarea></div></div>", "typenode": false, "inputs": { "input_1": { "connections": [{ "node": "23", "output": "output_1" }] } }, "outputs": { "output_1": { "connections": [{ "node": "46", "output": "input_1" }] } }, "pos_x": -2534, "pos_y": 728 },
-                    "23": { "id": 23, "name": "message", "data": { "info": "¡Hola! Bienvenido a Ventas Pro SMM. 🚀" }, "class": "message", "html": "<div class=\"node-wrapper\"><div class=\"node-header header-message\">💬 Mensaje</div><div class=\"node-body\"><textarea class=\"form-control\" df-info></textarea></div></div>", "typenode": false, "inputs": { "input_1": { "connections": [{ "node": "1", "output": "output_1" }] } }, "outputs": { "output_1": { "connections": [{ "node": "12", "output": "input_1" }] } }, "pos_x": -2920, "pos_y": 724 },
-                    "46": { "id": 46, "name": "whatsapp_list", "data": { 
-                        "list_title": "Planes TikTok", 
-                        "button_text": "Ver Servicios", 
-                        "row1": "Seguidores Reales", "desc1": "S/ 10.00 por 1k",
-                        "row2": "Likes Virales", "desc2": "S/ 5.00 por 1k",
-                        "row3": "Vistas Automáticas", "desc3": "S/ 2.00 por 1k" 
-                    }, "class": "whatsapp_list", "html": `<div class="node-wrapper"><div class="node-header header-list">📝 Lista</div><div class="node-body"><input type="text" class="form-control mb-1" df-list_title><input type="text" class="form-control mb-1" df-button_text><div class="items-container"><div class="row-group mb-2"><input type="text" class="form-control mb-1" df-row1><input type="text" class="form-control" df-desc1></div></div><button class="btn btn-sm btn-success w-100 mt-2" onclick="addRowDynamic(this)">+ Añadir Fila</button></div></div>`, "typenode": false, "inputs": { "input_1": { "connections": [{ "node": "12", "output": "output_1" }] } }, "outputs": { "output_1": { "connections": [{ "node": "50", "output": "input_1" }] }, "output_2": { "connections": [] }, "output_3": { "connections": [] } }, "pos_x": -2110, "pos_y": 714 },
-                    "50": { "id": 50, "name": "payment_validation", "data": { "product_id": "125", "amount": "20.00" }, "class": "payment_validation", "html": "<div class=\"node-wrapper\"><div class=\"node-header\" style=\"background: #2ecc71; color: white;\">💰 Validar Pago SMM</div><div class=\"node-body\"><input type=\"text\" class=\"form-control mb-2\" df-product_id><input type=\"text\" class=\"form-control\" df-amount></div></div>", "typenode": false, "inputs": { "input_1": { "connections": [{ "node": "46", "output": "output_1" }] } }, "outputs": { "output_1": { "connections": [] } }, "pos_x": -1650, "pos_y": 710 }
-                }
-            }
-        }
-    };
-
-    // 1. Limpieza absoluta
-    editor.clear();
-    
-    // 2. Importación de la estructura fiel al JSON (27)
-    editor.import(nemoFullData);
-
-    // 3. RECONSTRUCCIÓN AUTOMÁTICA DE FILAS DINÁMICAS
-    setTimeout(() => {
-        const node46 = document.getElementById('node-46');
-        if (node46) {
-            const btnAdd = node46.querySelector('.btn-success');
-            
-            // Creamos físicamente las filas 2 y 3 que el import no crea solo
-            window.addRowDynamic(btnAdd); 
-            window.addRowDynamic(btnAdd);
-
-            // Inyectamos los textos exactos del archivo (descripciones y títulos)
-            const data46 = nemoFullData.drawflow.Home.data["46"].data;
-            node46.querySelector('[df-row1]').value = data46.row1;
-            node46.querySelector('[df-desc1]').value = data46.desc1;
-            node46.querySelector('[df-row2]').value = data46.row2;
-            node46.querySelector('[df-desc2]').value = data46.desc2;
-            node46.querySelector('[df-row3]').value = data46.row3;
-            node46.querySelector('[df-desc3]').value = data46.desc3;
-        }
-        
-        // Refrescar flechas y centrar cámara
-        editor.updateConnectionNodes('node-list');
-        // Usamos las coordenadas para centrar la vista donde está el flujo
-        editor.canvas_x = 3500; 
-        editor.canvas_y = -500;
-        editor.zoom_reset();
-        
-        alert("✅ Flujo Nemo (27) restaurado íntegramente: Sin archivos y sin errores.");
-    }, 800);
-};
