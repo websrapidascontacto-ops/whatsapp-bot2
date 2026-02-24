@@ -325,19 +325,33 @@ window.addEventListener('message', function(event) {
 
 async function loadFlowsList() {
     try {
-        const response = await fetch('/api/get-flow');
-        const data = await response.json();
-        if (data) {
+        console.log("Cargando flujos desde Railway...");
+        const response = await fetch('/api/get-flows'); // Cambiado a plural para coincidir con el servidor
+        const flows = await response.json();
+        
+        if (flows && flows.length > 0) {
+            // Tomamos el último flujo guardado
+            const lastFlow = flows[flows.length - 1];
+            const flowData = lastFlow.data || lastFlow;
+
             const iframe = document.getElementById('flow-iframe');
-            if(iframe) {
-                iframe.contentWindow.postMessage({ type: 'LOAD_FLOW', data: data }, '*');
-                alert("📂 Flujo cargado. Webs Rápidas.");
+            if(iframe && iframe.contentWindow) {
+                // Enviamos el mensaje al Editor
+                iframe.contentWindow.postMessage({ 
+                    type: 'IMPORT_CLEAN', 
+                    data: flowData 
+                }, '*');
+                
+                alert("📂 Flujo cargado con éxito. Precio: S/380");
+            } else {
+                alert("❌ Error: No se encontró el lienzo del editor.");
             }
         } else {
-            alert("No hay flujos guardados aún.");
+            alert("⚠️ No tienes flujos guardados en la base de datos.");
         }
     } catch (error) {
-        console.error(error);
+        console.error("Error al cargar flujos:", error);
+        alert("❌ Error de conexión con el servidor.");
     }
 }
 
