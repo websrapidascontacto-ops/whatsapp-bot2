@@ -170,16 +170,34 @@ app.post("/webhook", async (req, res) => {
                 if (!targetNode) {
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name === "whatsapp_list") {
-                            return Object.values(n.data).some(val => val?.toString().trim().toLowerCase() === incomingText.toLowerCase());
+                            // Buscamos en row1, row2, etc., ignorando mayúsculas y espacios
+                            return Object.keys(n.data).some(key => 
+                                key.startsWith('row') && 
+                                n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
+                            );
                         }
                         return false;
                     });
 
                     if (listNode) {
-                        const rowKey = Object.keys(listNode.data).find(k => listNode.data[k]?.toString().toLowerCase() === incomingText.toLowerCase());
-                        const rowNum = rowKey.replace("row", "");
-                        const nextId = listNode.outputs[`output_${rowNum}`]?.connections?.[0]?.node;
-                        if (nextId) targetNode = nodes[nextId];
+                        // Encontramos la fila exacta (ej: "row2")
+                        const rowKey = Object.keys(listNode.data).find(k => 
+                            k.startsWith('row') && 
+                            listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
+                        );
+                        
+                        if (rowKey) {
+                            const rowNum = rowKey.replace("row", "");
+                            // IMPORTANTE: Buscamos la conexión en el output correspondiente
+                            const connection = listNode.outputs[`output_${rowNum}`]?.connections?.[0];
+                            
+                            if (connection) {
+                                targetNode = nodes[connection.node];
+                                console.log(`✅ Avance de lista: Fila ${rowNum} detectada, moviendo a nodo ${connection.node}`);
+                            } else {
+                                console.log(`⚠️ La fila "${incomingText}" no tiene una flecha conectada en el editor.`);
+                            }
+                        }
                     }
                 }
 
