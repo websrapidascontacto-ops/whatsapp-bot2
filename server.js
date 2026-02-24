@@ -407,70 +407,72 @@ app.post("/webhook-yape", async (req, res) => {
         const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
         const codigoNotificacion = matchCod ? matchCod[1] || matchCod[0] : null;
 
+        // Buscamos el monto (S/ 5, S/ 10.00, etc)
         const matchMonto = texto.match(/S\/\s?(\d+(\.\d{1,2})?)/i);
         const montoNotificacion = matchMonto ? matchMonto[1] : null;
 
         if (codigoNotificacion) {
-            // Buscamos al cliente
-            const waiting = await PaymentWaiting.findOne({ yapeCode: codigoNotificacion, active: true });
+            // Buscamos al cliente que coincida con el código
+            const waiting = await PaymentWaiting.findOne({ 
+                yapeCode: codigoNotificacion, 
+                active: true 
+            });
 
             if (waiting) {
-                if (montoNotificacion && parseFloat(montoNotificacion) >= parseFloat(waiting.amount)) {
-                    
-                    // 🔥 PASO CRUCIAL: Desactivar ANTES de enviar los mensajes para evitar bucles
-                    await PaymentWaiting.updateOne({ _id: waiting._id }, { 
-                        active: false, 
-                        waitingForCode: false, 
-                        waitingForLink: false 
-                    });
+                // 1. Desactivamos inmediatamente para evitar que el bot repita mensajes
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { 
+                    active: false,
+                    waitingForCode: false 
+                });
 
-                    console.log("✅ ¡MATCH TOTAL! Enviando pedido a WooCommerce/SMM...");
+                console.log("✅ Match encontrado. Procesando Pedido SMM...");
 
-                    // Obtener data del producto para el SMM
-                    const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                    const product = productRes.data;
-                    const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                    const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+                // 2. Obtener data del producto para sacar los IDs del SMM
+                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                const product = productRes.data;
+                
+                // Buscamos los metadatos que el plugin LTB (SMM) necesita
+                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
 
-                    // Crear el pedido (Esto dispara el SMM si tu WC está configurado así)
-                    await WooCommerce.post("orders", {
-                        payment_method: "bacs",
-                        payment_method_title: "Yape Automático ✅",
-                        status: "processing", // Al ponerlo en processing, WC dispara la acción
-                        billing: { phone: waiting.chatId },
-                        line_items: [{
-                            product_id: waiting.productId,
-                            quantity: 1,
-                            meta_data: [
-                                { key: "_ltb_id", value: serviceId },
-                                { key: "_ltb_qty", value: bulkQty },
-                                { key: "Link del perfil", value: waiting.profileLink },
-                                { key: "Código Yape", value: codigoNotificacion }
-                            ]
-                        }]
-                    });
+                // 3. Crear pedido en WooCommerce (Estado: processing dispara el SMM)
+                await WooCommerce.post("orders", {
+                    payment_method: "bacs",
+                    payment_method_title: "Yape Automático ✅",
+                    status: "processing", 
+                    billing: { phone: waiting.chatId },
+                    line_items: [{
+                        product_id: waiting.productId,
+                        quantity: 1,
+                        meta_data: [
+                            { key: "_ltb_id", value: serviceId },
+                            { key: "_ltb_qty", value: bulkQty },
+                            { key: "Link del perfil", value: waiting.profileLink },
+                            { key: "Código Yape", value: codigoNotificacion }
+                        ]
+                    }]
+                });
 
-                    // Notificación para el panel Rila
-                    const msgBot = await Message.create({ 
-                        chatId: waiting.chatId, 
-                        from: "bot", 
-                        text: `✅ ¡Pago de S/${montoNotificacion} verificado! Pedido enviado al SMM. 🚀` 
-                    });
-                    broadcast({ type: "new_message", message: msgBot });
+                // 4. Notificar en Rila (Panel)
+                const msgBot = await Message.create({ 
+                    chatId: waiting.chatId, 
+                    from: "bot", 
+                    text: `✅ ¡Pago validado! S/${montoNotificacion || waiting.amount}. Pedido enviado al SMM.` 
+                });
+                broadcast({ type: "new_message", message: msgBot });
 
-                    // Mensaje final al cliente 
-                    await processSequence(waiting.chatId, { 
-                        name: "message", 
-                        data: { info: `✅ *¡Pago verificado!* ✨\n\nHemos recibido tu Yape por S/${montoNotificacion}. Tu pedido ya está en camino. Gracias por confiar en nosotros! 🚀` } 
-                    }, {});
+                // 5. Mensaje de éxito final al WhatsApp del cliente
+                await processSequence(waiting.chatId, { 
+                    name: "message", 
+                    data: { info: `✅ *¡Pago verificado con éxito!* ✨\n\nHemos recibido tu Yape. Tu pedido ya está siendo procesado por el sistema. ¡Gracias por tu compra! 🚀` } 
+                }, {});
 
-                } else {
-                    console.log("⚠️ Monto insuficiente.");
-                }
+            } else {
+                console.log("⚠️ Código recibido pero no hay cliente activo esperando este código.");
             }
         }
-    } catch (err) { 
-        console.error("❌ Error Webhook Yape:", err.message); 
+    } catch (err) {
+        console.error("❌ Error Webhook Yape:", err.message);
     }
     res.sendStatus(200);
 });
