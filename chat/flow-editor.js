@@ -101,8 +101,7 @@ window.addRowDynamic = function(button) {
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
-    // Asignar valor si ya existe (para carga)
-    if(nodeData[keyRow]) inputRow.value = nodeData[keyRow];
+    // Corrección: Sincronización manual con el objeto de datos
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     
     const inputDesc = document.createElement("input");
@@ -113,51 +112,18 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
-    // Asignar valor si ya existe (para carga)
-    if(nodeData[keyDesc]) inputDesc.value = nodeData[keyDesc];
+    // Corrección: Sincronización manual con el objeto de datos
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    if (nodeData[keyRow] === undefined) nodeData[keyRow] = "";
-    if (nodeData[keyDesc] === undefined) nodeData[keyDesc] = "";
-    
+    // Inicializamos las llaves para que existan al exportar
+    nodeData[keyRow] = "";
+    nodeData[keyDesc] = "";
     editor.addNodeOutput(nodeId);
 };
-
-/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (INYECTADA) === */
-function rebuildFlowData(flowData) {
-    editor.clear();
-    editor.import(flowData);
-
-    setTimeout(() => {
-        const nodes = flowData.drawflow.Home.data;
-        Object.keys(nodes).forEach(nodeId => {
-            const node = nodes[nodeId];
-            if (node.name === "whatsapp_list") {
-                const nodeElement = document.getElementById(`node-${nodeId}`);
-                if (!nodeElement) return;
-
-                const btnAdd = nodeElement.querySelector('.btn-success');
-                const containerRows = nodeElement.querySelector('.items-container');
-                
-                // Llenar Fila 1
-                const firstRowInputs = containerRows.querySelectorAll('.row-group:first-child input');
-                if (firstRowInputs[0]) firstRowInputs[0].value = node.data.row1 || "";
-                if (firstRowInputs[1]) firstRowInputs[1].value = node.data.desc1 || "";
-
-                // Dibujar el resto de filas
-                let i = 2;
-                while (node.data[`row${i}`] !== undefined) {
-                    window.addRowDynamic(btnAdd);
-                    i++;
-                }
-            }
-        });
-    }, 450);
-}
 
 /* === GUARDAR Y CARGAR === */
 window.saveFlow = async function() {
@@ -232,14 +198,37 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 };
 
-/* === IMPORTAR ARCHIVO LOCAL === */
+/* === IMPORTAR ARCHIVO LOCAL (ARREGLADO) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            rebuildFlowData(JSON.parse(e.target.result));
+            const flowData = JSON.parse(e.target.result);
+            editor.import(flowData);
+
+            setTimeout(() => {
+                const nodes = flowData.drawflow.Home.data;
+                Object.keys(nodes).forEach(nodeId => {
+                    const node = nodes[nodeId];
+                    if (node.name === "whatsapp_list") {
+                        const nodeElement = document.getElementById(`node-${nodeId}`);
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        const containerRows = nodeElement.querySelector('.items-container');
+                        
+                        let i = 2;
+                        while (node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd);
+                            const lastGroup = containerRows.lastElementChild;
+                            const inputs = lastGroup.querySelectorAll('input');
+                            if(inputs[0]) inputs[0].value = node.data[`row${i}`];
+                            if(inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
+                            i++;
+                        }
+                    }
+                });
+            }, 350); 
             alert("✅ Flujo importado con éxito.");
         } catch (err) { alert("❌ Error al importar JSON."); }
     };
@@ -288,7 +277,9 @@ window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-        rebuildFlowData(responseData.drawflow ? responseData : (responseData.data || responseData));
+        editor.clear();
+        let finalData = responseData.drawflow ? responseData : (responseData.data || responseData);
+        editor.import(finalData);
         closeFlowsModal();
         alert("✅ Cargado correctamente");
     } catch (e) { alert("❌ Error al cargar"); }
@@ -304,6 +295,7 @@ window.deleteFlow = async function(id) {
 
 window.addEventListener('message', e => { 
     if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
-        rebuildFlowData(e.data.data);
+        editor.clear();
+        editor.import(e.data.data); 
     }
 });
