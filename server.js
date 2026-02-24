@@ -76,6 +76,7 @@ app.post("/webhook", async (req, res) => {
                 incomingText = msg.image.caption || "📷 Imagen recibida";
             }
 
+<<<<<<< HEAD
             const saved = await Message.create({ chatId: sender, from: sender, text: incomingText, media: mediaUrl });
             broadcast({ type: "new_message", message: saved });
             
@@ -117,6 +118,36 @@ app.post("/webhook", async (req, res) => {
                             await processSequence(sender, nextNode, nodes);
                             return res.sendStatus(200);
                         }
+=======
+            if (incomingText || mediaPath) {
+                const savedIncoming = await Message.create({ 
+                    chatId: sender, 
+                    from: sender, 
+                    text: incomingText, 
+                    media: mediaPath 
+                });
+                broadcast({ type: "new_message", message: savedIncoming });
+            }
+
+            const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
+            
+            if (waiting) {
+                if (waiting.waitingForLink) {
+                    const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
+                    if (isLink) {
+                        waiting.profileLink = incomingText;
+                        waiting.waitingForLink = false;
+                        await waiting.save();
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: `✅ Link recibido correctamente. ✨\n\n💳 Ahora, para finalizar, por favor envía el Yape por S/${waiting.amount}. al numero 981514479 a nombre de Lorena M. El sistema se activará automáticamente al recibir la notificación. 🚀` } 
+                        }, {});
+                    } else {
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar con tu pedido. 🔗" } 
+                        }, {});
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
                     }
                 }
             } catch (err) { 

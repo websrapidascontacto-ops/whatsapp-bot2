@@ -128,9 +128,15 @@ window.addRowDynamic = function(button) {
     inputRow.className = "form-control mb-1";
     inputRow.style.fontFamily = "Montserrat, sans-serif";
     inputRow.placeholder = `Fila ${count} (Título)`;
+<<<<<<< HEAD
     inputRow.setAttribute(`df-${keyRow}`, "");
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
 
+=======
+    // Corrección: Sincronización manual con el objeto de datos
+    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
+    
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     const inputDesc = document.createElement("input");
     inputDesc.className = "form-control";
     inputDesc.style.fontFamily = "Montserrat, sans-serif";
@@ -139,19 +145,25 @@ window.addRowDynamic = function(button) {
     inputDesc.style.background = "#f0f0f0";
     inputDesc.style.color = "#333";
     inputDesc.placeholder = "Comentario opcional";
+<<<<<<< HEAD
     inputDesc.setAttribute(`df-${keyDesc}`, "");
+=======
+    // Corrección: Sincronización manual con el objeto de datos
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     group.appendChild(inputRow);
     group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
+    // Inicializamos las llaves para que existan al exportar
     nodeData[keyRow] = "";
     nodeData[keyDesc] = "";
     
     editor.updateConnectionNodes(`node-${nodeId}`);
 };
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 /* === GUARDAR Y CARGAR === */
 window.saveFlow = function() {
@@ -176,10 +188,11 @@ window.saveFlow = function() {
     });
 =======
 /* === GUARDAR Y CARGAR (CORREGIDO) === */
+=======
+/* === GUARDAR Y CARGAR === */
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
 window.saveFlow = async function() {
     const exportData = editor.export();
-    
-    // Forzamos el nombre a "Main Flow" para que el bot lo reconozca de inmediato
     const flowName = document.getElementById('flow_name')?.value || "Main Flow";
 
     const payload = {
@@ -197,7 +210,7 @@ window.saveFlow = async function() {
 
         const result = await response.json();
         if (result.success) {
-            window.currentEditingFlowId = result.id; // Guardamos el ID para la próxima edición
+            window.currentEditingFlowId = result.id;
             alert("✅ Guardado en base de datos. ¡Triggers actualizados!");
         } else {
             alert("❌ Error al guardar: " + result.error);
@@ -208,10 +221,6 @@ window.saveFlow = async function() {
     }
 >>>>>>> 1e9601b85258c29d6f61576b052a7302d1f7e87e
 };
-
-window.addEventListener('message', e => { 
-    if (e.data.type === 'LOAD_FLOW') editor.import(e.data.data); 
-});
 
 /* === MEDIA NODE === */
 window.addMediaNode = () => {
@@ -264,8 +273,13 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 }
 
+<<<<<<< HEAD
 /* === IMPORTAR ARCHIVO Y RECONSTRUIR FILAS === */
 document.getElementById('import_file').addEventListener('change', function(e) {
+=======
+/* === IMPORTAR ARCHIVO LOCAL (ARREGLADO) === */
+document.getElementById('import_file')?.addEventListener('change', function(e) {
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
     const file = e.target.files[0];
     if (!file) return;
 
@@ -274,12 +288,17 @@ document.getElementById('import_file').addEventListener('change', function(e) {
         try {
             const flowData = JSON.parse(e.target.result);
             editor.import(flowData);
+<<<<<<< HEAD
             
+=======
+
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
             setTimeout(() => {
                 const nodes = flowData.drawflow.Home.data;
                 Object.keys(nodes).forEach(nodeId => {
                     const node = nodes[nodeId];
                     if (node.name === "whatsapp_list") {
+<<<<<<< HEAD
                         const btn = document.querySelector(`#node-${nodeId} .btn-success`);
                         if (btn) {
                             let i = 2;
@@ -306,4 +325,91 @@ document.getElementById('import_file').addEventListener('change', function(e) {
         }
     };
     reader.readAsText(file);
+=======
+                        const nodeElement = document.getElementById(`node-${nodeId}`);
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        const containerRows = nodeElement.querySelector('.items-container');
+                        
+                        let i = 2;
+                        while (node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd);
+                            const lastGroup = containerRows.lastElementChild;
+                            const inputs = lastGroup.querySelectorAll('input');
+                            if(inputs[0]) inputs[0].value = node.data[`row${i}`];
+                            if(inputs[1]) inputs[1].value = node.data[`desc${i}`] || "";
+                            i++;
+                        }
+                    }
+                });
+            }, 350); 
+            alert("✅ Flujo importado con éxito.");
+        } catch (err) { alert("❌ Error al importar JSON."); }
+    };
+    reader.readAsText(file);
+});
+
+/* === BOTÓN TRIGGER Y PAGO === */
+window.addButtonTriggerNode = () => {
+    const html = `<div class="node-wrapper"><div class="node-header" style="background: #9b59b6; color: white; font-family: 'Montserrat';">🔘 Botón en Chat</div><div class="node-body"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Texto que verá el usuario:</p><input type="text" class="form-control mb-2" df-button_text placeholder="Ej: Ver Catálogo" style="font-family: 'Montserrat';"><p style="font-size: 10px; color: #666; margin-bottom: 5px;">Palabra que activa (Trigger):</p><input type="text" class="form-control" df-trigger_val placeholder="Ej: catalogo" style="font-family: 'Montserrat';"></div></div>`;
+    createNode("button_trigger", 1, 1, html, { button_text: '', trigger_val: '' });
+};
+
+window.addPaymentValidationNode = () => {
+    const html = `<div class="node-wrapper"><div class="node-header" style="background: #2ecc71; color: white; font-family: 'Montserrat'; padding: 10px; border-radius: 8px 8px 0 0;"><i class="fa-solid fa-cash-register"></i> Validar Pago SMM</div><div class="node-body" style="padding: 12px; background: #fff; font-family: 'Montserrat';"><label style="font-size: 10px; font-weight: bold; color: #555;">ID PRODUCTO WOO:</label><input type="text" class="form-control mb-2" df-product_id placeholder="Ej: 125" style="font-size: 12px;"><label style="font-size: 10px; font-weight: bold; color: #555;">MONTO EXACTO (S/):</label><input type="text" class="form-control" df-amount placeholder="Ej: 20.00" style="font-size: 12px;"><p style="font-size: 9px; color: #888; margin-top: 8px;">* El bot esperará el comprobante tras este nodo.</p></div></div>`;
+    createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
+};
+
+/* === GESTIÓN DE MIS FLUJOS (MODAL ÚNICO) === */
+window.openFlowsModal = async function() {
+    const modal = document.getElementById('flowsModal');
+    const list = document.getElementById('flowsList');
+    if(modal) modal.style.display = 'flex';
+    list.innerHTML = "<p style='color:white;'>Cargando flujos...</p>";
+    
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        list.innerHTML = ""; 
+        flows.forEach(f => {
+            const div = document.createElement('div');
+            div.style = "background:#1a1b26; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #333;";
+            div.innerHTML = `
+                <span style="color:white; font-family:'Montserrat';">${f.name}</span>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="loadSpecificFlow('${f.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Cargar</button>
+                    <button onclick="deleteFlow('${f.id}')" style="background:#ff4b2b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">🗑️</button>
+                </div>`;
+            list.appendChild(div);
+        });
+    } catch (e) { list.innerHTML = "Error al conectar"; }
+};
+
+window.closeFlowsModal = () => { document.getElementById('flowsModal').style.display = 'none'; };
+
+window.loadSpecificFlow = async function(id) {
+    try {
+        const res = await fetch(`/api/get-flow-by-id/${id}`);
+        const responseData = await res.json();
+        editor.clear();
+        let finalData = responseData.drawflow ? responseData : (responseData.data || responseData);
+        editor.import(finalData);
+        closeFlowsModal();
+        alert("✅ Cargado correctamente");
+    } catch (e) { alert("❌ Error al cargar"); }
+};
+
+window.deleteFlow = async function(id) {
+    if(!confirm("¿Eliminar flujo?")) return;
+    try {
+        const res = await fetch(`/api/delete-flow/${id}`, { method: 'DELETE' });
+        if(res.ok) { alert("🗑️ Eliminado"); openFlowsModal(); }
+    } catch (e) { alert("❌ Error"); }
+};
+
+window.addEventListener('message', e => { 
+    if (e.data.type === 'LOAD_FLOW' || e.data.type === 'IMPORT_CLEAN') {
+        editor.clear();
+        editor.import(e.data.data); 
+    }
+>>>>>>> 345e92536f42aee91d0104c4fa8a32495d2326ca
 });
