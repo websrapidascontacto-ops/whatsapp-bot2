@@ -397,27 +397,59 @@ async function processSequence(to, node, allNodes) {
 /* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
+    
+    // ESTO ES CLAVE: Veremos en Railway qué está mandando MacroDroid
+    console.log("📩 TEXTO RECIBIDO DE MACRODROID:", texto); 
+
     if (!texto) return res.sendStatus(200);
 
     try {
-        // Buscamos cualquier número de 3 dígitos en el texto de la notificación
-        // Esto encontrará el "940" dentro del mensaje de Yape
-        const codigoNotificacion = texto.match(/\d{3}/)?.[0]; 
+        // Buscamos cualquier grupo de 3 números
+        const match = texto.match(/\d{3}/);
+        const codigoNotificacion = match ? match[0] : null;
 
-        if (!codigoNotificacion) {
-            console.log("⚠️ Notificación de Yape sin código de seguridad detectable.");
-            return res.sendStatus(200);
-        }
+        if (codigoNotificacion) {
+            const waiting = await PaymentWaiting.findOne({ 
+                yapeCode: codigoNotificacion, 
+                active: true 
+            });
 
-        // Buscamos al cliente que registró ese código de 3 dígitos
-        const waiting = await PaymentWaiting.findOne({ 
-            yapeCode: codigoNotificacion, 
-            active: true 
-        });
+            if (waiting) {
+                console.log(`✅ ¡Match! Código ${codigoNotificacion} encontrado.`);
+                
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
-        if (waiting) {
-            // ... (Resto del código para crear el pedido en WooCommerce se mantiene igual)
-            console.log(`🎯 Pedido validado con código de seguridad: ${codigoNotificacion}`);
+                // Lógica de WooCommerce (se mantiene igual)
+                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                const product = productRes.data;
+                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+
+                await WooCommerce.post("orders", {
+                    payment_method: "bacs", 
+                    payment_method_title: "Yape Automático ✅", 
+                    status: "processing",
+                    billing: { phone: waiting.chatId },
+                    line_items: [{ 
+                        product_id: waiting.productId, quantity: 1,
+                        meta_data: [
+                            { key: "_ltb_id", value: serviceId },
+                            { key: "_ltb_qty", value: bulkQty },
+                            { key: "Link del perfil", value: waiting.profileLink },
+                            { key: "Código Yape", value: codigoNotificacion }
+                        ]
+                    }]
+                });
+
+                await processSequence(waiting.chatId, { 
+                    name: "message", 
+                    data: { info: `✅ ¡Yape verificado! (Cod: ${codigoNotificacion}) 🚀\n\nTu pedido ya está en proceso. ¡Gracias por tu compra! ✨` } 
+                }, {});
+            } else {
+                console.log(`❓ Código ${codigoNotificacion} no coincide con ningún cliente activo.`);
+            }
+        } else {
+            console.log("❌ No se encontraron 3 dígitos en el texto recibido.");
         }
     } catch (err) { 
         console.error("❌ Error en Webhook Yape:", err.message); 
