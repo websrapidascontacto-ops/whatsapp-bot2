@@ -338,32 +338,34 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        // Manejo de la data según como venga de Mongo
+        // Determinamos si la data viene directa o dentro de un objeto .data
         const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
         
-        // 1. Limpiamos e importamos el esqueleto
+        // 1. Limpiamos el editor y cargamos el JSON
         editor.clear();
         editor.import(flowToLoad);
 
-        // 2. Esperamos a que los nodos se dibujen para meter las filas extras
+        // 2. Ejecutamos la reconstrucción de filas dinámicas
+        // Usamos un tiempo de espera para que Drawflow termine de renderizar el HTML
         setTimeout(() => {
             const nodes = flowToLoad.drawflow.Home.data;
             Object.keys(nodes).forEach(nodeId => {
                 const node = nodes[nodeId];
                 
+                // Si el nodo es una lista de WhatsApp
                 if (node.name === "whatsapp_list") {
                     const nodeElement = document.getElementById(`node-${nodeId}`);
                     if (!nodeElement) return;
 
                     const btnAdd = nodeElement.querySelector('.btn-success');
                     
-                    // Buscamos filas guardadas en Mongo (row2, row3, etc.)
+                    // Buscamos si hay filas adicionales guardadas (row2, row3...)
                     let i = 2;
                     while (node.data[`row${i}`] !== undefined) {
-                        // Creamos la fila visualmente
+                        // Creamos la fila físicamente en el editor
                         window.addRowDynamic(btnAdd); 
                         
-                        // Inyectamos el texto de la DB
+                        // Buscamos los inputs recién creados para ponerles el texto de la DB
                         const inputRow = nodeElement.querySelector(`[df-row${i}]`);
                         const inputDesc = nodeElement.querySelector(`[df-desc${i}]`);
                         
@@ -374,14 +376,14 @@ window.loadSpecificFlow = async function(id) {
                     }
                 }
             });
-            // Refrescar conexiones
+            // Refrescamos las flechas de conexión
             editor.updateConnectionNodes('node-list');
         }, 600); 
 
         closeFlowsModal();
-        alert("✅ Flujo recuperado de MongoDB");
+        alert("✅ Flujo de Nemo cargado correctamente desde MongoDB.");
     } catch (e) {
-        console.error("Error al cargar:", e);
+        console.error("Error al cargar desde DB:", e);
         alert("❌ Error al conectar con la base de datos.");
     }
 };
