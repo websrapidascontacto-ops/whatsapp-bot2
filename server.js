@@ -246,21 +246,26 @@ app.post("/webhook-yape", async (req, res) => {
     const codigoNotificacion = matchCod ? (matchCod[1] || matchCod[0]) : null;
 
     if (codigoNotificacion) {
-        // --- FUNCIÓN DE BÚSQUEDA CON RETARDO ---
         let waiting = null;
         console.log(`🔎 Buscando código ${codigoNotificacion}...`);
 
-        // Intentamos buscarlo 5 veces, una vez cada 2 segundos (10 seg en total)
-        for (let i = 0; i < 5; i++) {
-            waiting = await PaymentWaiting.findOne({ yapeCode: codigoNotificacion, active: true }).sort({ _id: -1 });
-            if (waiting) break; // Si lo encuentra, sale del bucle
+        // Aumentamos a 30 intentos (1 minuto de espera total)
+        for (let i = 0; i < 30; i++) {
+            // Buscamos cualquier registro que tenga ese código y esté activo
+            waiting = await PaymentWaiting.findOne({ 
+                yapeCode: codigoNotificacion, 
+                active: true 
+            }).sort({ _id: -1 });
+
+            if (waiting) break; 
             
-            console.log(`⏳ Intento ${i+1}: El cliente aún no escribe el código. Esperando...`);
+            if (i % 5 === 0) console.log(`⏳ Esperando al cliente... (Intento ${i+1}/30)`);
             await new Promise(r => setTimeout(r, 2000)); 
         }
 
         if (waiting) {
-            console.log("✅ ¡Match encontrado tras espera! Procesando...");
+            console.log("✅ ¡Match encontrado! Procesando pedido...");
+            // Desactivamos para evitar duplicados
             await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
             try {
@@ -280,19 +285,22 @@ app.post("/webhook-yape", async (req, res) => {
                         meta_data: [
                             { key: "_ltb_id", value: serviceId },
                             { key: "_ltb_qty", value: bulkQty },
-                            { key: "Link del perfil", value: waiting.profileLink }
+                            { key: "Link del perfil", value: waiting.profileLink },
+                            { key: "Código Yape", value: codigoNotificacion }
                         ]
                     }]
                 });
 
                 await processSequence(waiting.chatId, { 
                     name: "message", 
-                    data: { info: `✅ *¡PAGO VERIFICADO!* 🚀\n\nTu pedido #${wpResponse.data.id} ha sido activado con éxito. ¡Gracias por tu compra! ✨` } 
+                    data: { info: `✅ *¡PAGO VERIFICADO!* 🚀\n\nTu pedido #${wpResponse.data.id} ha sido activado con éxito. ¡Gracias por confiar en Webs Rápidas! ✨` } 
                 }, {});
 
-            } catch (err) { console.error("❌ Error WP:", err.message); }
+            } catch (err) { 
+                console.error("❌ Error WordPress:", err.response?.data || err.message); 
+            }
         } else {
-            console.log(`❌ Agotado: El código ${codigoNotificacion} no fue reclamado por ningún cliente.`);
+            console.log(`❌ Tiempo agotado para el código ${codigoNotificacion}.`);
         }
     }
     res.sendStatus(200);
