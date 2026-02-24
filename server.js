@@ -155,40 +155,33 @@ app.post("/webhook", async (req, res) => {
 
                 // PASO 2: Recibir el Código de 3 dígitos
 if (waiting.waitingForCode) {
-    // Limpiamos el texto para dejar solo números
     const cleanNumber = incomingText.replace(/\D/g, ''); 
     
-    // Si tiene exactamente 3 dígitos, es nuestro código
     if (cleanNumber.length === 3) {
-        console.log(`✍️ Guardando código ${cleanNumber} para el chat ${sender}`);
-        
-        // ACTUALIZACIÓN CRÍTICA: Guardar en la base de datos ANTES de los timeouts
         await PaymentWaiting.updateOne({ _id: waiting._id }, { 
             yapeCode: cleanNumber, 
             waitingForCode: false 
         });
         
-        // --- SECUENCIA DE ESPERA VISUAL ---
         await processSequence(sender, { name: "message", data: { info: `⏳ Código *${cleanNumber}* recibido. Iniciando validación...` } }, {});
         
-        setTimeout(async () => {
-            await processSequence(sender, { name: "message", data: { info: "🔍 Verificando transacción con el banco... 30%" } }, {});
-        }, 2500);
+        // Creamos una función para que los mensajes solo se envíen si el pedido sigue "active"
+        const sendProgress = (ms, text) => {
+            setTimeout(async () => {
+                const check = await PaymentWaiting.findById(waiting._id);
+                // SI YA NO ESTÁ ACTIVE, SIGNIFICA QUE EL PAGO SE VALIDÓ. NO ENVIAMOS NADA.
+                if (check && check.active) {
+                    await processSequence(sender, { name: "message", data: { info: text } }, {});
+                }
+            }, ms);
+        };
 
-        setTimeout(async () => {
-            await processSequence(sender, { name: "message", data: { info: "⚙️ Procesando datos del servicio... 75%" } }, {});
-        }, 5500);
-
-        setTimeout(async () => {
-            const check = await PaymentWaiting.findById(waiting._id);
-            if (check && check.active) {
-                await processSequence(sender, { name: "message", data: { info: "⏳ Casi listo, esperando la confirmación final de Yape... 📤" } }, {});
-            }
-        }, 8500);
+        sendProgress(2500, "🔍 Verificando transacción con el banco... 30%");
+        sendProgress(5500, "⚙️ Procesando datos del servicio... 75%");
+        sendProgress(8500, "⏳ Casi listo, esperando la confirmación final de Yape... 📥");
 
     } else {
-        // Si escribió algo que no son 3 números
-        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, ingresa los *3 dígitos* de tu comprobante de Yape para continuar. 📑" } }, {});
+        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad. 📑" } }, {});
     }
     return res.sendStatus(200); 
 }
