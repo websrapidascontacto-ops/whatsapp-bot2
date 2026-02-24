@@ -22,13 +22,16 @@ const WooCommerce = new WooCommerceRestApi({
 });
 
 // Esquema para rastrear quién está esperando validación de pago y link
+// Esquema actualizado
 const PaymentWaiting = mongoose.model("PaymentWaiting", new mongoose.Schema({
     chatId: String,
     productId: String,
     amount: String,
     profileLink: String,
+    yapeCode: String, // <--- NUEVO: Para guardar el código que el cliente escriba
     active: { type: Boolean, default: true },
-    waitingForLink: { type: Boolean, default: false }
+    waitingForLink: { type: Boolean, default: false },
+    waitingForCode: { type: Boolean, default: false } // <--- NUEVO: Para saber que esperamos el código
 }));
 
 /* ========================= CONFIGURACIÓN ========================= */
@@ -131,28 +134,50 @@ app.post("/webhook", async (req, res) => {
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
             
             if (waiting) {
+                // PASO 1: Recibir el Link
                 if (waiting.waitingForLink) {
                     const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
                     if (isLink) {
                         waiting.profileLink = incomingText;
                         waiting.waitingForLink = false;
+                        waiting.waitingForCode = true; // Activamos el siguiente paso
                         await waiting.save();
+                        
                         await processSequence(sender, { 
                             name: "message", 
-                            data: { info: `✅ Link recibido correctamente. ✨\n\n💳 Ahora, para finalizar, por favor envía el Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. 🚀` } 
+                            data: { info: `✅ Link recibido correctamente. ✨\n\n💰 Ahora, por favor realiza el Yape por *S/${waiting.amount}*.\n\n⚠️ Una vez realizado, **escribe aquí el CÓDIGO DE APROBACIÓN** (el número que sale en tu comprobante) para activar tu pedido automáticamente. 🚀` } 
                         }, {});
                     } else {
                         await processSequence(sender, { 
                             name: "message", 
-                            data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar con tu pedido. 🔗" } 
+                            data: { info: "⚠️ Por favor, envía un link válido de tu perfil o publicación para continuar. 🔗" } 
                         }, {});
                     }
                     return res.sendStatus(200);
                 }
-                await processSequence(sender, { 
-                    name: "message", 
-                    data: { info: `⏳ Seguimos esperando la confirmación de tu Yape por S/${waiting.amount}. El sistema se activará automáticamente al recibir la notificación. ✨` } 
-                }, {});
+
+                // PASO 2: Recibir el Código de Yape
+                if (waiting.waitingForCode) {
+                    // Limpiamos el texto para quedarnos solo con números si el cliente escribe "Código: 123456"
+                    const code = incomingText.match(/\d+/)?.[0];
+                    if (code && code.length >= 4) {
+                        waiting.yapeCode = code;
+                        waiting.waitingForCode = false; // Ya no esperamos nada más, solo la notificación
+                        await waiting.save();
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: `⏳ Código *${code}* registrado con éxito. ✨\n\nEl sistema procesará tu pedido automáticamente en cuanto recibamos la notificación de Yape. ¡No cierres este chat! 🚀` } 
+                        }, {});
+                    } else {
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: "⚠️ Por favor, ingresa un código de aprobación válido (solo los números de tu comprobante). 📑" } 
+                        }, {});
+                    }
+                    return res.sendStatus(200);
+                }
+
+                // Si ya envió todo y sigue escribiendo
                 return res.sendStatus(200);
             }
 
@@ -295,7 +320,14 @@ async function processSequence(to, node, allNodes) {
     else if (node.name === "payment_validation") {
             await PaymentWaiting.findOneAndUpdate(
                 { chatId: to },
-                { productId: node.data.product_id, amount: node.data.amount, active: true, waitingForLink: true },
+                { 
+                    productId: node.data.product_id, 
+                    amount: node.data.amount, 
+                    active: true, 
+                    waitingForLink: true,
+                    waitingForCode: false, // Reset
+                    yapeCode: null // Reset
+                },
                 { upsert: true }
             );
             botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
@@ -318,43 +350,65 @@ async function processSequence(to, node, allNodes) {
     } catch (err) { console.error("❌ Error en processSequence:", err.message); }
 }
 
-/* ========================= WEBHOOK YAPE ========================= */
+/* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
     if (!texto) return res.sendStatus(200);
+
     try {
-        const activeWaitings = await PaymentWaiting.find({ active: true });
-        const montoRecibido = texto.match(/\d+/)?.[0]; 
-        for (const waiting of activeWaitings) {
-            const montoEsperado = waiting.amount.match(/\d+/)?.[0]; 
-            if (montoRecibido && montoRecibido === montoEsperado) {
-                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
-                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                const product = productRes.data;
-                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
-                await WooCommerce.post("orders", {
-                    payment_method: "bacs", payment_method_title: "Yape Automático ✅", status: "processing",
-                    billing: { phone: waiting.chatId },
-                    line_items: [{ 
-                        product_id: waiting.productId, quantity: 1,
-                        meta_data: [
-                            { key: "_ltb_id", value: serviceId },
-                            { key: "_ltb_qty", value: bulkQty },
-                            { key: "Link del perfil", value: waiting.profileLink },
-                            { key: "Link del Perfil", value: waiting.profileLink }
-                        ]
-                    }],
-                    customer_note: `🤖 Pedido automático vía WhatsApp. Link: ${waiting.profileLink}`
-                });
-                await processSequence(waiting.chatId, { 
-                    name: "message", 
-                    data: { info: "✅ ¡Yape verificado! 🚀 Tu pedido ya está en proceso en el sistema central. ✨" } 
-                }, {});
-                return res.sendStatus(200);
-            }
+        // 1. Extraemos el código que viene en la notificación de Yape
+        // Buscamos una cadena de números larga (el código de operación suele tener 6-8 dígitos)
+        const codigoNotificacion = texto.match(/\d{6,}/)?.[0]; 
+
+        if (!codigoNotificacion) {
+            console.log("⚠️ Notificación de Yape sin código detectable.");
+            return res.sendStatus(200);
         }
-    } catch (err) { console.error("❌ Error Integración LTB:", err.message); }
+
+        // 2. Buscamos al cliente que registró ese código exacto
+        const waiting = await PaymentWaiting.findOne({ 
+            yapeCode: codigoNotificacion, 
+            active: true 
+        });
+
+        if (waiting) {
+            // ¡ENCONTRADO! Procedemos con el pedido
+            await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+
+            const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+            const product = productRes.data;
+            const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+            const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+
+            await WooCommerce.post("orders", {
+                payment_method: "bacs", 
+                payment_method_title: "Yape Automático ✅", 
+                status: "processing",
+                billing: { phone: waiting.chatId },
+                line_items: [{ 
+                    product_id: waiting.productId, quantity: 1,
+                    meta_data: [
+                        { key: "_ltb_id", value: serviceId },
+                        { key: "_ltb_qty", value: bulkQty },
+                        { key: "Link del perfil", value: waiting.profileLink },
+                        { key: "Código Yape", value: codigoNotificacion }
+                    ]
+                }],
+                customer_note: `🤖 Pedido automático. Código Yape: ${codigoNotificacion}`
+            });
+
+            await processSequence(waiting.chatId, { 
+                name: "message", 
+                data: { info: `✅ ¡Yape verificado! (Cod: ${codigoNotificacion}) 🚀\n\nTu pedido ya está en proceso en el sistema central. ¡Gracias por tu compra! ✨` } 
+            }, {});
+            
+            console.log(`🎯 Pedido procesado exitosamente para el código ${codigoNotificacion}`);
+        } else {
+            console.log(`❓ Se recibió el código ${codigoNotificacion} pero no hay ningún cliente esperándolo.`);
+        }
+    } catch (err) { 
+        console.error("❌ Error en Webhook Yape:", err.message); 
+    }
     res.sendStatus(200);
 });
 
