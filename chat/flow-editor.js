@@ -233,7 +233,7 @@ window.addNotifyNode = function() {
     createNode('notify', 1, 1, html, { info: '' });
 }
 
-/* === IMPORTAR ARCHIVO LOCAL (CORREGIDO Y RECONSTRUIDO) === */
+/* === IMPORTAR ARCHIVO LOCAL (CORREGIDO SIN FETCH) === */
 document.getElementById('import_file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -241,29 +241,33 @@ document.getElementById('import_file')?.addEventListener('change', function(e) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
+            // Convertimos el archivo a objeto JS
             const flowData = JSON.parse(e.target.result);
+            
+            // IMPORTANTE: Usamos la función local, no un fetch al servidor
             rebuildFlowData(flowData);
-            alert("✅ Flujo e ítems importados con éxito.");
+            
+            alert("✅ Flujo e ítems importados con éxito localmente.");
         } catch (err) { 
-            console.error(err);
-            alert("❌ Error al importar JSON."); 
+            console.error("Error al procesar JSON:", err);
+            alert("❌ Error: El archivo no es un JSON válido."); 
         }
     };
     reader.readAsText(file);
 });
 
-/* === FUNCIÓN PARA RECONSTRUIR NODOS DINÁMICOS (LISTAS) === */
+/* === FUNCIÓN MAESTRA DE RECONSTRUCCIÓN (DIBUJA LAS FILAS) === */
 function rebuildFlowData(flowData) {
+    // 1. Limpiar y cargar estructura base
     editor.clear();
     editor.import(flowData);
 
-    // Timeout un poco más largo para asegurar que Drawflow termine de renderizar el HTML
+    // 2. Esperar a que Drawflow cree los elementos en el HTML
     setTimeout(() => {
         const nodes = flowData.drawflow.Home.data;
         Object.keys(nodes).forEach(nodeId => {
             const node = nodes[nodeId];
             
-            // Si es un nodo de lista, reconstruimos sus filas
             if (node.name === "whatsapp_list") {
                 const nodeElement = document.getElementById(`node-${nodeId}`);
                 if (!nodeElement) return;
@@ -271,19 +275,17 @@ function rebuildFlowData(flowData) {
                 const btnAdd = nodeElement.querySelector('.btn-success');
                 const containerRows = nodeElement.querySelector('.items-container');
                 
-                // 1. Llenamos la Fila 1 (que ya existe en el HTML base)
+                // Llenar Fila 1 (ya existe)
                 const firstRowInputs = containerRows.querySelectorAll('.row-group:first-child input');
                 if (firstRowInputs[0]) firstRowInputs[0].value = node.data.row1 || "";
                 if (firstRowInputs[1]) firstRowInputs[1].value = node.data.desc1 || "";
 
-                // 2. Reconstruimos visualmente las filas adicionales (2, 3, 4...)
+                // Reconstruir Filas 2 en adelante
                 let i = 2;
                 while (node.data[`row${i}`] !== undefined) {
                     if (window.addRowDynamic) {
-                        // Llamamos a la función que crea el HTML de la fila y el output
-                        window.addRowDynamic(btnAdd); 
+                        window.addRowDynamic(btnAdd); // Simula el click para crear el HTML
                         
-                        // Buscamos los inputs de esa nueva fila para asignarles el valor
                         const allRows = containerRows.querySelectorAll('.row-group');
                         const currentGroup = allRows[i - 1]; 
                         
@@ -297,9 +299,8 @@ function rebuildFlowData(flowData) {
                 }
             }
         });
-        // Actualizamos las conexiones para que se ajusten a los nuevos outputs
-        editor.updateConnectionNodes('node-list'); 
-    }, 400);
+        editor.updateZoom(); // Refrescar visualmente
+    }, 450); 
 }
 
 /* === BOTÓN TRIGGER Y PAGO === */
