@@ -259,7 +259,7 @@ app.post("/webhook-yape", async (req, res) => {
 
             if (waiting) break; 
             
-            if (i % 5 === 0) console.log(`⏳ Esperando al cliente... (Intento ${i+1}/30)`);
+            if (i % 5 === 0) console.log(`⏳ Esperando al cliente... (Intento ${i+1}/60)`);
             await new Promise(r => setTimeout(r, 2000)); 
         }
 
@@ -295,7 +295,15 @@ app.post("/webhook-yape", async (req, res) => {
                     name: "message", 
                     data: { info: `✅ *¡PAGO VERIFICADO!* 🚀\n\nTu pedido #${wpResponse.data.id} ha sido activado con éxito. ¡Gracias por confiar en Webs Rápidas! ✨` } 
                 }, {});
-
+// --- ESTO ES LO QUE AGREGAMOS (AL FINAL DEL BLOQUE DE ÉXITO) ---
+                axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+                    messaging_product: "whatsapp",
+                    to: "51933425911",
+                    type: "text",
+                    text: { body: `🔔 *VENTA EXITOSA* 💰\n\nOrden: #${wpResponse.data.id}\nCliente: ${waiting.chatId}\nMonto: S/${waiting.amount}\nLink: ${waiting.profileLink}` }
+                }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }).catch(e => {});
+                // --- FIN DEL AGREGADO ---
+                
             } catch (err) { 
                 console.error("❌ Error WordPress:", err.response?.data || err.message); 
             }
