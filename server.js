@@ -572,7 +572,7 @@ const chatPath = path.join(__dirname, "chat");
 const uploadsPath = path.join(__dirname, "uploads");
 
 app.use("/uploads", express.static(uploadsPath));
-app.use(express.static(chatPath));
+
 
 // RUTA RAIZ: Para que al abrir la URL cargue el index.html
 app.get("/", (req, res) => {
