@@ -410,82 +410,64 @@ async function processSequence(to, node, allNodes) {
     } catch (err) { console.error("❌ Error en processSequence:", err.message); }
 }
 
-/* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) ========================= */
+/* ========================= WEBHOOK YAPE (Escaneo de 3 dígitos) ========================= */
 app.post("/webhook-yape", async (req, res) => {
     const { texto } = req.body; 
-    console.log("📩 Notificación de Yape Real:", texto);
-
+    console.log("📩 Recibido de MacroDroid:", texto); // Esto aparecerá en tu terminal
     if (!texto) return res.sendStatus(200);
 
     try {
-        // 1. Buscamos el código de 3 dígitos (el que viene después de "seguridad es: ")
-        const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
-        const codigoNotificacion = matchCod ? matchCod[1] || matchCod[0] : null;
-
-        // 2. Buscamos el monto (S/ 5 en tu caso)
-        const matchMonto = texto.match(/S\/\s?(\d+)/i);
-        const montoNotificacion = matchMonto ? matchMonto[1] : null;
-
-        console.log(`🔍 Buscando match para Código: ${codigoNotificacion} y Monto: S/${montoNotificacion}`);
+        // Buscamos el código de 3 dígitos en el texto de la notificación
+        const codigoNotificacion = texto.match(/\d{3}/)?.[0]; 
 
         if (codigoNotificacion) {
-            // Buscamos al cliente que está esperando con ese código
             const waiting = await PaymentWaiting.findOne({ 
                 yapeCode: codigoNotificacion, 
                 active: true 
             });
 
             if (waiting) {
-                // VALIDACIÓN DE SEGURIDAD (Monto)
-                // Si el Yape es de S/ 5 y el pedido es de S/ 5, procedemos.
-                if (montoNotificacion && parseFloat(montoNotificacion) >= parseFloat(waiting.amount)) {
-                    
-                    console.log("✅ ¡MATCH TOTAL! Procesando pedido en WooCommerce...");
-                    
-                    await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
+                // 1. Marcar como procesado DE INMEDIATO
+                await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
 
-                    // Crear pedido en WooCommerce
-                    const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                    const product = productRes.data;
-                    const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                    const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
+                // 2. Lógica de WooCommerce
+                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
+                const product = productRes.data;
+                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
+                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
 
-                    await WooCommerce.post("orders", {
-                        payment_method: "bacs",
-                        payment_method_title: "Yape Automático ✅",
-                        status: "processing",
-                        billing: { phone: waiting.chatId },
-                        line_items: [{
-                            product_id: waiting.productId,
-                            quantity: 1,
-                            meta_data: [
-                                { key: "_ltb_id", value: serviceId },
-                                { key: "_ltb_qty", value: bulkQty },
-                                { key: "Link del perfil", value: waiting.profileLink },
-                                { key: "Código Yape", value: codigoNotificacion }
-                            ]
-                        }]
-                    });
+                await WooCommerce.post("orders", {
+                    payment_method: "bacs",
+                    payment_method_title: "Yape Automático ✅",
+                    status: "processing",
+                    billing: { phone: waiting.chatId },
+                    line_items: [{
+                        product_id: waiting.productId,
+                        quantity: 1,
+                        meta_data: [
+                            { key: "_ltb_id", value: serviceId },
+                            { key: "_ltb_qty", value: bulkQty },
+                            { key: "Link del perfil", value: waiting.profileLink },
+                            { key: "Código Yape", value: codigoNotificacion }
+                        ]
+                    }]
+                });
 
-                    // Mensaje de éxito al cliente
-                    await processSequence(waiting.chatId, { 
-                        name: "message", 
-                        data: { info: `✅ ¡Pago verificado con éxito! ✨\n\nHemos recibido tu Yape por S/${montoNotificacion}. Tu pedido ya ha sido enviado al sistema y empezará a procesarse en breve. 🚀` } 
-                    }, {});
+                // 3. ENVIAR WHATSAPP AL CLIENTE (Usando sendWhatsApp directo)
+                await sendWhatsApp(waiting.chatId, "✅ *¡Pago verificado con éxito!* ✨\n\nTu pedido ha sido enviado al sistema. ¡Gracias por tu compra! 🚀");
 
-                } else {
-                    console.log("⚠️ Monto insuficiente detectado.");
-                    await processSequence(waiting.chatId, { 
-                        name: "message", 
-                        data: { info: `❌ *Monto incorrecto.* Recibimos S/${montoNotificacion} pero tu pedido es de S/${waiting.amount}. Por favor, contacta a soporte.` } 
-                    }, {});
-                }
+                // 4. NOTIFICACIÓN A TU CELULAR PERSONAL (Usando sendWhatsApp directo)
+                const miNumero = "51933425911";
+                const aviso = `💰 *¡NUEVA VENTA!* 💰\n\n👤 *Cliente:* ${waiting.chatId}\n📑 *Código:* ${codigoNotificacion}\n🔗 *Link:* ${waiting.profileLink}`;
+                await sendWhatsApp(miNumero, aviso);
+
+                console.log(`✅ Pedido creado y notificado: ${codigoNotificacion}`);
             } else {
-                console.log("❌ No se encontró ningún cliente activo con ese código de 3 dígitos.");
+                console.log(`⚠️ Código ${codigoNotificacion} recibido pero no hay cliente esperando.`);
             }
         }
-    } catch (err) {
-        console.error("❌ Error en Webhook Yape:", err.message);
+    } catch (err) { 
+        console.error("❌ Error Crítico en Webhook Yape:", err.message); 
     }
     res.sendStatus(200);
 });
