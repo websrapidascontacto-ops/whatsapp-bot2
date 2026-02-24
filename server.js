@@ -25,6 +25,9 @@ if (!fs.existsSync(uploadsPath)) {
 
 app.use("/uploads", express.static(uploadsPath));
 app.use(express.static(chatPath));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(chatPath, 'index.html'));
+});
 
 /* ========================= MONGODB ========================= */
 mongoose.connect(process.env.MONGO_URI)
