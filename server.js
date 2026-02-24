@@ -122,7 +122,7 @@ app.post("/webhook", async (req, res) => {
                 const savedIncoming = await Message.create({ 
                     chatId: sender, 
                     from: sender, 
-                    text: incomingText,
+                    text: incomingText, 
                     media: mediaPath 
                 });
                 broadcast({ type: "new_message", message: savedIncoming });
