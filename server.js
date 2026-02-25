@@ -590,75 +590,92 @@ app.post("/webhook-yape", async (req, res) => {
 
 /* ========================= APIS DE FLUJOS Y CHAT ========================= */
 
+/* ========================= GET FLOW PRINCIPAL ========================= */
 app.get("/api/get-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ isMain: true });
-        // Si no hay flujo, enviamos la estructura mínima de Drawflow
+
         if (!flow) {
-            return res.json({ drawflow: { Home: { data: {} } } });
-        }
-        res.json(flow.data);
-    } catch (e) {
-        res.json({ drawflow: { Home: { data: {} } } });
-    }
-});
-
-app.get("/api/get-flow-by-id/:id", async (req, res) => {
-    try {
-        const flow = await Flow.findById(req.params.id);
-        res.json(flow ? flow.data : null);
-    } catch (e) { res.status(500).json(null); }
-});
-
-app.get("/api/get-flow", async (req, res) => {
-    try {
-        // Buscamos el flujo que está activo (Main)
-        const flow = await Flow.findOne({ isMain: true });
-        
-        if (!flow) {
-            // Si no hay ninguno, enviamos uno vacío pero con estructura válida
-            return res.json({ drawflow: { Home: { data: {} } } });
-        }
-
-        // IMPORTANTE: Enviamos flow.data que es lo que Drawflow entiende
-        res.json(flow.data);
-    } catch (e) {
-        console.error("Error al obtener flujo:", e);
-        res.status(500).json({ error: "Error en el servidor" });
-    }
-});
-
-app.post('/api/save-flow', async (req, res) => {
-    try {
-        const { id, name, data } = req.body;
-        const finalName = name || `Flujo_${Date.now()}`;
-
-        // 1. Quitamos el "Main" a todos los flujos existentes
-        await Flow.updateMany({}, { isMain: false });
-
-        let savedFlow;
-
-        if (id && mongoose.Types.ObjectId.isValid(id)) {
-            // 2. Si el flujo ya existe, lo actualizamos y lo hacemos Main
-            savedFlow = await Flow.findByIdAndUpdate(
-                id, 
-                { name: finalName, data, isMain: true }, 
-                { new: true }
-            );
-        } else {
-            // 3. Si es nuevo, lo creamos directamente como Main
-            savedFlow = await Flow.create({ 
-                name: finalName, 
-                data, 
-                isMain: true 
+            return res.json({
+                drawflow: { Home: { data: {} } }
             });
         }
 
-        console.log(`✅ Flujo "${finalName}" guardado y activado como Principal.`);
-        res.json({ success: true, id: savedFlow._id });
-    } catch (e) { 
-        console.error("❌ Error al guardar y activar flujo:", e.message);
-        res.status(500).json({ error: e.message }); 
+        // IMPORTANTE: solo enviamos data porque Drawflow espera esa estructura
+        res.json(flow.data);
+
+    } catch (e) {
+        console.error("❌ Error al obtener flujo principal:", e.message);
+        res.status(500).json({
+            drawflow: { Home: { data: {} } }
+        });
+    }
+});
+
+
+/* ========================= GET FLOW POR ID ========================= */
+app.get("/api/get-flow-by-id/:id", async (req, res) => {
+    try {
+        const flow = await Flow.findById(req.params.id);
+
+        if (!flow) return res.json(null);
+
+        // 🔥 MUY IMPORTANTE:
+        // Devolvemos también el _id para que el frontend pueda actualizar correctamente
+        res.json({
+            _id: flow._id,
+            name: flow.name,
+            data: flow.data
+        });
+
+    } catch (e) {
+        console.error("❌ Error al obtener flujo por ID:", e.message);
+        res.status(500).json(null);
+    }
+});
+
+app.post("/api/save-flow", async (req, res) => {
+    try {
+        const { id, name, data, isMain } = req.body;
+
+        if (!data) {
+            return res.status(400).json({ error: "No hay data para guardar" });
+        }
+
+        let flow;
+
+        if (id) {
+            // 🔥 ACTUALIZA
+            flow = await Flow.findByIdAndUpdate(
+                id,
+                { name, data, isMain },
+                { new: true }
+            );
+        } else {
+            // 🔥 CREA NUEVO
+            flow = await Flow.create({
+                name,
+                data,
+                isMain: isMain || false
+            });
+        }
+
+        // 🔥 Si este flujo es principal, desactivar otros
+        if (isMain) {
+            await Flow.updateMany(
+                { _id: { $ne: flow._id } },
+                { isMain: false }
+            );
+        }
+
+        res.json({
+            success: true,
+            flowId: flow._id
+        });
+
+    } catch (e) {
+        console.error("❌ Error guardando flujo:", e);
+        res.status(500).json({ error: "Error al guardar" });
     }
 });
 

@@ -119,49 +119,6 @@ window.addRowDynamic = function(button, initialData = null) {
     }
 };
 let currentEditingFlowId = null; // Variable global para saber qué estamos editando
-/* === GUARDAR Y CARGAR (CORREGIDO) === */
-window.saveFlow = async function() {
-    // 1. Obtener los datos actuales del editor
-    const exportData = editor.export();
-    
-    // 2. Obtener el nombre del flujo
-    const flowNameInput = document.getElementById('flow_name');
-    const flowName = flowNameInput ? flowNameInput.value : "Flujo sin nombre";
-
-    // 3. Obtener el ID del flujo actual (si existe)
-    // Nota: Asegúrate de tener esta variable definida globalmente
-    const payload = {
-        id: typeof currentEditingFlowId !== 'undefined' ? currentEditingFlowId : null,
-        name: flowName,
-        data: exportData // Esto ya lleva la estructura drawflow.Home.data
-    };
-
-    console.log("Enviando flujo al servidor...", payload);
-
-    try {
-        const response = await fetch('/api/save-flow', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            alert("✅ ¡Guardado con éxito! El bot ya tiene las rutas actualizadas.");
-        } else {
-            const errorText = await response.text();
-            console.error("Error del servidor:", errorText);
-            alert("❌ Error 500: El servidor rechazó el flujo. Revisa que el nombre no tenga caracteres raros.");
-        }
-    } catch (error) {
-        console.error("Error en la petición:", error);
-        alert("❌ Error de conexión al guardar.");
-    }
-};
-
-
 
 /* === MEDIA NODE (CORREGIDO) === */
 window.addMediaNode = () => {
@@ -294,37 +251,45 @@ window.openFlowsModal = async function() {
     } catch (e) { list.innerHTML = '<p style="color:red;">Error al cargar flujos</p>'; }
 }
 
-// 2. Cargar un flujo específico (Arregla el ReferenceError)
+// 2. Cargar un flujo específico (VERSIÓN CORREGIDA)
 window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-        
-        // Validamos la estructura para no romper el editor
-        let flowToLoad = responseData.drawflow ? responseData : (responseData.data || { drawflow: { Home: { data: {} } } });
-        
+
+        if (!responseData || !responseData.data) {
+            alert("⚠️ El flujo no tiene estructura válida.");
+            return;
+        }
+
         editor.clear();
-        editor.import(flowToLoad);
-        currentEditingFlowId = id; 
+
+        // 🔥 IMPORTANTE: Importamos SOLO la propiedad data
+        editor.import(responseData.data);
+
+        // 🔥 MUY IMPORTANTE: Guardamos el ID real de Mongo
+        currentEditingFlowId = responseData._id;
+
+        // 🔥 Opcional pero recomendado: mostrar nombre en input
+        const nameInput = document.getElementById("flow_name");
+        if (nameInput) {
+            nameInput.value = responseData.name || "";
+        }
 
         // 🔄 RECONSTRUCCIÓN DINÁMICA DE FILAS (SMM)
         setTimeout(() => {
-            const nodes = flowToLoad.drawflow.Home.data;
+            const nodes = responseData.data.drawflow.Home.data;
+
             Object.keys(nodes).forEach(nodeId => {
                 const node = nodes[nodeId];
-                
+
                 if (node.name === "whatsapp_list" && node.data) {
                     const nodeElement = document.getElementById(`node-${nodeId}`);
                     const btnAdd = nodeElement?.querySelector('.btn-success');
-                    
+
                     if (btnAdd) {
-                        // Limpiamos duplicados visuales antes de reconstruir (por seguridad)
-                        const container = nodeElement.querySelector('.items-container');
-                        const existingRows = container.querySelectorAll('.row-group');
-                        // Si por error hay más de una fila inicial, las manejamos
-                        
-                        let i = 2; 
-                        // Buscamos en la data si existen row2, row3, row4...
+                        let i = 2;
+
                         while (node.data[`row${i}`] !== undefined) {
                             window.addRowDynamic(btnAdd, {
                                 row: node.data[`row${i}`],
@@ -335,12 +300,15 @@ window.loadSpecificFlow = async function(id) {
                     }
                 }
             });
-            editor.zoom_reset();
-            console.log(`✅ Flujo ${id} reconstruido con todas sus filas.`);
-        }, 600); // Tiempo prudente para que el DOM de Drawflow esté listo
 
-        if(typeof closeFlowsModal === 'function') closeFlowsModal();
-        
+            editor.zoom_reset();
+            console.log(`✅ Flujo ${id} reconstruido correctamente.`);
+        }, 600);
+
+        if (typeof closeFlowsModal === 'function') {
+            closeFlowsModal();
+        }
+
     } catch (e) {
         console.error("❌ Error crítico al cargar:", e);
         alert("No se pudo cargar el flujo correctamente.");
@@ -400,6 +368,7 @@ async function cargarFlujoPrincipal() {
         // 3. Importación protegida
         try {
             editor.import(cleanData);
+            currentEditingFlowId = responseData._id || null;
         } catch (importError) {
             console.error("❌ Drawflow falló al importar:", importError);
             // Si falla, intentamos cargar al menos un lienzo limpio para no bloquear la UI
@@ -447,3 +416,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // 800ms es el tiempo perfecto para que Montserrat y Drawflow carguen
     setTimeout(cargarFlujoPrincipal, 800); 
 });
+// ================= GUARDAR FLUJO =================
+window.saveFlow = async function() {
+    try {
+        const exportedData = editor.export();
+        const flowName = document.getElementById("flow_name")?.value || "Sin nombre";
+
+        const res = await fetch("/api/save-flow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                id: currentEditingFlowId || null,
+                name: flowName,
+                data: exportedData,
+                isMain: true
+            })
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+            currentEditingFlowId = result.flowId;
+            alert("✅ Flujo guardado correctamente");
+        } else {
+            alert("❌ No se pudo guardar");
+        }
+
+    } catch (e) {
+        console.error("Error guardando flujo:", e);
+        alert("Error al guardar flujo");
+    }
+};
