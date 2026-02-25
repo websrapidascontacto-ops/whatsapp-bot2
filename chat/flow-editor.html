@@ -175,52 +175,9 @@
             reader.readAsText(file);
         }
 
-        // 4. Listener para mensajes desde app.js
-        window.addEventListener('message', function(e) {
-            if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-                const flowData = e.data.data;
-                if (typeof editor !== 'undefined') {
-                    editor.clear();
-                    const finalData = flowData.drawflow ? flowData : (flowData.data || flowData);
-                    editor.import(finalData); 
-                    editor.zoom_reset();
-                }
-            }
-        });
 
-        // 5. Función para abrir el modal
-        window.openFlowsModal = async function() {
-            const modal = document.getElementById('flowsModal');
-            const list = document.getElementById('flowsList');
-            modal.style.display = 'flex';
-            list.innerHTML = '<p style="color:white; text-align:center;">Cargando flujos...</p>';
-            
-            try {
-                const res = await fetch('/api/get-flows');
-                const flows = await res.json();
-                list.innerHTML = "";
-                
-                if (!flows || flows.length === 0) {
-                    list.innerHTML = '<p style="color:#666; text-align:center;">No hay flujos guardados.</p>';
-                    return;
-                }
 
-                flows.forEach(f => {
-                    const div = document.createElement('div');
-                    div.className = "flow-card";
-                    div.innerHTML = `
-                        <div style="display:flex; flex-direction:column;">
-                            <span style="font-weight:600; font-size:14px;">${f.name || 'Sin nombre'}</span>
-                            <small style="color:#666; font-size:10px;">ID: ${f.id.substring(0,8)}...</small>
-                        </div>
-                        <button onclick="loadSpecificFlow('${f.id}')">ABRIR</button>
-                    `;
-                    list.appendChild(div);
-                });
-            } catch (e) {
-                list.innerHTML = '<p style="color:#ff4b2b; text-align:center;">Error al conectar con el servidor.</p>';
-            }
-        };
+
     </script>
 </body>
 </html>

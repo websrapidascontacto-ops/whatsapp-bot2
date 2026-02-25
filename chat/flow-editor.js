@@ -443,73 +443,77 @@ window.addEventListener('message', function(e) {
         editor.zoom_reset();
     }
 });
-/* === CARGA AUTOMÁTICA AL INICIAR (SOLUCIÓN AL PANEL VACÍO) === */
+/* === CARGA Y SINCRONIZACIÓN DEFINITIVA (WEBS RÁPIDAS) === */
+
+// Función maestra para reconstruir filas Montserrat
+function reconstruirFilasDinamicas(data) {
+    const nodes = data?.drawflow?.Home?.data;
+    if (!nodes) return;
+
+    Object.keys(nodes).forEach(id => {
+        const node = nodes[id];
+        if (node.name === "whatsapp_list") {
+            const nodeElement = document.getElementById(`node-${id}`);
+            if (nodeElement) {
+                const btnAdd = nodeElement.querySelector('.btn-success');
+                let i = 2; 
+                while (node.data && node.data[`row${i}`] !== undefined) {
+                    window.addRowDynamic(btnAdd, {
+                        row: node.data[`row${i}`],
+                        desc: node.data[`desc${i}`] || ""
+                    });
+                    i++;
+                }
+            }
+        }
+    });
+}
+
+// Interceptor de mensajes (para cargar flujos desde la lista o app.js)
+window.addEventListener('message', function(e) {
+    if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        const rawData = e.data.data;
+        // Validamos estructura mínima para no romper Drawflow
+        const safeData = (rawData && rawData.drawflow) ? rawData : { "drawflow": { "Home": { "data": {} } } };
+        
+        editor.clear();
+        editor.import(safeData);
+        
+        setTimeout(() => {
+            reconstruirFilasDinamicas(safeData);
+            editor.zoom_reset();
+        }, 400);
+    }
+});
+
+// Carga inicial automática al abrir el editor
 async function cargarFlujoPrincipal() {
     try {
         const res = await fetch('/api/get-flow');
         const responseData = await res.json();
 
-        // 🛡️ ESCUDO PROTECTOR: Validamos la estructura antes de pasarla a Drawflow
-        let flowToLoad;
-        
-        if (responseData && responseData.drawflow && responseData.drawflow.Home) {
-            flowToLoad = responseData;
-        } else if (responseData && responseData.data && responseData.data.drawflow) {
-            flowToLoad = responseData.data;
-        } else {
-            console.warn("⚠️ Datos de API inválidos o vacíos. Cargando lienzo limpio.");
-            // Estructura mínima requerida por drawflow.min.js para Object.keys
-            flowToLoad = { "drawflow": { "Home": { "data": {} } } };
-        }
+        // Si la API falla o está vacía, entregamos objeto válido
+        let flowToLoad = (responseData && responseData.drawflow) ? responseData : 
+                         (responseData?.data?.drawflow ? responseData.data : { "drawflow": { "Home": { "data": {} } } });
 
-        // Limpiamos e Importamos con seguridad
         editor.clear();
         editor.import(flowToLoad);
 
-        // 🔄 RECONSTRUCCIÓN DE FILAS DINÁMICAS (S/380)
         setTimeout(() => {
-            // Verificamos que existan nodos para evitar el error de Object.keys
-            const homeData = flowToLoad.drawflow.Home.data;
-            if (!homeData) return;
-
-            Object.keys(homeData).forEach(id => {
-                const node = homeData[id];
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${id}`);
-                    if (nodeElement) {
-                        const btnAdd = nodeElement.querySelector('.btn-success');
-                        let i = 2; // La fila 1 ya existe en el HTML
-                        
-                        // Si existen datos de filas adicionales, las dibujamos
-                        while (node.data && node.data[`row${i}`] !== undefined) {
-                            if (typeof window.addRowDynamic === 'function') {
-                                window.addRowDynamic(btnAdd, {
-                                    row: node.data[`row${i}`],
-                                    desc: node.data[`desc${i}`] || ""
-                                });
-                            }
-                            i++;
-                        }
-                    }
-                }
-            });
+            reconstruirFilasDinamicas(flowToLoad);
             editor.zoom_reset();
-        }, 800);
+            console.log("✅ Flujo inicial cargado con éxito.");
+        }, 600);
 
-        console.log("✅ Sistema cargado e iniciado correctamente.");
     } catch (error) {
-        console.error("❌ Error en la carga inicial:", error);
-        // Fallback final para que el editor no se quede bloqueado
+        console.error("❌ Error en carga inicial:", error);
         editor.import({ "drawflow": { "Home": { "data": {} } } });
     }
 }
 
-// Ejecutar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(cargarFlujoPrincipal, 800); 
-});
-// Si el autostart falla, forzamos una recarga limpia
-if (editor.drawflow.drawflow.Home.data && Object.keys(editor.drawflow.drawflow.Home.data).length === 0) {
-    console.log("🔄 Reintentando carga forzada...");
-    setTimeout(cargarFlujoPrincipal, 1500);
+// Iniciar cuando el DOM esté listo
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", cargarFlujoPrincipal);
+} else {
+    cargarFlujoPrincipal();
 }
