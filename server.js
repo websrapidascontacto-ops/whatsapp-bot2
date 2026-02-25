@@ -913,7 +913,6 @@ const userStatusSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 const UserStatus = mongoose.model('UserStatus', userStatusSchema);
-
 /* ========================= INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Servidor en línea y IA configurada");
