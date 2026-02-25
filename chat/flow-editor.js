@@ -258,60 +258,24 @@ window.loadSpecificFlow = async function(id) {
         const responseData = await res.json();
 
         if (!responseData || !responseData.data) {
-            alert("⚠️ El flujo no tiene estructura válida.");
+            console.warn("⚠ Flujo inválido");
+            editor.import({ drawflow: { Home: { data: {} } } });
             return;
         }
 
         editor.clear();
 
-        // 🔥 IMPORTANTE: Importamos SOLO la propiedad data
+        // 🔥 IMPORTAMOS SOLO data
         editor.import(responseData.data);
 
-        // 🔥 MUY IMPORTANTE: Guardamos el ID real de Mongo
         currentEditingFlowId = responseData._id;
 
-        // 🔥 Opcional pero recomendado: mostrar nombre en input
-        const nameInput = document.getElementById("flow_name");
-        if (nameInput) {
-            nameInput.value = responseData.name || "";
-        }
-
-        // 🔄 RECONSTRUCCIÓN DINÁMICA DE FILAS (SMM)
         setTimeout(() => {
-            const nodes = responseData.data.drawflow.Home.data;
-
-            Object.keys(nodes).forEach(nodeId => {
-                const node = nodes[nodeId];
-
-                if (node.name === "whatsapp_list" && node.data) {
-                    const nodeElement = document.getElementById(`node-${nodeId}`);
-                    const btnAdd = nodeElement?.querySelector('.btn-success');
-
-                    if (btnAdd) {
-                        let i = 2;
-
-                        while (node.data[`row${i}`] !== undefined) {
-                            window.addRowDynamic(btnAdd, {
-                                row: node.data[`row${i}`],
-                                desc: node.data[`desc${i}`] || ""
-                            });
-                            i++;
-                        }
-                    }
-                }
-            });
-
-            editor.zoom_reset();
-            console.log(`✅ Flujo ${id} reconstruido correctamente.`);
-        }, 600);
-
-        if (typeof closeFlowsModal === 'function') {
-            closeFlowsModal();
-        }
+            reconstruirFilas(responseData.data);
+        }, 500);
 
     } catch (e) {
         console.error("❌ Error crítico al cargar:", e);
-        alert("No se pudo cargar el flujo correctamente.");
     }
 };
 
@@ -350,69 +314,22 @@ window.addEventListener('message', function(e) {
 async function cargarFlujoPrincipal() {
     try {
         const res = await fetch('/api/get-flow');
-        const responseData = await res.json();
+        const data = await res.json();
 
-        // 1. Extraer la data ignorando envoltorios innecesarios
-        let cleanData = responseData?.data || responseData;
-
-if (!cleanData || !cleanData.drawflow) {
-    cleanData = { "drawflow": { "Home": { "data": {} } } };
-}
-
-        // 2. Validación estructural profunda para evitar el error de Object.keys
-        if (!cleanData.drawflow || !cleanData.drawflow.Home || !cleanData.drawflow.Home.data) {
-            console.warn("⚠️ Estructura inválida detectada, usando plantilla vacía.");
-            cleanData = { "drawflow": { "Home": { "data": {} } } };
+        if (!data?.drawflow) {
+            editor.import({ drawflow: { Home: { data: {} } } });
+            return;
         }
-
-        console.log("📦 Importando nodos...");
 
         editor.clear();
-        
-        // 3. Importación protegida
-        try {
-            editor.import(cleanData);
-            currentEditingFlowId = responseData._id || null;
-        } catch (importError) {
-            console.error("❌ Drawflow falló al importar:", importError);
-            // Si falla, intentamos cargar al menos un lienzo limpio para no bloquear la UI
-            editor.import({ "drawflow": { "Home": { "data": {} } } });
-        }
+        editor.import(data);
 
-        // 4. Reconstrucción de la interfaz de Montserrat
-        // 4. Reconstrucción visual de las Listas (Montserrat)
         setTimeout(() => {
-            const nodes = editor.drawflow.drawflow.Home.data;
-            Object.keys(nodes).forEach(id => {
-                const node = nodes[id];
-                
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${id}`);
-                    if (nodeElement) {
-                        const btnAdd = nodeElement.querySelector('.btn-success');
-                        
-                        // Buscamos cuántas filas tiene guardadas (empezando desde la 2)
-                        let i = 2;
-                        while (node.data && node.data[`row${i}`] !== undefined) {
-                            // IMPORTANTE: Pasamos los datos para que el input se rellene al crear la fila
-                            window.addRowDynamic(btnAdd, {
-                                row: node.data[`row${i}`],
-                                desc: node.data[`desc${i}`] || ""
-                            });
-                            i++;
-                        }
-                    }
-                }
-            });
-            
-            // Centramos la vista para que veas los 51 nodos
-            editor.zoom_reset(); 
-            editor.zoom_reset(); // Función de ayuda para ir a donde están los nodos
-            
-        }, 800);
+            reconstruirFilas(data);
+        }, 500);
 
     } catch (error) {
-        console.error("❌ Error fatal en cargarFlujoPrincipal:", error);
+        console.error("❌ Error cargando flujo:", error);
     }
 }
 // Único punto de entrada
@@ -451,3 +368,35 @@ window.saveFlow = async function() {
         alert("Error al guardar flujo");
     }
 };
+function reconstruirFilas(flowData) {
+    if (!flowData?.drawflow?.Home?.data) return;
+
+    const nodes = flowData.drawflow.Home.data;
+
+    Object.keys(nodes).forEach(nodeId => {
+        const node = nodes[nodeId];
+
+        if (node.name === "whatsapp_list") {
+
+            const nodeElement = document.getElementById(`node-${nodeId}`);
+            if (!nodeElement) return;
+
+            const btnAdd = nodeElement.querySelector('.btn-success');
+            if (!btnAdd) return;
+
+            let i = 2;
+
+            while (node.data[`row${i}`] !== undefined) {
+
+                window.addRowDynamic(btnAdd, {
+                    row: node.data[`row${i}`],
+                    desc: node.data[`desc${i}`] || ""
+                });
+
+                i++;
+            }
+        }
+    });
+
+    console.log("✅ Filas reconstruidas correctamente");
+}
