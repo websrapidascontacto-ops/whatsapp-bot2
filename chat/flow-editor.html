@@ -29,12 +29,7 @@
         </div>
 
         <div class="header-buttons">
-            <button onclick="forceLoadNemo()" class="btn btn-primary" style="font-family: 'Montserrat';">
-   🚀 Cargar Nemo Directo
-</button>
-<button onclick="forceLoadNemo()" class="btn btn-warning" style="font-weight: bold; color: #000;">
-   🔥 CARGAR NEMO (SIN ARCHIVO)
-</button>
+
             <button class="btn-trigger" onclick="addTriggerNode()"><i class="fa-solid fa-bolt"></i> TRIGGER</button>
             <button class="btn-message" onclick="addMessageNode()"><i class="fa-solid fa-comment"></i> MENSAJE</button>
             <button class="btn-ia" onclick="addIANode()"><i class="fa-solid fa-robot"></i> IA CHAT</button>
@@ -82,102 +77,32 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/drawflow/dist/drawflow.min.js"></script>
+    
     <script src="flow-editor.js"></script>
 
     <script>
-        // Función de descarga
+        // Solo funciones que interactúan estrictamente con la interfaz del HTML
         function downloadFlow() {
             window.location.href = "/api/download-flow";
         }
 
-        // 1. Cerrar Modal
         window.closeFlowsModal = function() {
             document.getElementById('flowsModal').style.display = 'none';
         };
-
-        // 2. Cargar un flujo específico desde el servidor
-        window.loadSpecificFlow = async function(id) {
-            try {
-                const res = await fetch(`/api/get-flow-by-id/${id}`);
-                const responseData = await res.json();
-                
-                if (typeof editor !== 'undefined') {
-                    editor.clear();
-
-                    let raw = responseData.data ? responseData.data : responseData;
-                    if (typeof raw === 'string') raw = JSON.parse(raw);
-
-                    let nodesFound = {};
-                    if (raw.drawflow && raw.drawflow.Home && raw.drawflow.Home.data) {
-                        nodesFound = raw.drawflow.Home.data;
-                    } else if (raw.drawflow && raw.drawflow.Home) {
-                        nodesFound = raw.drawflow.Home;
-                    } else if (raw.Home && raw.Home.data) {
-                        nodesFound = raw.Home.data;
-                    } else {
-                        nodesFound = raw;
-                    }
-
-                    const cleanNodes = {};
-                    if (nodesFound && typeof nodesFound === 'object') {
-                        Object.keys(nodesFound).forEach(key => {
-                            if (nodesFound[key] && typeof nodesFound[key] === 'object') {
-                                cleanNodes[key] = nodesFound[key];
-                            }
-                        });
-                    }
-
-                    const finalData = {
-                        "drawflow": { "Home": { "data": cleanNodes } }
-                    };
-
-                    if (Object.keys(cleanNodes).length === 0) {
-                        alert("⚠️ El flujo seleccionado está vacío o dañado.");
-                        return;
-                    }
-
-                    editor.import(finalData);
-                    setTimeout(() => { editor.zoom_reset(); }, 200);
-                    closeFlowsModal();
-                }
-            } catch (e) {
-                console.error("Error crítico en la carga:", e);
-                alert("❌ Error de formato: El JSON de este flujo es inválido.");
-            }
-        };
-
-        // 3. Manejar Importación manual
-        async function handleImport(event) {
+        
+        // El manejo de archivos local también puede quedarse aquí si no está en el JS
+        function handleImport(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const flowData = JSON.parse(e.target.result);
-                    if (typeof editor !== 'undefined') {
-                        editor.clear(); 
-                        editor.import(flowData);
-                        editor.zoom_reset();
-                        
-                        await fetch('/api/import-flow', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(flowData)
-                        });
-                        alert("✅ Flujo importado correctamente 🚀");
-                    }
-                } catch (err) {
-                    alert("❌ El archivo no es un JSON válido.");
-                }
+            reader.onload = function(e) {
+                const data = JSON.parse(e.target.result);
+                // Enviamos el mensaje al editor que está en flow-editor.js
+                window.postMessage({ type: 'IMPORT_CLEAN', data: data }, '*');
             };
             reader.readAsText(file);
         }
-
-
-
-
     </script>
 </body>
 </html>

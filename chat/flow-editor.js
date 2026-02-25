@@ -173,82 +173,57 @@ window.saveFlow = async function() {
     }
 };
 
-/* --- LISTENER PARA IMPORTACIÓN CON FILAS (CORREGIDO) --- */
-window.addEventListener('message', function(e) {
-    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-        const flowData = e.data.data;
-        
-        // 1. Limpiar e importar lo básico
-        editor.clear();
-        editor.import(flowData);
 
-        // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS
-        setTimeout(() => {
-            const nodes = flowData.drawflow.Home.data;
-            Object.keys(nodes).forEach(id => {
-                const node = nodes[id];
-                
-                // Si el nodo es una lista (donde están tus planes SMM)
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${id}`);
-                    if (!nodeElement) return;
 
-                    const btnAdd = nodeElement.querySelector('.btn-success');
-                    
-                    // Empezamos desde la fila 2 (porque la 1 ya existe en el HTML base)
-                    let i = 2;
-                    while (node.data[`row${i}`] !== undefined) {
-                        // Llamamos a tu función arreglada pasando la data inicial
-                        window.addRowDynamic(btnAdd, {
-                            row: node.data[`row${i}`],
-                            desc: node.data[`desc${i}`] || ""
-                        });
-                        i++;
-                    }
-                }
-            });
-            
-            editor.updateConnectionNodes('node-list');
-            editor.zoom_reset();
-            console.log("✅ Flujo Nemo reconstruido con filas dinámicas");
-        }, 300); // 300ms es suficiente para que el DOM esté listo
-    }
-});
-
-/* === MEDIA NODE === */
+/* === MEDIA NODE (CORREGIDO) === */
 window.addMediaNode = () => {
-    const nodeId = editor.node_id + 1;
-    createNode("media", 1, 1, `
+    // Primero creamos el nodo (Drawflow nos da el ID real)
+    const nodeId = createNode("media", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header" style="background: #e67e22; color: white;">🖼️ Imagen Adjunta</div>
             <div class="node-body">
-                <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, ${nodeId})">
-                <input type="hidden" df-media_url id="path-${nodeId}">
-                <div id="status-${nodeId}" style="font-size:11px; color:gray;">Esperando archivo...</div>
+                <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, this)">
+                <input type="hidden" df-media_url id="path-temp">
+                <div class="status-msg" style="font-size:11px; color:gray;">Esperando archivo...</div>
                 <input type="text" class="form-control" df-caption placeholder="Pie de foto">
             </div>
         </div>`, { media_url: '', caption: '' });
 };
 
-window.uploadNodeFile = async (event, nodeId) => {
+// Actualiza uploadNodeFile para recibir 'this' (el input)
+window.uploadNodeFile = async (event, inputElement) => {
     const file = event.target.files[0];
     if (!file) return;
-    const status = document.getElementById(`status-${nodeId}`);
-    const pathInput = document.getElementById(`path-${nodeId}`);
+
+    // Obtenemos el ID real del nodo padre
+    const nodeElement = inputElement.closest('.drawflow-node');
+    const nodeId = nodeElement.id.replace('node-', '');
+    const status = nodeElement.querySelector('.status-msg');
+    
     status.innerText = "⏳ Subiendo...";
+    status.style.color = "#e67e22";
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
         const res = await fetch('/api/upload-node-media', { method: 'POST', body: formData });
         const data = await res.json();
+
         if (data.url) {
-            pathInput.value = data.url;
-            status.innerText = "✅ Subido";
-            if(editor.drawflow.drawflow.Home.data[nodeId]) {
-                editor.drawflow.drawflow.Home.data[nodeId].data.media_url = data.url;
-            }
+            // Guardamos directamente en la data del motor
+            editor.updateNodeDataFromId(nodeId, { 
+                ...editor.getNodeFromId(nodeId).data, 
+                media_url: data.url 
+            });
+
+            status.innerText = "✅ Imagen vinculada";
+            status.style.color = "#2ecc71";
         }
-    } catch (e) { status.innerText = "❌ Error"; }
+    } catch (e) { 
+        status.innerText = "❌ Error";
+        status.style.color = "#ff4b2b";
+    }
 };
 
 /* === NOTIFY NODE === */
@@ -302,40 +277,6 @@ window.addPaymentValidationNode = () => {
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
 
-/* === GESTIÓN DE MIS FLUJOS (MODAL) === */
-window.openFlowsModal = async function() {
-    const modal = document.getElementById('flowsModal');
-    const list = document.getElementById('flowsList');
-    if(modal) modal.style.display = 'flex';
-    if(list) list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
-    
-    try {
-        const res = await fetch('/api/get-flows');
-        const flows = await res.json();
-        if(list) {
-            list.innerHTML = ""; 
-            flows.forEach(flow => {
-                const card = document.createElement('div');
-                card.className = "flow-card"; // Asegúrate de tener este CSS
-                card.style = "background:#1a1b26; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;";
-                
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
-                        <div style="display:flex; gap:5px;">
-                            <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:11px; cursor:pointer;">EDITAR ✏️</button>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="activateFlow('${flow.id}')" style="flex:1; background:#10b981; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ACTIVAR ✅</button>
-                        <button onclick="deleteFlow('${flow.id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ELIMINAR 🗑️</button>
-                    </div>
-                `;
-                list.appendChild(card);
-            });
-        }
-    } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
-};
 
 /* --- FUNCIONES DE GESTIÓN DE FLUJOS --- */
 
@@ -432,11 +373,14 @@ window.deleteFlow = async function(id) {
 }
 
 /* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
+// ÚNICO Listener de mensajes para evitar conflictos
 window.addEventListener('message', function(e) {
-    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+    if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
         const rawData = e.data.data;
-        // Si rawData no tiene la estructura de Drawflow, le damos una
-        const safeData = (rawData && rawData.drawflow) ? rawData : { "drawflow": { "Home": { "data": {} } } };
+        // Si viene basura o vacío, inyectamos estructura válida
+        const safeData = (rawData && rawData.drawflow?.Home?.data) 
+            ? rawData 
+            : { "drawflow": { "Home": { "data": {} } } };
         
         editor.clear();
         editor.import(safeData);
@@ -445,46 +389,8 @@ window.addEventListener('message', function(e) {
 });
 /* === CARGA Y SINCRONIZACIÓN DEFINITIVA (WEBS RÁPIDAS) === */
 
-// Función maestra para reconstruir filas Montserrat
-function reconstruirFilasDinamicas(data) {
-    const nodes = data?.drawflow?.Home?.data;
-    if (!nodes) return;
 
-    Object.keys(nodes).forEach(id => {
-        const node = nodes[id];
-        if (node.name === "whatsapp_list") {
-            const nodeElement = document.getElementById(`node-${id}`);
-            if (nodeElement) {
-                const btnAdd = nodeElement.querySelector('.btn-success');
-                let i = 2; 
-                while (node.data && node.data[`row${i}`] !== undefined) {
-                    window.addRowDynamic(btnAdd, {
-                        row: node.data[`row${i}`],
-                        desc: node.data[`desc${i}`] || ""
-                    });
-                    i++;
-                }
-            }
-        }
-    });
-}
 
-// Interceptor de mensajes (para cargar flujos desde la lista o app.js)
-window.addEventListener('message', function(e) {
-    if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-        const rawData = e.data.data;
-        // Validamos estructura mínima para no romper Drawflow
-        const safeData = (rawData && rawData.drawflow) ? rawData : { "drawflow": { "Home": { "data": {} } } };
-        
-        editor.clear();
-        editor.import(safeData);
-        
-        setTimeout(() => {
-            reconstruirFilasDinamicas(safeData);
-            editor.zoom_reset();
-        }, 400);
-    }
-});
 
 // Carga inicial automática al abrir el editor
 async function cargarFlujoPrincipal() {
@@ -492,28 +398,53 @@ async function cargarFlujoPrincipal() {
         const res = await fetch('/api/get-flow');
         const responseData = await res.json();
 
-        // Si la API falla o está vacía, entregamos objeto válido
-        let flowToLoad = (responseData && responseData.drawflow) ? responseData : 
-                         (responseData?.data?.drawflow ? responseData.data : { "drawflow": { "Home": { "data": {} } } });
+        // 🛡️ VALIDACIÓN DE HIERRO
+        // Si la respuesta no tiene la estructura exacta, forzamos una limpia
+        let flowToLoad = { "drawflow": { "Home": { "data": {} } } };
+
+        if (responseData && responseData.drawflow && responseData.drawflow.Home && responseData.drawflow.Home.data) {
+            flowToLoad = responseData;
+        } else if (responseData?.data?.drawflow?.Home?.data) {
+            flowToLoad = responseData.data;
+        }
+
+        console.log("📦 Cargando datos al editor:", flowToLoad);
 
         editor.clear();
+        // IMPORTANTE: Ahora flowToLoad SIEMPRE tiene Home.data, evitando el error de Object.keys
         editor.import(flowToLoad);
 
+        // Reconstrucción de filas dinámicas (Planes S/380)
         setTimeout(() => {
-            reconstruirFilasDinamicas(flowToLoad);
+            const nodes = flowToLoad.drawflow.Home.data;
+            Object.keys(nodes).forEach(id => {
+                const node = nodes[id];
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${id}`);
+                    if (nodeElement) {
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        let i = 2;
+                        while (node.data && node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd, {
+                                row: node.data[`row${i}`],
+                                desc: node.data[`desc${i}`] || ""
+                            });
+                            i++;
+                        }
+                    }
+                }
+            });
             editor.zoom_reset();
-            console.log("✅ Flujo inicial cargado con éxito.");
         }, 600);
 
     } catch (error) {
         console.error("❌ Error en carga inicial:", error);
+        // Fallback absoluto: lienzo vacío con estructura correcta
         editor.import({ "drawflow": { "Home": { "data": {} } } });
     }
 }
-
-// Iniciar cuando el DOM esté listo
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", cargarFlujoPrincipal);
-} else {
-    cargarFlujoPrincipal();
-}
+// Único punto de entrada
+document.addEventListener('DOMContentLoaded', () => {
+    // 800ms es el tiempo perfecto para que Montserrat y Drawflow carguen
+    setTimeout(cargarFlujoPrincipal, 800); 
+});

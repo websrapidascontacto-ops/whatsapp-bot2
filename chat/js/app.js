@@ -264,29 +264,6 @@ async function loadFlowDataIntoEditor(flowId) {
     } catch (e) { console.error("Error al cargar datos en editor:", e); }
 }
 
-window.addEventListener('message', async function(event) {
-    if (event.data.type === 'SAVE_FLOW') {
-        let flowJson = event.data.data;
-        let flowName = "Flujo Actualizado";
-        if (!currentEditingFlowId) {
-            flowName = prompt("Asigna un nombre a este nuevo flujo:", "Nuevo Flujo");
-            if (!flowName) return;
-        }
-        const payload = { id: currentEditingFlowId, name: flowName, data: flowJson };
-        try {
-            const res = await fetch('/api/save-flow', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if(res.ok) {
-                const result = await res.json();
-                alert("✅ Flujo guardado correctamente");
-                if (result.id) currentEditingFlowId = result.id;
-            } else { alert("❌ Error al guardar el flujo"); }
-        } catch (err) { console.error("Error fetch save-flow:", err); }
-    }
-});
 
 window.openFlowsModal = async function() {
     const modal = document.getElementById('flows-modal');
