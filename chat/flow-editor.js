@@ -92,6 +92,7 @@ window.addRowDynamic = function(button, initialData = null) {
     if (!nodeInfo) return;
     const nodeData = nodeInfo.data;
     
+    // Contamos grupos actuales para definir el índice (ej: row2, row3...)
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
@@ -108,24 +109,24 @@ window.addRowDynamic = function(button, initialData = null) {
     const inputRow = group.querySelector(`[df-${keyRow}]`);
     const inputDesc = group.querySelector(`[df-${keyDesc}]`);
 
-    // 💡 ASIGNACIÓN DE DATOS (IMPORTANTE PARA CARGAR)
+    // 💡 Si venimos de una carga (initialData tiene contenido)
     if(initialData) {
         inputRow.value = initialData.row || "";
         inputDesc.value = initialData.desc || "";
     }
 
-    // Guardado en tiempo real en el objeto del nodo
+    // Escuchar cambios para actualizar el objeto interno de Drawflow
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     containerRows.appendChild(group);
     
-    // Si es una carga inicial, sincronizamos el objeto data
+    // Sincronizar el valor inicial en el objeto data (importante para el primer render)
     nodeData[keyRow] = inputRow.value;
     nodeData[keyDesc] = inputDesc.value;
 
-    // Solo añadimos salida visual si no existía antes
-    if(count > 1) {
+    // Solo añadimos salida en el editor si es una fila nueva (no la inicial)
+    if(count > 1 && !initialData) {
         editor.addNodeOutput(nodeId);
     }
 };
@@ -370,23 +371,31 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
+        // Validamos la estructura para no romper el editor
         let flowToLoad = responseData.drawflow ? responseData : (responseData.data || { drawflow: { Home: { data: {} } } });
         
         editor.clear();
         editor.import(flowToLoad);
         currentEditingFlowId = id; 
 
-        // 🔄 RECONSTRUCCIÓN DINÁMICA
+        // 🔄 RECONSTRUCCIÓN DINÁMICA DE FILAS (SMM)
         setTimeout(() => {
             const nodes = flowToLoad.drawflow.Home.data;
             Object.keys(nodes).forEach(nodeId => {
                 const node = nodes[nodeId];
-                if (node.name === "whatsapp_list") {
+                
+                if (node.name === "whatsapp_list" && node.data) {
                     const nodeElement = document.getElementById(`node-${nodeId}`);
                     const btnAdd = nodeElement?.querySelector('.btn-success');
                     
                     if (btnAdd) {
-                        let i = 2; // La fila 1 ya viene en el HTML del nodo
+                        // Limpiamos duplicados visuales antes de reconstruir (por seguridad)
+                        const container = nodeElement.querySelector('.items-container');
+                        const existingRows = container.querySelectorAll('.row-group');
+                        // Si por error hay más de una fila inicial, las manejamos
+                        
+                        let i = 2; 
+                        // Buscamos en la data si existen row2, row3, row4...
                         while (node.data[`row${i}`] !== undefined) {
                             window.addRowDynamic(btnAdd, {
                                 row: node.data[`row${i}`],
@@ -398,13 +407,14 @@ window.loadSpecificFlow = async function(id) {
                 }
             });
             editor.zoom_reset();
-        }, 500); // Medio segundo para asegurar que el DOM cargó
+            console.log(`✅ Flujo ${id} reconstruido con todas sus filas.`);
+        }, 600); // Tiempo prudente para que el DOM de Drawflow esté listo
 
         if(typeof closeFlowsModal === 'function') closeFlowsModal();
         
     } catch (e) {
-        console.error("❌ Error al cargar:", e);
-        alert("No se pudo cargar el flujo.");
+        console.error("❌ Error crítico al cargar:", e);
+        alert("No se pudo cargar el flujo correctamente.");
     }
 };
 
@@ -456,26 +466,31 @@ async function cargarFlujoPrincipal() {
 
         // Reconstrucción de filas dinámicas (SMM)
         setTimeout(() => {
-            const nodes = flowToLoad.drawflow.Home.data;
-            Object.keys(nodes).forEach(id => {
-                const node = nodes[id];
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${id}`);
-                    if (nodeElement) {
-                        const btnAdd = nodeElement.querySelector('.btn-success');
-                        let i = 2;
-                        while (node.data && node.data[`row${i}`] !== undefined) {
-                            window.addRowDynamic(btnAdd, {
-                                row: node.data[`row${i}`],
-                                desc: node.data[`desc${i}`] || ""
-                            });
-                            i++;
-                        }
-                    }
-                }
-            });
-            editor.zoom_reset();
-        }, 800);
+    const nodes = flowToLoad.drawflow.Home.data;
+    Object.keys(nodes).forEach(nodeId => {
+        const node = nodes[nodeId];
+        
+        // Verificamos que sea una lista y que tenga datos guardados
+        if (node.name === "whatsapp_list" && node.data) {
+            const nodeElement = document.getElementById(`node-${nodeId}`);
+            if (!nodeElement) return;
+
+            const btnAdd = nodeElement.querySelector('.btn-success');
+            
+            // 🔄 Reconstrucción forzada de filas 2 en adelante
+            let i = 2;
+            while (node.data[`row${i}`] !== undefined) {
+                // Llamamos a la función para que cree el HTML de la fila
+                window.addRowDynamic(btnAdd, {
+                    row: node.data[`row${i}`],
+                    desc: node.data[`desc${i}`] || ""
+                });
+                i++;
+            }
+        }
+    });
+    editor.zoom_reset();
+}, 600);
 
         console.log("✅ Sistema cargado correctamente.");
     } catch (error) {
