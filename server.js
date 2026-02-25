@@ -595,18 +595,41 @@ app.delete('/api/delete-flow/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// REGLA: Esta ruta debe llamarse "/chats" y enviar "id" para que el CRM los vea
 app.get("/chats", async (req, res) => {
-    const chats = await Message.aggregate([
-        { $sort: { timestamp: 1 } }, 
-        { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
-        { $sort: { lastTime: -1 } }
-    ]);
-    res.json(chats);
+    try {
+        const chats = await Message.aggregate([
+            { $sort: { timestamp: 1 } }, 
+            { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
+            { $sort: { lastTime: -1 } }
+        ]);
+        // Mapeamos _id a id para que el frontend no de "undefined"
+        res.json(chats.map(c => ({ id: c._id, lastMessage: { text: c.lastMessage }, timestamp: c.lastTime })));
+    } catch (e) { res.status(500).json([]); }
 });
 
-app.get("/messages/:chatId", async (req, res) => {
-    const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-    res.json(messages);
+// REGLA: El frontend busca los mensajes en "/chats/ID", no en "/messages/ID"
+app.get("/chats/:chatId", async (req, res) => {
+    try {
+        const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
+        res.json(messages);
+    } catch (e) { res.status(500).json([]); }
+});
+
+// REGLA: Ruta necesaria para el efecto de "escribiendo" de la IA
+app.post('/api/whatsapp-presence', async (req, res) => {
+    const { chatId, status } = req.body;
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: chatId,
+            sender_action: status 
+        }, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const storage = multer.diskStorage({
