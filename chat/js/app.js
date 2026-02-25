@@ -573,27 +573,35 @@ function procesarRespuestaFlujo(accion) {
 async function loadChats() {
     try {
         const res = await fetch("/chats");
-        if (!res.ok) throw new Error("Error en la respuesta del servidor");
-        
+        // Si el servidor falla, lanzamos error para no romper el código
+        if (!res.ok) throw new Error("Servidor no responde");
+
         const chats = await res.json();
         chatList.innerHTML = "";
-        
+
+        if (!chats || chats.length === 0) {
+            chatList.innerHTML = "<div style='color:gray; padding:20px; font-family:Montserrat;'>No hay chats disponibles</div>";
+            return;
+        }
+
         chats.forEach(chat => {
-            // Usamos chat.id o chat.chatId dependiendo de cómo venga de tu base de datos
-            const id = chat.id || chat.chatId;
-            if (!id) return; // Si no hay ID, saltamos este item
+            // Buscamos el ID en cualquier formato posible (id o chatId)
+            const id = chat.id || chat.chatId || (chat._id ? chat._id.toString() : null);
+            
+            if (!id) return; // Saltamos si no hay rastro de ID
 
             const div = document.createElement("div");
             div.className = `chat-item ${id === currentChat ? "active" : ""}`;
             div.style.fontFamily = "'Montserrat', sans-serif";
             
-            const name = chat.name || id; // Si no hay nombre, ponemos el número/ID
-            const lastMsg = chat.lastMessage?.text || "Sin mensajes";
+            // Si no hay nombre, usamos el número o ID
+            const name = chat.name || id || "Usuario Desconocido";
+            const lastMsg = (chat.lastMessage && chat.lastMessage.text) ? chat.lastMessage.text : "Sin mensajes";
             
             div.innerHTML = `
-                <div class="chat-info">
-                    <div class="chat-name">${name}</div>
-                    <div class="chat-last-msg">${lastMsg}</div>
+                <div class="chat-info" style="pointer-events: none;">
+                    <div class="chat-name" style="font-weight:700;">${name}</div>
+                    <div class="chat-last-msg" style="font-size:12px; opacity:0.8;">${lastMsg}</div>
                 </div>
             `;
             
@@ -601,36 +609,40 @@ async function loadChats() {
             chatList.appendChild(div);
         });
     } catch (e) {
-        console.error("Error cargando chats:", e);
+        console.error("Error en loadChats:", e);
+        chatList.innerHTML = "<div style='color:red; padding:20px;'>⚠️ Error al conectar con los chats</div>";
     }
 }
 
 async function openChat(chatId) {
-    if (!chatId || chatId === "undefined") {
-        console.error("ID de chat no válido");
-        return;
-    }
-    
+    if (!chatId || chatId === "undefined") return;
+
     currentChat = chatId;
+    messagesContainer.innerHTML = "<div style='color:white; padding:20px; font-family:Montserrat;'>Cargando mensajes...</div>";
+    
+    // UI: Enfoque en móvil
     document.body.classList.add('show-chat');
-    messagesContainer.innerHTML = "";
 
     try {
         const res = await fetch(`/chats/${chatId}`);
-        // Verificamos si la respuesta es JSON antes de procesar
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            throw new Error("El servidor no devolvió JSON. Posible error 404/500.");
-        }
-
         const messages = await res.json();
-        messages.forEach(msg => renderMessage(msg));
+        
+        messagesContainer.innerHTML = ""; // Limpiamos el "Cargando..."
+
+        if (Array.isArray(messages)) {
+            messages.forEach(msg => renderMessage(msg));
+        }
+        
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
-        // Refrescamos la lista para marcar el activo
-        loadChats();
+        // Refrescamos la lista para que se vea el chat seleccionado
+        const allItems = document.querySelectorAll('.chat-item');
+        allItems.forEach(i => i.classList.remove('active'));
+        // Buscamos el item actual para activarlo visualmente
+        loadChats(); 
+
     } catch (e) {
         console.error("Error al abrir chat:", e);
-        messagesContainer.innerHTML = `<div style="color:white; padding:20px;">Error al cargar mensajes. Verifica que la ruta /chats/${chatId} exista en tu servidor.</div>`;
+        messagesContainer.innerHTML = "<div style='color:white; padding:20px;'>No se pudieron cargar los mensajes.</div>";
     }
 }
