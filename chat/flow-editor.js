@@ -316,17 +316,10 @@ async function cargarFlujoPrincipal() {
         const res = await fetch('/api/get-flow');
         const data = await res.json();
 
-        if (!data?.drawflow) {
-            editor.import({ drawflow: { Home: { data: {} } } });
-            return;
-        }
+        console.log("🔥 DATA RECIBIDA DEL BACKEND:", data);
 
         editor.clear();
         editor.import(data);
-
-        setTimeout(() => {
-            reconstruirFilas(data);
-        }, 500);
 
     } catch (error) {
         console.error("❌ Error cargando flujo:", error);
