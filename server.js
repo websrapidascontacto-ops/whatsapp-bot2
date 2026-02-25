@@ -687,70 +687,39 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Server Punto Nemo Estable - Todo restaurado");
-});
-
-
-// 2. PEGA ESTO AL FINAL (pero antes del app.listen)
+/* ========================= ENDPOINT DE IA (OPENAI) ========================= */
 app.post('/api/ai-chat', async (req, res) => {
     const { message, chatId } = req.body;
-    
-    // RECOMENDACIÓN: Usa variables de entorno o pega aquí tu clave
     const apiKey = process.env.OPENAI_API_KEY;
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o-mini", // Es más barato y rápido que gpt-4o
+            model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
                     content: `Eres el asistente virtual experto de 'aumentar-seguidores.com'. Tu misión es resolver dudas sobre el servicio y dirigir al cliente hacia la compra usando los botones del chat.
 
-INFORMACIÓN LEGAL Y REGLAS DE ORO (Estrictas):
+INFORMACIÓN LEGAL Y REGLAS (Estrictas):
+1. NATURALEZA: Solo aumentamos la "Apariencia" visual. NO garantizamos interacción.
+2. REQUISITOS: Cuenta PÚBLICA obligatoria. No pedimos contraseñas.
+3. REEMBOLSOS: NO hay reembolsos una vez realizado el depósito.
+4. GARANTÍA: Solo si cae más del 10% y el servicio incluye Refill.
+5. TIEMPOS: El tiempo estimado de entrega es de MENOS DE 1 HORA después de validar el pago. 🚀
 
-1. NATURALEZA DEL SERVICIO:
-- Solo aumentamos la "Apariencia" visual del perfil.
-- NO garantizamos interacción (likes o comentarios) de los nuevos seguidores.
-- Garantizamos la entrega de la cantidad comprada, pero no su actividad.
-
-2. REQUISITOS TÉCNICOS:
-- La cuenta DEBE ser PÚBLICA.
-- Si el cliente tiene la cuenta en "Privada", el pedido no se cargará y NO hay derecho a reembolso ni reposición.
-- Nunca pedimos contraseñas, solo el enlace (URL) o nombre de usuario.
-
-3. POLÍTICA DE PAGOS Y REEMBOLSOS:
-- NO hay reembolsos de dinero bajo ninguna circunstancia una vez realizado el depósito.
-- Pedidos con enlaces incorrectos o URLs mal escritas por el cliente no tienen derecho a reposición.
-
-4. GARANTÍA DE REPOSICIÓN (REFILL):
-- Solo aplica si el servicio lo especifica.
-- Reponemos si la caída supera el 10% del total comprado dentro del periodo de garantía.
-- La garantía se anula si el usuario cambia su nombre de usuario o pone la cuenta en privado.
-
-5. RESPONSABILIDAD:
-- El cliente asume el riesgo de posibles suspensiones por parte de las redes sociales. No somos responsables por sanciones de Instagram, Facebook, TikTok, etc.
-
-6. REFERENCIAS Y CONFIANZA:
-- Si piden pruebas o referencias, envíalos amablemente aquí: https://www.instagram.com/aumentar.seguidores2026/
-
-Tiempos de Entrega: Si el usuario pregunta cuánto tarda su pedido o servicio, responde que el tiempo estimado es de menos de 1 hora después de la validación del pago. Recuérdales que siempre intentamos entregarlo lo antes posible y que pueden haber retrasos si hay alto volumen de pedidos. 🚀
-
-ESTILO DE RESPUESTA:
-- Usa siempre fuente Montserrat (estilo limpio y profesional).
+ESTILO:
 - Responde de forma CORTA, amigable y usa iconos (🚀, ✨, 🛡️).
-- NO des precios (el cliente debe verlos en el menú de opciones).
-- REGLA DE CIERRE: Al final de CADA mensaje, invita al cliente a elegir una opción del menú de servicios que aparece abajo en el chat para continuar con su pedido. 👇
-7. No inventes servicios que no tenemos.
-Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTION:TIKTOK]
-            Si quiere Instagram o pregunta por planes de esa red, termina con: [ACTION:INSTAGRAM]
-            Si quiere Facebook o pregunta por planes de esa red, termina con: [ACTION:FACEBOOK]
-            No menciones los códigos en tu texto, solo ponlos al final de tu respuesta.`
+- Usa fuente Montserrat si es posible.
+- No des precios, invita a usar el menú de abajo. 👇
+6. Si preguntan por redes específicas, usa estos códigos al final:
+   TikTok: [ACTION:TIKTOK]
+   Instagram: [ACTION:INSTAGRAM]
+   Facebook: [ACTION:FACEBOOK]`
                 },
                 { role: "user", content: message }
             ],
-            max_tokens: 150, // Limita el gasto de saldo (aprox 100 palabras)
-            temperature: 0.5 // Hace respuestas más directas y menos creativas
+            max_tokens: 150,
+            temperature: 0.5
         }, {
             headers: { 
                 'Authorization': `Bearer ${apiKey}`, 
@@ -762,16 +731,19 @@ Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTI
         res.json({ text: aiText });
 
     } catch (error) {
-        // Log detallado en Railway para saber por qué falla (saldo, clave, etc)
-        console.error("Error con OpenAI:", error.response ? error.response.data : error.message);
+        console.error("❌ Error OpenAI:", error.response ? error.response.data : error.message);
         res.status(500).json({ error: "Error al conectar con la IA" });
     }
 });
-async function responderConIA(chatId, textoUsuario) {
+
+/* ========================= FUNCIÓN AUTÓNOMA (24/7) ========================= */
+// Importante: Esta función debe llamarse igual que en tu webhook (ejecutarIAsola)
+async function ejecutarIAsola(chatId, textoUsuario) {
     try {
-        // 1. Llamamos a tu propia ruta de IA o directamente a OpenAI
-        // Usamos la lógica que ya tienes configurada en /api/ai-chat
-        const response = await axios.post(`http://localhost:${process.env.PORT || 3000}/api/ai-chat`, {
+        console.log(`🤖 IA trabajando para ${chatId}...`);
+        
+        // Llamada interna al endpoint de arriba
+        const response = await axios.post(`http://127.0.0.1:${process.env.PORT || 3000}/api/ai-chat`, {
             message: textoUsuario,
             chatId: chatId
         });
@@ -781,31 +753,41 @@ async function responderConIA(chatId, textoUsuario) {
         if (data.text) {
             let textoIA = data.text;
 
-            // Limpiar acciones [ACTION:...]
-            const regexAction = /\[ACTION:(\w+)\]/i;
-            const match = textoIA.match(regexAction);
-            if (match) {
-                const accion = match[0];
-                textoIA = textoIA.replace(accion, "").trim();
-                // Aquí podrías disparar el flujo si es necesario
-            }
+            // Limpiar códigos de acción para que no los vea el cliente
+            textoIA = textoIA.replace(/\[ACTION:\w+\]/gi, "").trim();
 
-            // 2. ENVIAR A WHATSAPP
+            // 1. ENVIAR A WHATSAPP DIRECTO (META)
             await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
                 messaging_product: "whatsapp",
                 to: chatId,
-                text: { body: textoIA.trim() }
+                type: "text",
+                text: { body: textoIA }
             }, {
-                headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+                headers: { 
+                    'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
-            // 3. Guardar en BD para que aparezca en el CRM cuando lo abras
+            // 2. Guardar en Base de Datos
             const savedBot = await Message.create({ 
-                chatId: chatId, from: "bot", text: textoIA.trim() 
+                chatId: chatId, from: "bot", text: textoIA 
             });
-            broadcast({ type: "new_message", message: { ...savedBot._doc, id: chatId } });
+
+            // 3. Avisar al CRM por WebSocket
+            broadcast({ 
+                type: "new_message", 
+                message: { ...savedBot._doc, id: chatId } 
+            });
+
+            console.log(`✅ IA respondió sola a ${chatId}`);
         }
     } catch (e) {
-        console.error("❌ Error IA Automática:", e.message);
+        console.error("❌ Error en ejecutarIAsola:", e.message);
     }
 }
+
+/* ========================= INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ========================= */
+server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+    console.log("🚀 Servidor en línea y IA configurada");
+});
