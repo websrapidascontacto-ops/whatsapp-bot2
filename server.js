@@ -1,4 +1,3 @@
-const axios = require('axios'); // Asegúrate de tener instalado axios (npm install axios)// 
 const express = require("express");
 const http = require("http");
 const mongoose = require("mongoose");
