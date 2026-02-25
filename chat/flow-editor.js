@@ -372,19 +372,17 @@ window.deleteFlow = async function(id) {
     } catch (e) { alert("❌ Error al eliminar"); }
 }
 
-/* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
-// ÚNICO Listener de mensajes para evitar conflictos
+/* --- LISTENER PARA IMPORTACIÓN LIMPIA --- */
 window.addEventListener('message', function(e) {
     if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
         const rawData = e.data.data;
-        // Si viene basura o vacío, inyectamos estructura válida
-        const safeData = (rawData && rawData.drawflow?.Home?.data) 
-            ? rawData 
-            : { "drawflow": { "Home": { "data": {} } } };
-        
-        editor.clear();
-        editor.import(safeData);
-        editor.zoom_reset();
+        // Si no hay datos válidos, evitamos llamar a editor.import
+        if (!rawData || !rawData.drawflow) {
+            editor.clear();
+            return;
+        }
+        editor.import(rawData);
+        setTimeout(() => editor.zoom_reset(), 100);
     }
 });
 /* === CARGA Y SINCRONIZACIÓN DEFINITIVA (WEBS RÁPIDAS) === */
@@ -398,25 +396,31 @@ async function cargarFlujoPrincipal() {
         const res = await fetch('/api/get-flow');
         const responseData = await res.json();
 
-        // 🛡️ VALIDACIÓN DE HIERRO
-        // Si la respuesta no tiene la estructura exacta, forzamos una limpia
-        let flowToLoad = { "drawflow": { "Home": { "data": {} } } };
+        // 1. Extraer la data ignorando envoltorios innecesarios
+        let cleanData = responseData.drawflow ? responseData : (responseData.data || responseData);
 
-        if (responseData && responseData.drawflow && responseData.drawflow.Home && responseData.drawflow.Home.data) {
-            flowToLoad = responseData;
-        } else if (responseData?.data?.drawflow?.Home?.data) {
-            flowToLoad = responseData.data;
+        // 2. Validación estructural profunda para evitar el error de Object.keys
+        if (!cleanData.drawflow || !cleanData.drawflow.Home || !cleanData.drawflow.Home.data) {
+            console.warn("⚠️ Estructura inválida detectada, usando plantilla vacía.");
+            cleanData = { "drawflow": { "Home": { "data": {} } } };
         }
 
-        console.log("📦 Cargando datos al editor:", flowToLoad);
+        console.log("📦 Importando nodos...");
 
         editor.clear();
-        // IMPORTANTE: Ahora flowToLoad SIEMPRE tiene Home.data, evitando el error de Object.keys
-        editor.import(flowToLoad);
+        
+        // 3. Importación protegida
+        try {
+            editor.import(cleanData);
+        } catch (importError) {
+            console.error("❌ Drawflow falló al importar:", importError);
+            // Si falla, intentamos cargar al menos un lienzo limpio para no bloquear la UI
+            editor.import({ "drawflow": { "Home": { "data": {} } } });
+        }
 
-        // Reconstrucción de filas dinámicas (Planes S/380)
+        // 4. Reconstrucción de la interfaz de Montserrat
         setTimeout(() => {
-            const nodes = flowToLoad.drawflow.Home.data;
+            const nodes = editor.drawflow.drawflow.Home.data;
             Object.keys(nodes).forEach(id => {
                 const node = nodes[id];
                 if (node.name === "whatsapp_list") {
@@ -434,13 +438,17 @@ async function cargarFlujoPrincipal() {
                     }
                 }
             });
-            editor.zoom_reset();
+            
+            // Forzamos el zoom para ver los 51 nodos (que están en coordenadas negativas)
+            editor.zoom_reset(); 
+            
+            // Reseteo de coordenadas para nuevos nodos
+            lastNodeX = 50;
+            lastNodeY = 150;
         }, 600);
 
     } catch (error) {
-        console.error("❌ Error en carga inicial:", error);
-        // Fallback absoluto: lienzo vacío con estructura correcta
-        editor.import({ "drawflow": { "Home": { "data": {} } } });
+        console.error("❌ Error fatal en cargarFlujoPrincipal:", error);
     }
 }
 // Único punto de entrada
