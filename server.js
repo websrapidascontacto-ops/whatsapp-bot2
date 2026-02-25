@@ -592,16 +592,32 @@ app.post('/api/save-flow', async (req, res) => {
     try {
         const { id, name, data } = req.body;
         const finalName = name || `Flujo_${Date.now()}`;
+
+        // 1. Quitamos el "Main" a todos los flujos existentes
+        await Flow.updateMany({}, { isMain: false });
+
+        let savedFlow;
+
         if (id && mongoose.Types.ObjectId.isValid(id)) {
-            await Flow.findByIdAndUpdate(id, { name: finalName, data });
-            res.json({ success: true, id });
+            // 2. Si el flujo ya existe, lo actualizamos y lo hacemos Main
+            savedFlow = await Flow.findByIdAndUpdate(
+                id, 
+                { name: finalName, data, isMain: true }, 
+                { new: true }
+            );
         } else {
-            const existing = await Flow.findOne({ name: finalName });
-            const safeName = existing ? `${finalName}_${Date.now()}` : finalName;
-            const newFlow = await Flow.create({ name: safeName, data, isMain: false });
-            res.json({ success: true, id: newFlow._id });
+            // 3. Si es nuevo, lo creamos directamente como Main
+            savedFlow = await Flow.create({ 
+                name: finalName, 
+                data, 
+                isMain: true 
+            });
         }
+
+        console.log(`✅ Flujo "${finalName}" guardado y activado como Principal.`);
+        res.json({ success: true, id: savedFlow._id });
     } catch (e) { 
+        console.error("❌ Error al guardar y activar flujo:", e.message);
         res.status(500).json({ error: e.message }); 
     }
 });
