@@ -355,15 +355,28 @@ app.post("/webhook-yape", async (req, res) => {
 async function processSequence(to, node, allNodes) {
     if (!node) return;
 
+    // 📍 GUARDAR ESTADO PARA LA IA (Contexto)
+    try {
+        await UserStatus.updateOne(
+            { chatId: to },
+            { lastNodeId: node.id.toString(), updatedAt: Date.now() },
+            { upsert: true }
+        );
+    } catch (err) {
+        console.error("❌ Error al guardar estado:", err.message);
+    }
+
     let payload = { messaging_product: "whatsapp", to };
     let botText = "";
 
+    // 1. NODO DE TEXTO O IA
     if (node.name === "message" || node.name === "ia") {
         botText = node.data.info || "Servicios Webs Rápidas 🚀";
         payload.type = "text";
         payload.text = { body: botText };
     } 
-    else if (node.name === "media") {
+    // 2. NODO DE IMAGEN / MEDIA
+    else if (node.name === "media" || node.name === "image") {
         const mediaPath = node.data.url || node.data.media_url || node.data.info || node.data.val;
         const caption = node.data.caption || node.data.text || "";
         if (mediaPath) {
@@ -375,6 +388,7 @@ async function processSequence(to, node, allNodes) {
             botText = `🖼️ Imagen: ${caption}`;
         }
     }
+    // 3. NODO DE NOTIFICACIÓN
     else if (node.name === "notify") {
         const myNumber = "51933425911"; 
         const alertText = node.data.info || "Alguien llegó a este punto";
@@ -385,14 +399,16 @@ async function processSequence(to, node, allNodes) {
         axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, notifyPayload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         }).catch(e => console.error("Error aviso admin:", e.message));
+        
         botText = "🔔 Aviso enviado al admin";
+        
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
         return; 
     }
-    /* ========================= CORRECCIÓN DE LISTA FILTRADA ========================= */
+    // 4. NODO DE LISTA FILTRADA (TU LÓGICA COMPLETA)
     else if (node.name === "whatsapp_list") {
         try {
             const rows = [];
@@ -421,44 +437,53 @@ async function processSequence(to, node, allNodes) {
                     sections: [{ title: "Servicios", rows: rows }] 
                 }
             };
-
             botText = "📋 Menú de lista filtrado enviado";
         } catch (e) { 
             console.error("❌ Error en construcción de lista:", e.message); 
         }
     }
+    // 5. NODO DE VALIDACIÓN DE PAGO (TU LÓGICA COMPLETA)
     else if (node.name === "payment_validation") {
-            await PaymentWaiting.findOneAndUpdate(
-                { chatId: to },
-                { 
-                    productId: node.data.product_id, 
-                    amount: node.data.amount, 
-                    active: true, 
-                    waitingForLink: true,
-                    waitingForCode: false,
-                    yapeCode: null 
-                },
-                { upsert: true }
-            );
-            // Mensaje inicial solicitando el link
-            botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
-            payload.type = "text";
-            payload.text = { body: botText };
+        await PaymentWaiting.findOneAndUpdate(
+            { chatId: to },
+            { 
+                productId: node.data.product_id, 
+                amount: node.data.amount, 
+                active: true, 
+                waitingForLink: true,
+                waitingForCode: false,
+                yapeCode: null 
+            },
+            { upsert: true }
+        );
+        botText = `🚀 ¡Excelente elección!\n\n🔗 Para procesar tu pedido, por favor pega aquí el *link de tu cuenta o publicación* donde enviaremos el servicio. ✨`;
+        payload.type = "text";
+        payload.text = { body: botText };
     }
 
+    // --- BLOQUE DE ENVÍO Y ENCADENAMIENTO (SIN OMITIR NADA) ---
     try {
+        // Envío a Meta
         await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, payload, {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
-        const savedBot = await Message.create({ chatId: to, from: "me", text: botText });
-        broadcast({ type: "new_message", message: savedBot });
+
+        // Registro en CRM/DB
+        const savedBot = await Message.create({ chatId: to, from: "bot", text: botText });
+        broadcast({ type: "new_message", message: { ...savedBot._doc, id: to } });
+
+        // Si es lista o pago, aquí cortamos porque el usuario debe interactuar
         if (node.name === "whatsapp_list" || node.name === "payment_validation") return; 
+
+        // Si el nodo tiene una conexión de salida, esperamos 1.5s y mandamos el siguiente
         if (node.outputs?.output_1?.connections?.[0]) {
             const nextNodeId = node.outputs.output_1.connections[0].node;
             await new Promise(r => setTimeout(r, 1500)); 
             return await processSequence(to, allNodes[nextNodeId], allNodes);
         }
-    } catch (err) { console.error("❌ Error en processSequence:", err.message); }
+    } catch (err) { 
+        console.error("❌ Error final processSequence:", err.response?.data || err.message); 
+    }
 }
 
 /* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) ========================= */
@@ -693,8 +718,20 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
 
 /* ========================= ENDPOINT DE IA (OPENAI) ========================= */
 app.post('/api/ai-chat', async (req, res) => {
-    const { message, chatId } = req.body;
+    const { message, chatId, contexto } = req.body;
     const apiKey = process.env.OPENAI_API_KEY;
+
+    // Diccionario para que la IA entienda en qué parte del flujo está el usuario
+    const nombresNodos = {
+        "23": "Menú Principal de Redes (Instagram, TikTok, Facebook)",
+        "12": "Sección de Planes de TikTok",
+        "46": "Sección de Planes de Instagram",
+        "13": "Sección de Planes de Facebook",
+        "waiting_link": "Proceso de Pago: Esperando el link del perfil",
+        "waiting_code": "Proceso de Pago: Esperando código de validación"
+    };
+
+    const ubicacionActual = nombresNodos[contexto] || "Inicio de la conversación";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -704,25 +741,56 @@ app.post('/api/ai-chat', async (req, res) => {
                     role: "system",
                     content: `Eres el asistente virtual experto de 'aumentar-seguidores.com'. Tu misión es resolver dudas sobre el servicio y dirigir al cliente hacia la compra usando los botones del chat.
 
-INFORMACIÓN LEGAL Y REGLAS (Estrictas):
-1. NATURALEZA: Solo aumentamos la "Apariencia" visual. NO garantizamos interacción.
-2. REQUISITOS: Cuenta PÚBLICA obligatoria. No pedimos contraseñas.
-3. REEMBOLSOS: NO hay reembolsos una vez realizado el depósito.
-4. GARANTÍA: Solo si cae más del 10% y el servicio incluye Refill.
-5. TIEMPOS: El tiempo estimado de entrega es de MENOS DE 1 HORA después de validar el pago. 🚀
+UBICACIÓN ACTUAL DEL CLIENTE: El usuario se encuentra en: ${ubicacionActual}. Usa esta información para guiarlo si tiene dudas.
 
-ESTILO:
+INFORMACIÓN LEGAL Y REGLAS DE ORO (Estrictas - No omitir ninguna):
+
+1. NATURALEZA DEL SERVICIO:
+- Solo aumentamos la "Apariencia" visual del perfil.
+- NO garantizamos interacción (likes o comentarios) de los nuevos seguidores.
+- Garantizamos la entrega de la cantidad comprada, pero no su actividad.
+
+2. REQUISITOS TÉCNICOS:
+- La cuenta DEBE ser PÚBLICA.
+- Si el cliente tiene la cuenta en "Privada", el pedido no se cargará y NO hay derecho a reembolso ni reposición.
+- Nunca pedimos contraseñas, solo el enlace (URL) o nombre de usuario.
+
+3. POLÍTICA DE PAGOS Y REEMBOLSOS:
+- NO hay reembolsos de dinero bajo ninguna circunstancia una vez realizado el depósito.
+- Pedidos con enlaces incorrectos o URLs mal escritas por el cliente no tienen derecho a reposición.
+
+4. GARANTÍA DE REPOSICIÓN (REFILL):
+- Solo aplica si el servicio lo especifica.
+- Reponemos si la caída supera el 10% del total comprado dentro del periodo de garantía.
+- La garantía se anula si el usuario cambia su nombre de usuario o pone la cuenta en privado.
+
+5. RESPONSABILIDAD:
+- El cliente asume el riesgo de posibles suspensiones por parte de las redes sociales. No somos responsables por sanciones de Instagram, Facebook, TikTok, etc.
+
+6. REFERENCIAS Y CONFIANZA:
+- Si piden pruebas o referencias, envíalos amablemente aquí: https://www.instagram.com/aumentar.seguidores2026/
+
+7. TIEMPOS DE ENTREGA:
+- El tiempo estimado de entrega es de MENOS DE 1 HORA después de la validación del pago. 
+- Aclara que siempre procuramos entregar lo más pronto posible, pero que pueden haber retrasos si hay un alto volumen de pedidos. 🚀
+
+ESTILO DE RESPUESTA:
+- Usa siempre fuente Montserrat (estilo limpio y profesional).
 - Responde de forma CORTA, amigable y usa iconos (🚀, ✨, 🛡️).
-- Usa fuente Montserrat si es posible.
-- No des precios, invita a usar el menú de abajo. 👇
-6. Si preguntan por redes específicas, usa estos códigos al final:
-   TikTok: [ACTION:TIKTOK]
-   Instagram: [ACTION:INSTAGRAM]
-   Facebook: [ACTION:FACEBOOK]`
+- NO des precios (el cliente debe verlos en el menú de opciones).
+- REGLA DE CIERRE: Al final de CADA mensaje, invita al cliente a elegir una opción del menú de servicios que aparece abajo para continuar con su pedido usando el código [ACTION:MENU_REDES]. 👇
+
+GATILLOS DE ACCIÓN:
+- Si el usuario quiere comprar o ver servicios: [ACTION:MENU_REDES]
+- Si pregunta específicamente por una red:
+  TikTok: [ACTION:TIKTOK]
+  Instagram: [ACTION:INSTAGRAM]
+  Facebook: [ACTION:FACEBOOK]
+No menciones los códigos en tu texto, solo ponlos al final.`
                 },
                 { role: "user", content: message }
             ],
-            max_tokens: 150,
+            max_tokens: 300,
             temperature: 0.5
         }, {
             headers: { 
@@ -735,7 +803,7 @@ ESTILO:
         res.json({ text: aiText });
 
     } catch (error) {
-        console.error("❌ Error OpenAI:", error.response ? error.response.data : error.message);
+        console.error("❌ Error con OpenAI:", error.response ? error.response.data : error.message);
         res.status(500).json({ error: "Error al conectar con la IA" });
     }
 });
@@ -744,53 +812,116 @@ ESTILO:
 // Importante: Esta función debe llamarse igual que en tu webhook (ejecutarIAsola)
 async function ejecutarIAsola(chatId, textoUsuario) {
     try {
-        console.log(`🤖 IA trabajando para ${chatId}...`);
-        
-        // Llamada interna al endpoint de arriba
+        // 📍 PASO 1: Obtener el contexto actual del usuario (último nodo visitado)
+        const status = await UserStatus.findOne({ chatId });
+        const contextoNodo = status ? status.lastNodeId : null;
+
+        // 📍 PASO 2: Enviar mensaje y contexto al Endpoint de la IA
         const response = await axios.post(`http://127.0.0.1:${process.env.PORT || 3000}/api/ai-chat`, {
             message: textoUsuario,
-            chatId: chatId
+            chatId: chatId,
+            contexto: contextoNodo // Enviamos el ID del nodo para que la IA sepa qué responder
         });
 
         const data = response.data;
-
         if (data.text) {
             let textoIA = data.text;
 
-            // Limpiar códigos de acción para que no los vea el cliente
-            textoIA = textoIA.replace(/\[ACTION:\w+\]/gi, "").trim();
+            // 1. Detectar si la IA quiere mandar al menú de redes sociales (Gatillo Principal)
+            if (textoIA.includes("[ACTION:MENU_REDES]") || 
+                textoIA.includes("[ACTION:TIKTOK]") || 
+                textoIA.includes("[ACTION:INSTAGRAM]") || 
+                textoIA.includes("[ACTION:FACEBOOK]")) {
+                
+                const flowDoc = await Flow.findOne({ isMain: true });
+                if (flowDoc) {
+                    const nodes = flowDoc.data.drawflow.Home.data;
+                    
+                    // Mapeo de códigos a IDs de Nodos según tu flujo
+                    let targetNodeId = "23"; // Por defecto Menú Principal
+                    if (textoIA.includes("[ACTION:TIKTOK]")) targetNodeId = "12";
+                    if (textoIA.includes("[ACTION:INSTAGRAM]")) targetNodeId = "46";
+                    if (textoIA.includes("[ACTION:FACEBOOK]")) targetNodeId = "13";
 
-            // 1. ENVIAR A WHATSAPP DIRECTO (META)
-            await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-                messaging_product: "whatsapp",
-                to: chatId,
-                type: "text",
-                text: { body: textoIA }
-            }, {
-                headers: { 
-                    'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
+                    const targetNode = nodes[targetNodeId];
+
+                    if (targetNode) {
+                        console.log(`🚀 IA activando Nodo ${targetNodeId} para ${chatId}`);
+                        
+                        // Limpiamos el texto de cualquier código de acción
+                        const textoLimpio = textoIA
+                            .replace("[ACTION:MENU_REDES]", "")
+                            .replace("[ACTION:TIKTOK]", "")
+                            .replace("[ACTION:INSTAGRAM]", "")
+                            .replace("[ACTION:FACEBOOK]", "")
+                            .trim();
+                        
+                        // Mandamos el texto explicativo de la IA primero
+                        if (textoLimpio) {
+                            await enviarWhatsApp(chatId, textoLimpio);
+                        }
+                        
+                        // DISPARAMOS EL FLUJO AUTOMÁTICAMENTE
+                        await processSequence(chatId, targetNode, nodes);
+                        return; // Salimos para evitar duplicados
+                    }
                 }
-            });
+            }
 
-            // 2. Guardar en Base de Datos
+            // 2. Si no hay acción especial, enviar texto normal de la IA
+            await enviarWhatsApp(chatId, textoIA.trim());
+
+            // 3. Guardar en BD y CRM
             const savedBot = await Message.create({ 
-                chatId: chatId, from: "bot", text: textoIA 
+                chatId, 
+                from: "bot", 
+                text: textoIA 
             });
-
-            // 3. Avisar al CRM por WebSocket
             broadcast({ 
                 type: "new_message", 
                 message: { ...savedBot._doc, id: chatId } 
             });
-
-            console.log(`✅ IA respondió sola a ${chatId}`);
         }
     } catch (e) {
-        console.error("❌ Error en ejecutarIAsola:", e.message);
+        console.error("❌ Error IA Autónoma:", e.message);
     }
 }
 
+/**
+ * Función auxiliar para enviar mensajes de texto plano vía WhatsApp API
+ */
+async function enviarWhatsApp(to, text) {
+    try {
+        await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+            messaging_product: "whatsapp",
+            to: to,
+            type: "text",
+            text: { body: text }
+        }, {
+            headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+        });
+    } catch (err) {
+        console.error("❌ Error al enviarWhatsApp:", err.response?.data || err.message);
+    }
+}
+
+// Función auxiliar para no repetir código de envío
+async function enviarWhatsApp(to, text) {
+    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "text",
+        text: { body: text }
+    }, {
+        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+    });
+}
+const userStatusSchema = new mongoose.Schema({
+    chatId: { type: String, required: true, unique: true },
+    lastNodeId: { type: String, default: null },
+    updatedAt: { type: Date, default: Date.now }
+});
+const UserStatus = mongoose.model('UserStatus', userStatusSchema);
 /* ========================= INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Servidor en línea y IA configurada");
