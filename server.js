@@ -103,6 +103,10 @@ app.post("/webhook", async (req, res) => {
 
     for (const msg of value.messages) {
         const sender = msg.from;
+        
+        // Detectamos si el mensaje viene de un botón o lista
+        const isInteractive = msg.type === "interactive";
+
         let incomingText = (
             msg.text?.body || 
             msg.interactive?.list_reply?.title || 
@@ -257,10 +261,10 @@ app.post("/webhook", async (req, res) => {
             }
 
             // --- DISPARO DE IA SI NADA DE LO ANTERIOR SE EJECUTÓ ---
-            if (!flowProcessed) {
+            // Solo entra si: NO se procesó un flujo Y NO es un mensaje interactivo (botón/lista)
+            if (!flowProcessed && !isInteractive) {
                 console.log(`🤖 Disparando IA autónoma para: ${sender}`);
                 if (typeof ejecutarIAsola === "function") {
-                    // No usamos await aquí para que el webhook termine rápido
                     ejecutarIAsola(sender, incomingText).catch(e => console.error("Error IA:", e));
                 }
             }
