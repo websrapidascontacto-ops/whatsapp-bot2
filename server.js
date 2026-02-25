@@ -792,7 +792,7 @@ app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => 
 /* ========================= ENDPOINT DE IA (OPENAI) ========================= */
 app.post('/api/ai-chat', async (req, res) => {
     const { message, chatId, contexto } = req.body;
-    const apiKey = process.env.OPENAI_API_KEY;
+    //const apiKey = process.env.OPENAI_API_KEY;
 
     // Diccionario para que la IA entienda en qué parte del flujo está el usuario
     const nombresNodos = {
