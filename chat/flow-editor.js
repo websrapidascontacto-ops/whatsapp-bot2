@@ -313,16 +313,44 @@ window.addEventListener('message', function(e) {
 // Carga inicial automática al abrir el editor
 async function cargarFlujoPrincipal() {
     try {
+
         const res = await fetch('/api/get-flow');
         const data = await res.json();
 
         console.log("🔥 DATA RECIBIDA DEL BACKEND:", data);
 
+        if (!data || !data.drawflow) {
+            console.warn("⚠ Flujo vacío o inválido");
+            return;
+        }
+
         editor.clear();
-       editor.import(data);
-        setTimeout(() => {
-        reconstruirFilas(data);
-        }, 400);
+
+        /* 🔥 CLONACIÓN SEGURA */
+        const safeData = JSON.parse(JSON.stringify(data));
+
+        /* 🔥 SANITIZAR NODOS */
+        Object.values(safeData.drawflow.Home.data).forEach(node => {
+
+            if (!node.inputs || node.inputs === null)
+                node.inputs = {};
+
+            if (!node.outputs || node.outputs === null)
+                node.outputs = {};
+
+        });
+
+        editor.import(safeData);
+
+        /* 🔥 Reconstrucción visual después del render */
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                reconstruirFilas(safeData);
+            }, 200);
+        });
+
+        console.log("✅ Flujo cargado correctamente");
+
     } catch (error) {
         console.error("❌ Error cargando flujo:", error);
     }
