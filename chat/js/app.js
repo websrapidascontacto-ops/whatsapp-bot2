@@ -568,4 +568,57 @@ function procesarRespuestaFlujo(accion) {
         ejecutarNodoPorNombre("Facebook ");
     }
 }
+/* --- CARGA DE CHATS Y APERTURA (Lógica faltante) --- */
 
+async function loadChats() {
+    try {
+        const res = await fetch("/chats");
+        const chats = await res.json();
+        chatList.innerHTML = "";
+        
+        // Ordenamos por el que tiene mensajes más recientes
+        chats.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+
+        chats.forEach(chat => {
+            const div = document.createElement("div");
+            div.className = `chat-item ${chat.id === currentChat ? "active" : ""}`;
+            div.style.fontFamily = "'Montserrat', sans-serif";
+            
+            const unread = unreadCounts[chat.id] ? `<span class="unread-badge">${unreadCounts[chat.id]}</span>` : "";
+            
+            div.innerHTML = `
+                <div class="chat-info">
+                    <div class="chat-name">${chat.name || chat.id}</div>
+                    <div class="chat-last-msg">${chat.lastMessage?.text || "Sin mensajes"}</div>
+                </div>
+                ${unread}
+            `;
+            
+            div.onclick = () => openChat(chat.id);
+            chatList.appendChild(div);
+        });
+    } catch (e) {
+        console.error("Error cargando chats:", e);
+    }
+}
+
+async function openChat(chatId) {
+    currentChat = chatId;
+    unreadCounts[chatId] = 0;
+    
+    // UI: Mostrar el panel de mensajes en móvil si es necesario
+    document.body.classList.add('show-chat');
+    
+    // Limpiar y cargar mensajes
+    messagesContainer.innerHTML = "";
+    loadChats(); // Refrescar lista para quitar el badge de no leído
+
+    try {
+        const res = await fetch(`/chats/${chatId}`);
+        const messages = await res.json();
+        messages.forEach(msg => renderMessage(msg));
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } catch (e) {
+        console.error("Error al abrir chat:", e);
+    }
+}
