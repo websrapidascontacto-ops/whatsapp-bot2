@@ -812,22 +812,20 @@ No menciones los códigos en tu texto, solo ponlos al final.`
 // Importante: Esta función debe llamarse igual que en tu webhook (ejecutarIAsola)
 async function ejecutarIAsola(chatId, textoUsuario) {
     try {
-        // 📍 PASO 1: Obtener el contexto actual del usuario (último nodo visitado)
         const status = await UserStatus.findOne({ chatId });
         const contextoNodo = status ? status.lastNodeId : null;
 
-        // 📍 PASO 2: Enviar mensaje y contexto al Endpoint de la IA
         const response = await axios.post(`http://127.0.0.1:${process.env.PORT || 3000}/api/ai-chat`, {
             message: textoUsuario,
             chatId: chatId,
-            contexto: contextoNodo // Enviamos el ID del nodo para que la IA sepa qué responder
+            contexto: contextoNodo 
         });
 
         const data = response.data;
         if (data.text) {
             let textoIA = data.text;
 
-            // 1. Detectar si la IA quiere mandar al menú de redes sociales (Gatillo Principal)
+            // 1. Solo disparamos un nodo si la IA detecta una intención CLARA de navegación
             if (textoIA.includes("[ACTION:MENU_REDES]") || 
                 textoIA.includes("[ACTION:TIKTOK]") || 
                 textoIA.includes("[ACTION:INSTAGRAM]") || 
@@ -837,18 +835,14 @@ async function ejecutarIAsola(chatId, textoUsuario) {
                 if (flowDoc) {
                     const nodes = flowDoc.data.drawflow.Home.data;
                     
-                    // Mapeo de códigos a IDs de Nodos según tu flujo
-                    let targetNodeId = "23"; // Por defecto Menú Principal
+                    let targetNodeId = null;
                     if (textoIA.includes("[ACTION:TIKTOK]")) targetNodeId = "12";
-                    if (textoIA.includes("[ACTION:INSTAGRAM]")) targetNodeId = "46";
-                    if (textoIA.includes("[ACTION:FACEBOOK]")) targetNodeId = "13";
+                    else if (textoIA.includes("[ACTION:INSTAGRAM]")) targetNodeId = "46";
+                    else if (textoIA.includes("[ACTION:FACEBOOK]")) targetNodeId = "13";
+                    else if (textoIA.includes("[ACTION:MENU_REDES]")) targetNodeId = "23";
 
-                    const targetNode = nodes[targetNodeId];
-
-                    if (targetNode) {
-                        console.log(`🚀 IA activando Nodo ${targetNodeId} para ${chatId}`);
-                        
-                        // Limpiamos el texto de cualquier código de acción
+                    if (targetNodeId) {
+                        const targetNode = nodes[targetNodeId];
                         const textoLimpio = textoIA
                             .replace("[ACTION:MENU_REDES]", "")
                             .replace("[ACTION:TIKTOK]", "")
@@ -856,31 +850,26 @@ async function ejecutarIAsola(chatId, textoUsuario) {
                             .replace("[ACTION:FACEBOOK]", "")
                             .trim();
                         
-                        // Mandamos el texto explicativo de la IA primero
-                        if (textoLimpio) {
-                            await enviarWhatsApp(chatId, textoLimpio);
-                        }
-                        
-                        // DISPARAMOS EL FLUJO AUTOMÁTICAMENTE
+                        if (textoLimpio) await enviarWhatsApp(chatId, textoLimpio);
                         await processSequence(chatId, targetNode, nodes);
-                        return; // Salimos para evitar duplicados
+                        return; 
                     }
                 }
             }
 
-            // 2. Si no hay acción especial, enviar texto normal de la IA
-            await enviarWhatsApp(chatId, textoIA.trim());
+            // 2. SI NO HAY ACCIÓN (Duda puntual): Solo responde el texto.
+            // Esto evita que el flujo se reinicie al nodo 1 o 23.
+            const textoFinal = textoIA
+                .replace("[ACTION:MENU_REDES]", "")
+                .replace("[ACTION:TIKTOK]", "")
+                .replace("[ACTION:INSTAGRAM]", "")
+                .replace("[ACTION:FACEBOOK]", "")
+                .trim();
 
-            // 3. Guardar en BD y CRM
-            const savedBot = await Message.create({ 
-                chatId, 
-                from: "bot", 
-                text: textoIA 
-            });
-            broadcast({ 
-                type: "new_message", 
-                message: { ...savedBot._doc, id: chatId } 
-            });
+            await enviarWhatsApp(chatId, textoFinal);
+
+            const savedBot = await Message.create({ chatId, from: "bot", text: textoFinal });
+            broadcast({ type: "new_message", message: { ...savedBot._doc, id: chatId } });
         }
     } catch (e) {
         console.error("❌ Error IA Autónoma:", e.message);
