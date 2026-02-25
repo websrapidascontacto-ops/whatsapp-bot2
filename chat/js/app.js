@@ -77,56 +77,6 @@ function hideTypingIndicator() {
     }
 }
 
-/* --- LÓGICA DE IA Y FLUJOS (UNIFICADO) --- */
-async function procesarDudaConIA(textoDelUsuario) {
-    if (!currentChat) return;
-    showTypingIndicator(); 
-
-    try {
-        const response = await fetch('/api/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: textoDelUsuario, chatId: currentChat })
-        });
-
-        const data = await response.json();
-        hideTypingIndicator(); 
-
-        if (data.text) {
-            let textoParaMostrar = data.text;
-            const regexAction = /\[ACTION:(\w+)\]/i;
-            const match = textoParaMostrar.match(regexAction);
-            
-            if (match) {
-                const accionEncontrada = match[0];
-                textoParaMostrar = textoParaMostrar.replace(accionEncontrada, "");
-                procesarRespuestaFlujo(accionEncontrada);
-            }
-
-            renderMessage({ from: "bot", text: textoParaMostrar.trim(), timestamp: Date.now() });
-        }
-    } catch (error) {
-        hideTypingIndicator();
-        console.error("Error en el puente de IA:", error);
-    }
-}
-
-function procesarRespuestaFlujo(accion) {
-    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
-    const mapeo = { "tiktok": "Tik Tok ", "instagram": "Instagram ", "facebook": "Facebook " };
-    if (mapeo[redSocial]) ejecutarNodoPorNombre(mapeo[redSocial]);
-}
-
-async function ejecutarNodoPorNombre(nombreBoton) {
-    try {
-        await fetch("/api/execute-flow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ to: currentChat, trigger: nombreBoton })
-        });
-    } catch (e) { console.error("Error flujo:", e); }
-}
-
 /* --- RENDERIZADO Y OTROS --- */
 function renderMessage(msg) {
     const div = document.createElement("div");
@@ -510,19 +460,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 /* --- BLOQUE FINAL UNIFICADO (IA + FLUJOS) --- */
 
-// 1. Llamada a la IA y detección de acciones
+/* ========================= LÓGICA DE IA Y FLUJOS (UNIFICADO) ========================= */
+
 async function procesarDudaConIA(textoDelUsuario) {
     if (!currentChat) return;
     showTypingIndicator(); 
 
     try {
+        // 1. Pedir respuesta a OpenAI
         const response = await fetch('/api/ai-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: textoDelUsuario, 
-                chatId: currentChat 
-            })
+            body: JSON.stringify({ message: textoDelUsuario, chatId: currentChat })
         });
 
         const data = await response.json();
@@ -531,26 +480,62 @@ async function procesarDudaConIA(textoDelUsuario) {
         if (data.text) {
             let textoParaMostrar = data.text;
 
-            // Detectar acciones como [ACTION:TIKTOK]
+            // 2. Detectar y ejecutar acciones ([ACTION:XXX])
             const regexAction = /\[ACTION:(\w+)\]/i;
             const match = textoParaMostrar.match(regexAction);
             
             if (match) {
-                const accionEncontrada = match[0]; // [ACTION:TIKTOK]
-                textoParaMostrar = textoParaMostrar.replace(accionEncontrada, "");
-                procesarRespuestaFlujo(accionEncontrada);
+                const accionCompleta = match[0];
+                textoParaMostrar = textoParaMostrar.replace(accionCompleta, "").trim();
+                procesarRespuestaFlujo(accionCompleta);
             }
 
-            // Renderizar el mensaje limpio en el CRM con Montserrat
+            const mensajeFinal = textoParaMostrar.trim();
+
+            // 3. ENVIAR A WHATSAPP (Esto hace que llegue al celular) 📱
+            await fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to: currentChat, text: mensajeFinal })
+            });
+
+            // 4. Renderizar en el CRM (Montserrat)
             renderMessage({ 
                 from: "bot", 
-                text: textoParaMostrar.trim(), 
+                text: mensajeFinal, 
                 timestamp: Date.now() 
             });
         }
     } catch (error) {
         hideTypingIndicator();
-        console.error("Error en el puente de IA:", error);
+        console.error("❌ Error en el puente de IA:", error);
+    }
+}
+
+function procesarRespuestaFlujo(accion) {
+    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
+    // Mapeo exacto a tus botones del Flow
+    const mapeo = { 
+        "tiktok": "Tik Tok ", 
+        "instagram": "Instagram ", 
+        "facebook": "Facebook " 
+    };
+    
+    if (mapeo[redSocial]) {
+        console.log("🚀 Disparando flujo para:", redSocial);
+        ejecutarNodoPorNombre(mapeo[redSocial]);
+    }
+}
+
+async function ejecutarNodoPorNombre(nombreBoton) {
+    try {
+        await fetch("/api/execute-flow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: currentChat, trigger: nombreBoton })
+        });
+    } catch (e) { 
+        console.error("❌ Error disparando flujo:", e); 
     }
 }
 
