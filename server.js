@@ -375,32 +375,19 @@ async function processSequence(to, node, allNodes) {
         payload.type = "text";
         payload.text = { body: botText };
     } 
-    // >>> AQUÍ DEBES PEGAR EL CÓDIGO DE LA IMAGEN / ASSETS <<<
+    // 2. NODO DE IMAGEN / MEDIA
     else if (node.name === "media" || node.name === "image") {
         const mediaPath = node.data.url || node.data.media_url || node.data.info || node.data.val;
-        const caption = node.data.caption || node.data.text || node.data.info || "";
-        
-        const esImagenReal = mediaPath && (mediaPath.includes('.') || mediaPath.includes('assets/'));
-
-        if (esImagenReal) {
+        const caption = node.data.caption || node.data.text || "";
+        if (mediaPath) {
             const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-            let cleanPath = mediaPath;
-            if (!mediaPath.startsWith('http')) {
-                const fileName = mediaPath.split('/').pop();
-                cleanPath = mediaPath.includes('assets') ? mediaPath : `/assets/${fileName}`;
-            }
-            const fullUrl = cleanPath.startsWith('http') ? cleanPath : `https://${domain}${cleanPath}`;
-            
+            const cleanPath = mediaPath.startsWith('/uploads/') ? mediaPath : `/uploads/${mediaPath.split('/').pop()}`;
+            const fullUrl = `https://${domain}${cleanPath}`;
             payload.type = "image";
             payload.image = { link: fullUrl, caption: caption };
             botText = `🖼️ Imagen: ${caption}`;
-        } else {
-            botText = caption || mediaPath || "Instrucción de pago 💡";
-            payload.type = "text";
-            payload.text = { body: botText };
         }
     }
-    // >>> FIN DEL BLOQUE DE IMAGEN <<<
     // 3. NODO DE NOTIFICACIÓN
     else if (node.name === "notify") {
         const myNumber = "51933425911"; 
@@ -926,7 +913,7 @@ const userStatusSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 const UserStatus = mongoose.model('UserStatus', userStatusSchema);
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
 /* ========================= INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ========================= */
 server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
     console.log("🚀 Servidor en línea y IA configurada");
