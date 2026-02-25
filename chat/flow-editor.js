@@ -353,7 +353,11 @@ async function cargarFlujoPrincipal() {
         const responseData = await res.json();
 
         // 1. Extraer la data ignorando envoltorios innecesarios
-        let cleanData = responseData.drawflow ? responseData : (responseData.data || responseData);
+        let cleanData = responseData?.data || responseData;
+
+if (!cleanData || !cleanData.drawflow) {
+    cleanData = { "drawflow": { "Home": { "data": {} } } };
+}
 
         // 2. Validación estructural profunda para evitar el error de Object.keys
         if (!cleanData.drawflow || !cleanData.drawflow.Home || !cleanData.drawflow.Home.data) {
@@ -403,7 +407,7 @@ async function cargarFlujoPrincipal() {
             
             // Centramos la vista para que veas los 51 nodos
             editor.zoom_reset(); 
-            centrarFlujo(nodes); // Función de ayuda para ir a donde están los nodos
+            editor.zoom_reset(); // Función de ayuda para ir a donde están los nodos
             
         }, 800);
 
@@ -447,5 +451,3 @@ window.saveFlow = async function() {
         alert("Error al guardar flujo");
     }
 };
-console.log("FLOW IMPORTADO:", response.data.data);
-console.log(editor.export());
