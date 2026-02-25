@@ -447,3 +447,5 @@ window.saveFlow = async function() {
         alert("Error al guardar flujo");
     }
 };
+console.log("FLOW IMPORTADO:", response.data.data);
+console.log(editor.export());
