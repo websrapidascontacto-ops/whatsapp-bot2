@@ -496,3 +496,8 @@ async function cargarFlujoPrincipal() {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(cargarFlujoPrincipal, 800); 
 });
+// Si el autostart falla, forzamos una recarga limpia
+if (editor.drawflow.drawflow.Home.data && Object.keys(editor.drawflow.drawflow.Home.data).length === 0) {
+    console.log("🔄 Reintentando carga forzada...");
+    setTimeout(cargarFlujoPrincipal, 1500);
+}
