@@ -573,28 +573,31 @@ function procesarRespuestaFlujo(accion) {
 async function loadChats() {
     try {
         const res = await fetch("/chats");
+        if (!res.ok) throw new Error("Error en la respuesta del servidor");
+        
         const chats = await res.json();
         chatList.innerHTML = "";
         
-        // Ordenamos por el que tiene mensajes más recientes
-        chats.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
-
         chats.forEach(chat => {
+            // Usamos chat.id o chat.chatId dependiendo de cómo venga de tu base de datos
+            const id = chat.id || chat.chatId;
+            if (!id) return; // Si no hay ID, saltamos este item
+
             const div = document.createElement("div");
-            div.className = `chat-item ${chat.id === currentChat ? "active" : ""}`;
+            div.className = `chat-item ${id === currentChat ? "active" : ""}`;
             div.style.fontFamily = "'Montserrat', sans-serif";
             
-            const unread = unreadCounts[chat.id] ? `<span class="unread-badge">${unreadCounts[chat.id]}</span>` : "";
+            const name = chat.name || id; // Si no hay nombre, ponemos el número/ID
+            const lastMsg = chat.lastMessage?.text || "Sin mensajes";
             
             div.innerHTML = `
                 <div class="chat-info">
-                    <div class="chat-name">${chat.name || chat.id}</div>
-                    <div class="chat-last-msg">${chat.lastMessage?.text || "Sin mensajes"}</div>
+                    <div class="chat-name">${name}</div>
+                    <div class="chat-last-msg">${lastMsg}</div>
                 </div>
-                ${unread}
             `;
             
-            div.onclick = () => openChat(chat.id);
+            div.onclick = () => openChat(id);
             chatList.appendChild(div);
         });
     } catch (e) {
@@ -603,22 +606,31 @@ async function loadChats() {
 }
 
 async function openChat(chatId) {
+    if (!chatId || chatId === "undefined") {
+        console.error("ID de chat no válido");
+        return;
+    }
+    
     currentChat = chatId;
-    unreadCounts[chatId] = 0;
-    
-    // UI: Mostrar el panel de mensajes en móvil si es necesario
     document.body.classList.add('show-chat');
-    
-    // Limpiar y cargar mensajes
     messagesContainer.innerHTML = "";
-    loadChats(); // Refrescar lista para quitar el badge de no leído
 
     try {
         const res = await fetch(`/chats/${chatId}`);
+        // Verificamos si la respuesta es JSON antes de procesar
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("El servidor no devolvió JSON. Posible error 404/500.");
+        }
+
         const messages = await res.json();
         messages.forEach(msg => renderMessage(msg));
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // Refrescamos la lista para marcar el activo
+        loadChats();
     } catch (e) {
         console.error("Error al abrir chat:", e);
+        messagesContainer.innerHTML = `<div style="color:white; padding:20px;">Error al cargar mensajes. Verifica que la ruta /chats/${chatId} exista en tu servidor.</div>`;
     }
 }
