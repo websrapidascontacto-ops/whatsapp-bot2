@@ -721,8 +721,8 @@ Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTI
                 },
                 { role: "user", content: message }
             ],
-            max_tokens: 100, // <--- AGREGA ESTO. 100 tokens son aprox. 75 palabras.
-            temperature: 0.5
+            max_tokens: 150, // Limita el gasto de saldo (aprox 100 palabras)
+            temperature: 0.5 // Hace respuestas más directas y menos creativas
         }, {
             headers: { 
                 'Authorization': `Bearer ${apiKey}`, 
@@ -734,6 +734,7 @@ Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTI
         res.json({ text: aiText });
 
     } catch (error) {
+        // Log detallado en Railway para saber por qué falla (saldo, clave, etc)
         console.error("Error con OpenAI:", error.response ? error.response.data : error.message);
         res.status(500).json({ error: "Error al conectar con la IA" });
     }
