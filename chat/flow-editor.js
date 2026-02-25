@@ -449,53 +449,52 @@ async function cargarFlujoPrincipal() {
         const res = await fetch('/api/get-flow');
         const responseData = await res.json();
 
-        // 🛡️ ESCUDO PROTECTOR: Si la API no trae nada, creamos la estructura mínima
+        // 🛡️ ESCUDO ANTI-ERROR: Si la API falla o viene vacía, creamos un objeto válido
         let flowToLoad;
         if (responseData && responseData.drawflow) {
             flowToLoad = responseData;
         } else if (responseData && responseData.data && responseData.data.drawflow) {
             flowToLoad = responseData.data;
         } else {
-            console.warn("⚠️ Datos inválidos de la API, cargando lienzo vacío.");
+            console.warn("⚠️ API sin datos, inicializando lienzo limpio.");
             flowToLoad = { "drawflow": { "Home": { "data": {} } } };
         }
 
+        // Limpiar e Importar
         editor.clear();
-        // Aquí es donde daba el error, ahora flowToLoad nunca será null
         editor.import(flowToLoad);
 
-        // Reconstrucción de filas dinámicas (SMM)
+        // 🔄 RECONSTRUCCIÓN DE FILAS (SMM)
         setTimeout(() => {
-    const nodes = flowToLoad.drawflow.Home.data;
-    Object.keys(nodes).forEach(nodeId => {
-        const node = nodes[nodeId];
-        
-        // Verificamos que sea una lista y que tenga datos guardados
-        if (node.name === "whatsapp_list" && node.data) {
-            const nodeElement = document.getElementById(`node-${nodeId}`);
-            if (!nodeElement) return;
-
-            const btnAdd = nodeElement.querySelector('.btn-success');
+            // Verificamos que existan nodos antes de intentar leer llaves
+            if (!flowToLoad.drawflow.Home.data) return;
             
-            // 🔄 Reconstrucción forzada de filas 2 en adelante
-            let i = 2;
-            while (node.data[`row${i}`] !== undefined) {
-                // Llamamos a la función para que cree el HTML de la fila
-                window.addRowDynamic(btnAdd, {
-                    row: node.data[`row${i}`],
-                    desc: node.data[`desc${i}`] || ""
-                });
-                i++;
-            }
-        }
-    });
-    editor.zoom_reset();
-}, 600);
+            const nodes = flowToLoad.drawflow.Home.data;
+            Object.keys(nodes).forEach(id => {
+                const node = nodes[id];
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${id}`);
+                    if (nodeElement) {
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        let i = 2;
+                        // Cargamos filas guardadas
+                        while (node.data && node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd, {
+                                row: node.data[`row${i}`],
+                                desc: node.data[`desc${i}`] || ""
+                            });
+                            i++;
+                        }
+                    }
+                }
+            });
+            editor.zoom_reset();
+        }, 800);
 
         console.log("✅ Sistema cargado correctamente.");
     } catch (error) {
         console.error("❌ Error en la carga inicial:", error);
-        // Si todo falla, al menos iniciamos con el Home vacío para evitar el error de keys
+        // Fallback final: importar estructura mínima para evitar que el editor se congele
         editor.import({ "drawflow": { "Home": { "data": {} } } });
     }
 }
