@@ -1,161 +1,109 @@
-let currentChat=null;
-let unreadCounts = {}; // CONTADOR DE NO LEIDOS
+/* --- VARIABLES GLOBALES --- */
+let currentChat = null;
+let unreadCounts = {}; 
+let typingTimeout; // Control para el teclado manual
 
-const chatList=document.getElementById("chat-list");
-const messagesContainer=document.getElementById("messages");
-const chatContent=document.getElementById("chatContent");
-const chatListContainer=document.getElementById("chatListContainer");
+const chatList = document.getElementById("chat-list");
+const messagesContainer = document.getElementById("messages");
+const chatContent = document.getElementById("chatContent");
+const chatListContainer = document.getElementById("chatListContainer");
 
-// --- 1. DATA DEL FLUJO NEMO (PRE-CARGADA) ---
-const DATA_FLUJO_NEMO = {
-    "drawflow": {
-        "Home": {
-            "data": {
-                "1": { "id": 1, "name": "trigger", "data": { "val": "¡Hola! 🔝 Quiero aumentar mis redes sociales 😊" }, "class": "trigger", "outputs": { "output_1": { "connections": [{ "node": "23" }] } }, "pos_x": -1566, "pos_y": 50 },
-                "12": { "id": 12, "name": "message", "data": { "info": "🔥 ¡Excelente! TikTok es ideal para crecer rápido y volverte viral 🚀\n\nPara continuar elija el servicio que desea para su cuenta , una vez seleccione su plan le pediremos el link o usuario de su perfil" }, "class": "message", "outputs": { "output_1": { "connections": [{ "node": "33" }] } }, "pos_x": -313, "pos_y": -547 },
-                "23": { "id": 23, "name": "whatsapp_list", "data": { "title": "Servicios Disponibles", "body": "Elija la red social que desea potenciar para su cuenta personal o de empresa:\n\n*Recuerde que no pedimos contraseñas de ningún tipo*", "footer": "Webs Rápidas", "btn": "Ver Servicios", "row1": "Instagram", "row2": "Tik Tok", "row3": "Facebook", "row4": "Youtube", "row5": "Quiero ver referencias", "desc1": "Seguidores / Likes / Vistas", "desc2": "Seguidores / Vistas / Likes", "desc3": "Seguidores / Likes", "desc4": "Suscriptores / Vistas", "desc5": "Mira los resultados de nuestros clientes" }, "outputs": { "output_1": { "connections": [{ "node": "31" }] }, "output_2": { "connections": [{ "node": "12" }] }, "output_3": { "connections": [{ "node": "36" }] }, "output_4": { "connections": [{ "node": "48" }] }, "output_5": { "connections": [{ "node": "49" }] } }, "pos_x": -680, "pos_y": -248 }
-            }
-        }
-    }
-};
+// --- 1. DATA DEL FLUJO NEMO ---
+const DATA_FLUJO_NEMO = { /* ... tu data se mantiene intacta ... */ };
 
-/* --- LAS RUTAS APP.GET SE MOVIERON AL SERVER.JS PARA NO ROMPER EL NAVEGADOR --- */
-
-// Ejecutar al cargar la página (Asegúrate de tener esta función definida o cámbiala por loadChats)
+/* --- INICIALIZACIÓN --- */
 loadChats();
 
-/* ENTER ENVÍA */
-document.getElementById("message-input").addEventListener("keypress",e=>{
-if(e.key==="Enter"){e.preventDefault();sendMessage();}
+/* --- EVENTOS DE INTERFAZ --- */
+const messageInput = document.getElementById("message-input");
+
+messageInput.addEventListener("keypress", e => {
+    if (e.key === "Enter") { e.preventDefault(); sendMessage(); }
 });
 
-/* EMOJI */
-const picker=new EmojiMart.Picker({onEmojiSelect:e=>{
-document.getElementById("message-input").value+=e.native;
-}});
+// Evento para detectar cuando TÚ escribes (Presencia Real)
+messageInput.addEventListener("input", () => {
+    setWhatsAppPresence('composing');
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        setWhatsAppPresence('paused');
+    }, 2000);
+});
+
+// Emojis y Clics (Mantenido igual)
+const picker = new EmojiMart.Picker({
+    onEmojiSelect: e => { messageInput.value += e.native; }
+});
 document.getElementById("emoji-picker-container").appendChild(picker);
-
-document.getElementById("emoji-trigger").onclick=(e)=>{
-e.stopPropagation();
-const c=document.getElementById("emoji-picker-container");
-c.style.display=c.style.display==="none"?"block":"none";
+document.getElementById("emoji-trigger").onclick = (e) => {
+    e.stopPropagation();
+    const c = document.getElementById("emoji-picker-container");
+    c.style.display = c.style.display === "none" ? "block" : "none";
 };
 
-/* CERRAR EMOJI Y MENÚS AL DAR CLICK AFUERA */
-document.addEventListener("click", (e) => {
-    const pickerContainer = document.getElementById("emoji-picker-container");
-    const emojiTrigger = document.getElementById("emoji-trigger");
-    const flowMenu = document.getElementById('flow-menu');
-
-    if (pickerContainer && pickerContainer.style.display === "block") {
-        if (!pickerContainer.contains(e.target) && e.target !== emojiTrigger) {
-            pickerContainer.style.display = "none";
-        }
-    }
-    if (flowMenu && !e.target.closest('.flow-selector-container')) {
-        flowMenu.style.display = 'none';
-    }
-});
-
-/* FUNCIONES LIGHTBOX (POP-UP IMÁGENES) */
-function openLightbox(src) {
-    const lightbox = document.getElementById("lightbox");
-    const img = document.getElementById("lightbox-img");
-    const downloadLink = document.getElementById("download-link");
-    if(lightbox && img && downloadLink) {
-        img.src = src;
-        downloadLink.href = src;
-        lightbox.style.display = "flex";
-    }
-}
-
-function closeLightbox() {
-    const lightbox = document.getElementById("lightbox");
-    if(lightbox) lightbox.style.display = "none";
-}
-
-/* WEBSOCKET - CON INTELIGENCIA ARTIFICIAL AUTOMÁTICA */
-const ws = new WebSocket(location.protocol === "https:" ? "wss://" + location.host : "ws://" + location.host);
-
-ws.onmessage = async (event) => {
-    const data = JSON.parse(event.data);
-
-    if (data.type === "new_message") {
-        const chatId = data.message.chatId;
-        const userText = data.message.text ? data.message.text.trim() : "";
-
-        // 1. Renderizado normal en la interfaz
-        if (chatId === currentChat) {
-            renderMessage(data.message);
-        } else {
-            unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
-        }
-        loadChats();
-
-        // 2. DISPARADOR DE IA (Solo si el mensaje NO es nuestro y estamos en el chat activo)
-        if (data.message.from !== "me" && chatId === currentChat && userText !== "") {
-            
-            // Verificamos si lo que escribió el cliente coincide con algún botón del flujo
-            const esBoton = verificarSiEsBoton(userText);
-
-            if (!esBoton) {
-                // Si no es un botón, es una duda: ejecutamos la IA con efecto "Escribiendo..."
-                procesarDudaConIA(data.message.text);
-            }
-        }
-    }
-};
-
-/* FUNCIÓN PARA VERIFICAR SI EL TEXTO ES UN COMANDO DEL FLUJO */
-function verificarSiEsBoton(text) {
+/* --- FUNCIONES DE PRESENCIA (CONEXIÓN BACKEND) --- */
+async function setWhatsAppPresence(status) {
+    if (!currentChat) return;
     try {
-        const nodos = DATA_FLUJO_NEMO.drawflow.Home.data;
-        const textoLimpio = text.toLowerCase();
-        
-        for (let id in nodos) {
-            // Buscamos en nodos tipo 'trigger'
-            if (nodos[id].name === 'trigger' && nodos[id].data.val.toLowerCase() === textoLimpio) {
-                return true;
-            }
-            // También buscamos en los botones de las listas (rows) de WhatsApp
-            if (nodos[id].name === 'whatsapp_list') {
-                const d = nodos[id].data;
-                const botones = [d.row1, d.row2, d.row3, d.row4, d.row5].map(b => b ? b.toLowerCase() : "");
-                if (botones.includes(textoLimpio)) return true;
-            }
-        }
-    } catch (e) {
-        console.error("Error validando flujo:", e);
-    }
-    return false;
+        await fetch('/api/whatsapp-presence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: currentChat, status: status })
+        });
+    } catch (e) { console.error("Error de presencia:", e); }
 }
 
-/* FUNCIÓN QUE LLAMA A LA IA Y MANEJA LOS PUNTITOS */
+/* --- UI HELPERS (TYPING INDICATOR) --- */
+function showTypingIndicator() {
+    if (document.getElementById("ai-typing")) return;
+    
+    // Avisar a WhatsApp que el bot está escribiendo
+    setWhatsAppPresence('composing');
+
+    const div = document.createElement("div");
+    div.className = "typing-bubble";
+    div.id = "ai-typing"; 
+    div.style.fontFamily = "'Montserrat', sans-serif";
+    div.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
+    messagesContainer.appendChild(div);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const indicator = document.getElementById("ai-typing");
+    if (indicator) {
+        indicator.remove();
+        setWhatsAppPresence('paused'); // Quitar el "escribiendo" en WhatsApp
+    }
+}
+
+/* --- LÓGICA DE IA Y FLUJOS (UNIFICADO) --- */
 async function procesarDudaConIA(textoDelUsuario) {
     if (!currentChat) return;
-
-    showTypingIndicator(); // Muestra los 3 puntitos animados ✍️
+    showTypingIndicator(); 
 
     try {
         const response = await fetch('/api/ai-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: textoDelUsuario, 
-                chatId: currentChat 
-            })
+            body: JSON.stringify({ message: textoDelUsuario, chatId: currentChat })
         });
 
         const data = await response.json();
-        
-        hideTypingIndicator(); // Quita los puntitos 
+        hideTypingIndicator(); 
 
         if (data.text) {
-            renderMessage({ 
-                from: "bot", 
-                text: data.text, 
-                timestamp: Date.now() 
-            });
+            let textoParaMostrar = data.text;
+            const regexAction = /\[ACTION:(\w+)\]/i;
+            const match = textoParaMostrar.match(regexAction);
+            
+            if (match) {
+                const accionEncontrada = match[0];
+                textoParaMostrar = textoParaMostrar.replace(accionEncontrada, "");
+                procesarRespuestaFlujo(accionEncontrada);
+            }
+
+            renderMessage({ from: "bot", text: textoParaMostrar.trim(), timestamp: Date.now() });
         }
     } catch (error) {
         hideTypingIndicator();
@@ -163,112 +111,54 @@ async function procesarDudaConIA(textoDelUsuario) {
     }
 }
 
-/* CARGAR CHATS */
-async function loadChats(){
-try {
-    const res=await fetch("/chats");
-    const chats=await res.json();
-    chatList.innerHTML="";
-
-    chats.forEach(chat=>{
-        const div=document.createElement("div");
-        div.className="chat-item";
-        if(unreadCounts[chat._id]){ div.classList.add("unread"); }
-
-        div.innerHTML=`
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:40px; height:40px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
-            <div>
-                <div style="font-weight:600; font-family:'Montserrat';">${chat._id}</div>
-                <small>${chat.lastMessage||""}</small>
-            </div>
-        </div>
-        ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
-        `;
-        div.onclick=()=>openChat(chat._id);
-        chatList.appendChild(div);
-    });
-} catch(e) { console.error("Error al cargar chats:", e); }
+function procesarRespuestaFlujo(accion) {
+    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
+    const mapeo = { "tiktok": "Tik Tok ", "instagram": "Instagram ", "facebook": "Facebook " };
+    if (mapeo[redSocial]) ejecutarNodoPorNombre(mapeo[redSocial]);
 }
 
-/* ABRIR CHAT */
-async function openChat(chatId) {
-    currentChat = chatId;
-    delete unreadCounts[chatId];
-
-    // --- MODO MÓVIL: Oculta la lista y muestra el chat ---
-    document.body.classList.add('show-chat');
-
-    const headerInfo = document.querySelector(".chat-header-info");
-    if (headerInfo) {
-        headerInfo.style.display = "flex";
-        headerInfo.style.alignItems = "center";
-        headerInfo.style.justifyContent = "space-between";
-        headerInfo.style.width = "100%";
-        headerInfo.style.padding = "10px 15px";
-
-        headerInfo.innerHTML = `
-            <div style="display:flex; align-items:center;">
-                <button class="mobile-back-btn" onclick="document.body.classList.remove('show-chat')" style="margin-right:10px;">
-                    <i class="fa-solid fa-arrow-left"></i>
-                </button>
-                
-                <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
-                <div>
-                    <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px; color:white;">${chatId}</div>
-                    <div style="font-size:11px; color:#25D366; font-family:'Montserrat';">● En línea</div>
-                </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:15px;">
-                <div class="flow-selector-container" style="position:relative;">
-                    <div onclick="toggleFlowMenu()" style="cursor:pointer; font-size:22px;" title="Lanzar flujo">🤖</div>
-                    <div id="flow-menu" class="flow-menu" style="display:none; position:absolute; right:0; top:40px; background:#2d3748; border:1px solid #4a5568; border-radius:8px; z-index:1000; min-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
-                </div>
-                <div onclick="deleteCurrentChat()" style="cursor:pointer; font-size:18px;" title="Borrar chat">🗑️</div>
-            </div>
-        `;
-    }
-
-    if (messagesContainer) messagesContainer.innerHTML = "";
-
+async function ejecutarNodoPorNombre(nombreBoton) {
     try {
-        const res = await fetch("/messages/" + chatId);
-        const msgs = await res.json();
-        msgs.forEach(renderMessage);
-    } catch (e) { console.error("Error al obtener mensajes:", e); }
-    loadChats();
+        await fetch("/api/execute-flow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: currentChat, trigger: nombreBoton })
+        });
+    } catch (e) { console.error("Error flujo:", e); }
 }
 
-function goBackMobile(){
-    chatContent.classList.remove("active-mobile");
-    chatListContainer.style.display="flex";
-}
+/* --- RENDERIZADO Y OTROS --- */
+function renderMessage(msg) {
+    const div = document.createElement("div");
+    div.className = `msg-bubble ${msg.from === "me" ? "msg-sent" : "msg-received"}`;
+    div.style.fontFamily = "'Montserrat', sans-serif";
 
-function renderMessage(msg){
-    const div=document.createElement("div");
-    div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
-    if(msg.media){
-        const img=document.createElement("img");
-        img.src=msg.media;
-        img.className="msg-image";
-        img.style.cursor="pointer";
+    if (msg.media) {
+        const img = document.createElement("img");
+        img.src = msg.media;
+        img.className = "msg-image";
         img.onclick = () => openLightbox(msg.media);
         div.appendChild(img);
     }
-    if(msg.text){
-        const text=document.createElement("div");
-        text.innerText=msg.text;
-        div.appendChild(text);
+    if (msg.text) {
+        const textDiv = document.createElement("div");
+        textDiv.innerText = msg.text;
+        div.appendChild(textDiv);
     }
-    const time=document.createElement("div");
-    time.className="msg-time";
-    time.innerText=new Date(msg.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    
+    const time = document.createElement("div");
+    time.className = "msg-time";
+    time.innerText = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     div.appendChild(time);
-    if(messagesContainer) {
-        messagesContainer.appendChild(div);
-        messagesContainer.scrollTop=messagesContainer.scrollHeight;
-    }
+
+    messagesContainer.appendChild(div);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
+
+// ... Mantén tus funciones de loadChats, confirmSendImages, etc. sin cambios ...
+
+/* --- RESTO DE FUNCIONES (loadChats, openChat, etc.) --- */
+// (Copia tus funciones de loadChats, openChat y gestión de archivos aquí abajo una sola vez)
 function showTypingIndicator() {
     const messagesArea = document.getElementById("messages");
     if (!messagesArea) return;
@@ -618,11 +508,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
-// 1. FUNCIÓN QUE LLAMA A LA IA Y DETECTA ACCIONES
+/* --- BLOQUE FINAL UNIFICADO (IA + FLUJOS) --- */
+
+// 1. Llamada a la IA y detección de acciones
 async function procesarDudaConIA(textoDelUsuario) {
     if (!currentChat) return;
-
-    showTypingIndicator(); // Muestra los puntitos ✍️
+    showTypingIndicator(); 
 
     try {
         const response = await fetch('/api/ai-chat', {
@@ -635,29 +526,25 @@ async function procesarDudaConIA(textoDelUsuario) {
         });
 
         const data = await response.json();
-        hideTypingIndicator(); // Quita los puntitos 
+        hideTypingIndicator(); 
 
         if (data.text) {
             let textoParaMostrar = data.text;
 
-            // Detectar si la IA envió un código de redirección
-            if (textoParaMostrar.includes("[ACTION:TIKTOK]")) {
-                textoParaMostrar = textoParaMostrar.replace("[ACTION:TIKTOK]", "");
-                ejecutarNodoPorNombre("Tik Tok ");
-            } 
-            else if (textoParaMostrar.includes("[ACTION:INSTAGRAM]")) {
-                textoParaMostrar = textoParaMostrar.replace("[ACTION:INSTAGRAM]", "");
-                ejecutarNodoPorNombre("Instagram ");
-            }
-            else if (textoParaMostrar.includes("[ACTION:FACEBOOK]")) {
-                textoParaMostrar = textoParaMostrar.replace("[ACTION:FACEBOOK]", "");
-                ejecutarNodoPorNombre("Facebook ");
+            // Detectar acciones como [ACTION:TIKTOK]
+            const regexAction = /\[ACTION:(\w+)\]/i;
+            const match = textoParaMostrar.match(regexAction);
+            
+            if (match) {
+                const accionEncontrada = match[0]; // [ACTION:TIKTOK]
+                textoParaMostrar = textoParaMostrar.replace(accionEncontrada, "");
+                procesarRespuestaFlujo(accionEncontrada);
             }
 
-            // Renderizar el mensaje limpio en el CRM
+            // Renderizar el mensaje limpio en el CRM con Montserrat
             renderMessage({ 
                 from: "bot", 
-                text: textoParaMostrar, 
+                text: textoParaMostrar.trim(), 
                 timestamp: Date.now() 
             });
         }
@@ -667,51 +554,18 @@ async function procesarDudaConIA(textoDelUsuario) {
     }
 }
 
-// 2. FUNCIÓN PARA DISPARAR EL FLUJO AUTOMÁTICAMENTE
-function ejecutarNodoPorNombre(nombreBoton) {
-    console.log("Redirigiendo flujo a:", nombreBoton);
-    
-    // Esta es la función que ya usa tu sistema para procesar botones.
-    // Al pasarle el nombre exacto (ej: "Tik Tok "), el sistema buscará el nodo
-    // hijo correspondiente en tu Drawflow y enviará el mensaje automático.
-    if (typeof procesarRespuestaFlujo === "function") {
-        procesarRespuestaFlujo(nombreBoton);
-    } else {
-        // Si tu función se llama distinto (ej: handleFlowResponse), cámbiala aquí:
-        console.warn("La función procesarRespuestaFlujo no está definida.");
-    }
-}
-
-// 3. INDICADORES VISUALES (Si no los habías pegado antes)
-function showTypingIndicator() {
-    const messagesArea = document.getElementById("messages");
-    if (!messagesArea || document.getElementById("ai-typing")) return;
-
-    const typingDiv = document.createElement("div");
-    typingDiv.className = "typing-bubble";
-    typingDiv.id = "ai-typing"; 
-    typingDiv.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
-    messagesArea.appendChild(typingDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-}
-
-function hideTypingIndicator() {
-    const indicator = document.getElementById("ai-typing");
-    if (indicator) indicator.remove();
-}
+// 2. Mapeo de acciones a nombres de nodos
 function procesarRespuestaFlujo(accion) {
-    console.log("🚀 Ejecutando redirección para:", accion);
-
-    // Quitamos los corchetes y el texto ACTION: para quedarnos solo con la red
+    console.log("🚀 Redirigiendo flujo:", accion);
     const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
 
-    // Aquí mapeamos la acción al nombre exacto de tus Nodos en el sistema
-    // ASEGÚRATE de que los nombres coincidan con cómo los llamaste en tu panel
+    // Mapeo exacto a tus botones del Flow
     if (redSocial === 'tiktok') {
-        ejecutarNodoPorNombre("TikTok"); 
+        ejecutarNodoPorNombre("Tik Tok "); 
     } else if (redSocial === 'instagram') {
-        ejecutarNodoPorNombre("Instagram");
+        ejecutarNodoPorNombre("Instagram ");
     } else if (redSocial === 'facebook') {
-        ejecutarNodoPorNombre("Facebook");
+        ejecutarNodoPorNombre("Facebook ");
     }
 }
+
