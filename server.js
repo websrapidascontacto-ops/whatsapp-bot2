@@ -376,16 +376,37 @@ async function processSequence(to, node, allNodes) {
         payload.text = { body: botText };
     } 
     // 2. NODO DE IMAGEN / MEDIA
-    else if (node.name === "media" || node.name === "image") {
-        const mediaPath = node.data.url || node.data.media_url || node.data.info || node.data.val;
+else if (node.name === "media" || node.name === "image") {
+        const pathFromNode = node.data.url || node.data.media_url || node.data.info || node.data.val;
         const caption = node.data.caption || node.data.text || "";
-        if (mediaPath) {
-            const domain = process.env.RAILWAY_STATIC_URL || "whatsapp-bot2-production-0129.up.railway.app";
-            const cleanPath = mediaPath.startsWith('/uploads/') ? mediaPath : `/uploads/${mediaPath.split('/').pop()}`;
-            const fullUrl = `https://${domain}${cleanPath}`;
+
+        if (pathFromNode) {
+            let fullUrl = pathFromNode;
+
+            if (!pathFromNode.startsWith('http')) {
+                // 1. Railway usa RAILWAY_PUBLIC_DOMAIN (según tu imagen)
+                // Si por alguna razón está vacía, usamos el link de respaldo
+                const domain = process.env.RAILWAY_PUBLIC_DOMAIN || "whatsapp-bot2-production-0129.up.railway.app";
+                
+                // 2. Quitamos barras duplicadas si las hay
+                const cleanPath = pathFromNode.startsWith('/') ? pathFromNode : `/${pathFromNode}`;
+                
+                // 3. WhatsApp requiere HTTPS obligatoriamente
+                fullUrl = `https://${domain}${cleanPath}`;
+            }
+
+            console.log("🚀 URL Generada para WhatsApp:", fullUrl);
+
             payload.type = "image";
-            payload.image = { link: fullUrl, caption: caption };
-            botText = `🖼️ Imagen: ${caption}`;
+            payload.image = { 
+                link: fullUrl, 
+                caption: caption 
+            };
+            botText = `🖼️ Imagen enviada: ${caption}`;
+        } else {
+            payload.type = "text";
+            payload.text = { body: caption || "⚠️ Error: Archivo de imagen no encontrado." };
+            botText = payload.text.body;
         }
     }
     // 3. NODO DE NOTIFICACIÓN
