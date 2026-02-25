@@ -130,7 +130,15 @@ app.post("/webhook", async (req, res) => {
                     text: incomingText,
                     media: mediaPath 
                 });
-                broadcast({ type: "new_message", message: savedIncoming });
+
+                // REGLA: Forzamos el ID para que aparezca al instante en el CRM
+                broadcast({ 
+                    type: "new_message", 
+                    message: {
+                        ...savedIncoming._doc,
+                        id: savedIncoming.chatId 
+                    } 
+                });
             }
 
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
