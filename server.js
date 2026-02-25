@@ -96,140 +96,120 @@ async function downloadMedia(mediaId, fileName) {
 
 /* ========================= WEBHOOK PRINCIPAL (WHATSAPP) ========================= */
 app.post("/webhook", async (req, res) => {
+    res.sendStatus(200); // Respondemos a Meta de inmediato
+
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
-    if (value?.messages) {
-        for (const msg of value.messages) {
-            const sender = msg.from;
-            
-            let incomingText = (
-                msg.text?.body || 
-                msg.interactive?.list_reply?.title || 
-                msg.interactive?.button_reply?.title || 
-                ""
-            ).trim();
+    if (!value?.messages) return;
 
-            let mediaPath = null;
+    for (const msg of value.messages) {
+        const sender = msg.from;
+        let incomingText = (
+            msg.text?.body || 
+            msg.interactive?.list_reply?.title || 
+            msg.interactive?.button_reply?.title || 
+            ""
+        ).trim();
 
-            if (msg.type === "image") {
-                try {
-                    const mediaId = msg.image.id;
-                    const fileName = `whatsapp_${Date.now()}.jpg`;
-                    mediaPath = await downloadMedia(mediaId, fileName);
-                    if (!incomingText) {
-                        incomingText = msg.image.caption || "📷 Imagen recibida";
-                    }
-                } catch (err) {
-                    console.error("❌ Error descargando imagen:", err.message);
-                }
-            }
+        let mediaPath = null;
 
-            if (incomingText || mediaPath) {
-                const savedIncoming = await Message.create({ 
-                    chatId: sender, 
-                    from: sender, 
-                    text: incomingText,
-                    media: mediaPath 
-                });
+        // Manejo de imágenes entrantes
+        if (msg.type === "image") {
+            try {
+                const mediaId = msg.image.id;
+                const fileName = `whatsapp_${Date.now()}.jpg`;
+                mediaPath = await downloadMedia(mediaId, fileName);
+                if (!incomingText) incomingText = msg.image.caption || "📷 Imagen recibida";
+            } catch (err) { console.error("❌ Error imagen:", err.message); }
+        }
 
-                // REGLA: Forzamos el ID para que aparezca al instante en el CRM
-                broadcast({ 
-                    type: "new_message", 
-                    message: {
-                        ...savedIncoming._doc,
-                        id: savedIncoming.chatId 
-                    } 
-                });
-            }
+        if (incomingText || mediaPath) {
+            // 1. Guardar mensaje en BD
+            const savedIncoming = await Message.create({ 
+                chatId: sender, from: sender, text: incomingText, media: mediaPath 
+            });
 
+            // 2. Avisar al CRM (WebSocket)
+            broadcast({ 
+                type: "new_message", 
+                message: { ...savedIncoming._doc, id: savedIncoming.chatId } 
+            });
+
+            // 3. Lógica de Estado de Pago (Waiting)
             const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
-            
+
             if (waiting) {
                 // PASO 1: Recibir el Link
-if (waiting.waitingForLink) {
-    const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
-    
-    if (isLink) {
-        waiting.profileLink = incomingText;
-        waiting.waitingForLink = false;
-        waiting.waitingForCode = true; 
-        await waiting.save();
+                if (waiting.waitingForLink) {
+                    const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
+                    
+                    if (isLink) {
+                        waiting.profileLink = incomingText;
+                        waiting.waitingForLink = false;
+                        waiting.waitingForCode = true; 
+                        await waiting.save();
 
-        // --- AQUÍ PONES LAS LÍNEAS DE LA URL ---
-        const host = req.protocol + '://' + req.get('host');
-        const urlImagen = `${host}/assets/ayuda-yape.jpg`;
-        // ---------------------------------------
-        
-        const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n--- \n\n⚠️ *INSTRUCCIONES IMPORTANTES* ⚠️\n\n1️⃣ Realiza el pago en tu App Yape.\n2️⃣ Al terminar, busca en tu comprobante de yape el **"Código de Seguridad"** (son 3 dígitos).\n3️⃣ Escribe esos **3 números aquí abajo** para activar tu pedido.\n\n🚫 No envíes capturas, el sistema solo necesita los 3 dígitos. 🚀`;
+                        const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n--- \n\n⚠️ *INSTRUCCIONES IMPORTANTES* ⚠️\n\n1️⃣ Realiza el pago en tu App Yape.\n2️⃣ Al terminar, busca en tu comprobante de yape el **"Código de Seguridad"** (son 3 dígitos).\n3️⃣ Escribe esos **3 números aquí abajo** para activar tu pedido.\n\n🚫 No envíes capturas, el sistema solo necesita los 3 dígitos. 🚀`;
 
-        // 1. Enviamos el texto de instrucciones
-        await processSequence(sender, { name: "message", data: { info: mensajePago } }, {});
-
-        // 2. Enviamos la imagen explicativa desde tu propio servidor
-        // Reemplaza 'tu-dominio-railway.up.railway.app' por tu URL real
-        await processSequence(sender, { 
-            name: "image", 
-            data: { 
-                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
-                caption: "💡 Aquí te muestro dónde encontrar los 3 dígitos en tu comprobante de Yape 👇" 
-            } 
-        }, {});
-
-    } else {
-        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, envía un link válido. 🔗" } }, {});
-    }
-    return res.sendStatus(200);
-}
+                        await processSequence(sender, { name: "message", data: { info: mensajePago } }, {});
+                        await processSequence(sender, { 
+                            name: "image", 
+                            data: { 
+                                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
+                                caption: "💡 Aquí te muestro dónde encontrar los 3 dígitos en tu comprobante de Yape 👇" 
+                            } 
+                        }, {});
+                    } else {
+                        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, envía un link válido. 🔗" } }, {});
+                    }
+                    continue; // Pasa al siguiente mensaje si lo hay
+                }
 
                 // PASO 2: Recibir el Código de 3 dígitos
-if (waiting.waitingForCode) {
-    const cleanNumber = incomingText.replace(/\D/g, ''); 
-    
-    if (cleanNumber.length === 3) {
-        await PaymentWaiting.updateOne({ _id: waiting._id }, { 
-            yapeCode: cleanNumber, 
-            waitingForCode: false 
-        });
-        
-        await processSequence(sender, { name: "message", data: { info: `⏳ Código *${cleanNumber}* recibido. Iniciando validación...` } }, {});
-        
-        // Creamos una función para que los mensajes solo se envíen si el pedido sigue "active"
-        const sendProgress = (ms, text) => {
-            setTimeout(async () => {
-                const check = await PaymentWaiting.findById(waiting._id);
-                // SI YA NO ESTÁ ACTIVE, SIGNIFICA QUE EL PAGO SE VALIDÓ. NO ENVIAMOS NADA.
-                if (check && check.active) {
-                    await processSequence(sender, { name: "message", data: { info: text } }, {});
+                if (waiting.waitingForCode) {
+                    const cleanNumber = incomingText.replace(/\D/g, ''); 
+                    
+                    if (cleanNumber.length === 3) {
+                        await PaymentWaiting.updateOne({ _id: waiting._id }, { 
+                            yapeCode: cleanNumber, 
+                            waitingForCode: false 
+                        });
+                        
+                        await processSequence(sender, { name: "message", data: { info: `⏳ Código *${cleanNumber}* recibido. Iniciando validación...` } }, {});
+                        
+                        const sendProgress = (ms, text) => {
+                            setTimeout(async () => {
+                                const check = await PaymentWaiting.findById(waiting._id);
+                                if (check && check.active) {
+                                    await processSequence(sender, { name: "message", data: { info: text } }, {});
+                                }
+                            }, ms);
+                        };
+
+                        sendProgress(2500, "🔍 Verificando transacción con el banco... 30%");
+                        sendProgress(5500, "⚙️ Procesando datos del servicio... 75%");
+                        sendProgress(8500, "⏳ Casi listo, esperando la confirmación final de Yape... 📥");
+                    } else {
+                        await processSequence(sender, { 
+                            name: "message", 
+                            data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad que esta en la constancia de tu yape. 📑" } 
+                        }, {});
+
+                        await processSequence(sender, { 
+                            name: "image", 
+                            data: { 
+                                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
+                                caption: "Aquí puedes ver dónde encontrar los 3 dígitos. 👇😊" 
+                            } 
+                        }, {});
+                    }
+                    continue;
                 }
-            }, ms);
-        };
+            }
 
-        sendProgress(2500, "🔍 Verificando transacción con el banco... 30%");
-        sendProgress(5500, "⚙️ Procesando datos del servicio... 75%");
-        sendProgress(8500, "⏳ Casi listo, esperando la confirmación final de Yape... 📥");
-
-    } else {
-        // 1. Enviamos el mensaje de advertencia
-        await processSequence(sender, { 
-            name: "message", 
-            data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad que esta en la constancia de tu yape. 📑" } 
-        }, {});
-
-        // 2. Enviamos la imagen explicativa (Asegúrate de que el nombre del nodo o tipo sea 'image')
-        // El 'url' debe ser una ruta accesible de tu servidor en Railway
-        await processSequence(sender, { 
-            name: "image", 
-            data: { 
-                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
-                caption: "Aquí puedes ver dónde encontrar los 3 dígitos. 👇😊" 
-            } 
-        }, {});
-    }
-    return res.sendStatus(200);
-}
-
-                return res.sendStatus(200); // Cierra el flujo si hay un waiting pero no es link ni código
-            } // <--- Aquí cierra el if (waiting)
-
+            // --- Lógica de IA Automática (Si no hay flujo de pago activo) ---
+            // Aquí puedes llamar a ejecutarIAsola(sender, incomingText) si deseas que responda dudas
+            // O dejar que el flujo de triggers continúe abajo.
+            
             // --- Lógica de Flujos (Triggers / Listas) ---
             const flowDoc = await Flow.findOne({ isMain: true });
             if (flowDoc && incomingText) {
@@ -270,11 +250,15 @@ if (waiting.waitingForCode) {
                     } else {
                         await processSequence(sender, targetNode, nodes);
                     }
+                } else {
+                    // Si no es un trigger ni un pago, lanzamos la IA para que trabaje sola
+                    if (typeof ejecutarIAsola === "function") {
+                        await ejecutarIAsola(sender, incomingText);
+                    }
                 }
             }
         }
     }
-    res.sendStatus(200);
 });
 
 /* ========================= WEBHOOK YAPE (EXTERNO - RECIBE DE MACRODROID) ========================= */
@@ -774,3 +758,45 @@ Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTI
         res.status(500).json({ error: "Error al conectar con la IA" });
     }
 });
+async function responderConIA(chatId, textoUsuario) {
+    try {
+        // 1. Llamamos a tu propia ruta de IA o directamente a OpenAI
+        // Usamos la lógica que ya tienes configurada en /api/ai-chat
+        const response = await axios.post(`http://localhost:${process.env.PORT || 3000}/api/ai-chat`, {
+            message: textoUsuario,
+            chatId: chatId
+        });
+
+        const data = response.data;
+
+        if (data.text) {
+            let textoIA = data.text;
+
+            // Limpiar acciones [ACTION:...]
+            const regexAction = /\[ACTION:(\w+)\]/i;
+            const match = textoIA.match(regexAction);
+            if (match) {
+                const accion = match[0];
+                textoIA = textoIA.replace(accion, "").trim();
+                // Aquí podrías disparar el flujo si es necesario
+            }
+
+            // 2. ENVIAR A WHATSAPP
+            await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+                messaging_product: "whatsapp",
+                to: chatId,
+                text: { body: textoIA.trim() }
+            }, {
+                headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
+            });
+
+            // 3. Guardar en BD para que aparezca en el CRM cuando lo abras
+            const savedBot = await Message.create({ 
+                chatId: chatId, from: "bot", text: textoIA.trim() 
+            });
+            broadcast({ type: "new_message", message: { ...savedBot._doc, id: chatId } });
+        }
+    } catch (e) {
+        console.error("❌ Error IA Automática:", e.message);
+    }
+}
