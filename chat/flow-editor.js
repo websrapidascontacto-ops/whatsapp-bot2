@@ -84,15 +84,10 @@ window.addListNode = function() {
 
 window.addRowDynamic = function(button, initialData = null) {
     const nodeElement = button.closest('.drawflow-node');
-    if (!nodeElement) return;
-
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
-    const nodeInfo = editor.getNodeFromId(nodeId);
-    if (!nodeInfo) return;
-    const nodeData = nodeInfo.data;
+    const nodeData = editor.getNodeFromId(nodeId).data;
     
-    // Contamos grupos actuales para definir el índice (ej: row2, row3...)
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
@@ -106,27 +101,20 @@ window.addRowDynamic = function(button, initialData = null) {
         <input type="text" class="form-control" style="font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;" placeholder="Comentario" df-${keyDesc}>
     `;
 
-    const inputRow = group.querySelector(`[df-${keyRow}]`);
-    const inputDesc = group.querySelector(`[df-${keyDesc}]`);
-
-    // 💡 Si venimos de una carga (initialData tiene contenido)
-    if(initialData) {
-        inputRow.value = initialData.row || "";
-        inputDesc.value = initialData.desc || "";
-    }
-
-    // Escuchar cambios para actualizar el objeto interno de Drawflow
-    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
-    inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
-
     containerRows.appendChild(group);
-    
-    // Sincronizar el valor inicial en el objeto data (importante para el primer render)
-    nodeData[keyRow] = inputRow.value;
-    nodeData[keyDesc] = inputDesc.value;
 
-    // Solo añadimos salida en el editor si es una fila nueva (no la inicial)
-    if(count > 1 && !initialData) {
+    // SI HAY DATOS INICIALES (Carga de flujo)
+    if(initialData) {
+        const inputRow = group.querySelector(`[df-${keyRow}]`);
+        const inputDesc = group.querySelector(`[df-${keyDesc}]`);
+        inputRow.value = initialData.row;
+        inputDesc.value = initialData.desc;
+        
+        // Sincronizamos con el motor de Drawflow
+        nodeData[keyRow] = initialData.row;
+        nodeData[keyDesc] = initialData.desc;
+    } else {
+        // SI ES UNA FILA NUEVA (Click del usuario)
         editor.addNodeOutput(nodeId);
     }
 };
@@ -419,16 +407,21 @@ async function cargarFlujoPrincipal() {
         }
 
         // 4. Reconstrucción de la interfaz de Montserrat
+        // 4. Reconstrucción visual de las Listas (Montserrat)
         setTimeout(() => {
             const nodes = editor.drawflow.drawflow.Home.data;
             Object.keys(nodes).forEach(id => {
                 const node = nodes[id];
+                
                 if (node.name === "whatsapp_list") {
                     const nodeElement = document.getElementById(`node-${id}`);
                     if (nodeElement) {
                         const btnAdd = nodeElement.querySelector('.btn-success');
+                        
+                        // Buscamos cuántas filas tiene guardadas (empezando desde la 2)
                         let i = 2;
                         while (node.data && node.data[`row${i}`] !== undefined) {
+                            // IMPORTANTE: Pasamos los datos para que el input se rellene al crear la fila
                             window.addRowDynamic(btnAdd, {
                                 row: node.data[`row${i}`],
                                 desc: node.data[`desc${i}`] || ""
@@ -439,13 +432,11 @@ async function cargarFlujoPrincipal() {
                 }
             });
             
-            // Forzamos el zoom para ver los 51 nodos (que están en coordenadas negativas)
+            // Centramos la vista para que veas los 51 nodos
             editor.zoom_reset(); 
+            centrarFlujo(nodes); // Función de ayuda para ir a donde están los nodos
             
-            // Reseteo de coordenadas para nuevos nodos
-            lastNodeX = 50;
-            lastNodeY = 150;
-        }, 600);
+        }, 800);
 
     } catch (error) {
         console.error("❌ Error fatal en cargarFlujoPrincipal:", error);
