@@ -618,16 +618,20 @@ async function openChat(chatId) {
     if (!chatId || chatId === "undefined") return;
 
     currentChat = chatId;
-    messagesContainer.innerHTML = "<div style='color:white; padding:20px; font-family:Montserrat;'>Cargando mensajes...</div>";
     
     // UI: Enfoque en móvil
     document.body.classList.add('show-chat');
+
+    // Optimizamos: Solo ponemos el "Cargando" si el contenedor está vacío
+    if(messagesContainer.innerHTML === "") {
+        messagesContainer.innerHTML = "<div id='temp-loading' style='color:white; padding:20px; font-family:Montserrat;'>Cargando mensajes...</div>";
+    }
 
     try {
         const res = await fetch(`/chats/${chatId}`);
         const messages = await res.json();
         
-        messagesContainer.innerHTML = ""; // Limpiamos el "Cargando..."
+        messagesContainer.innerHTML = ""; // Limpiamos
 
         if (Array.isArray(messages)) {
             messages.forEach(msg => renderMessage(msg));
@@ -635,14 +639,52 @@ async function openChat(chatId) {
         
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
-        // Refrescamos la lista para que se vea el chat seleccionado
-        const allItems = document.querySelectorAll('.chat-item');
-        allItems.forEach(i => i.classList.remove('active'));
-        // Buscamos el item actual para activarlo visualmente
-        loadChats(); 
+        // CORRECCIÓN: No llames a loadChats() aquí. Solo cambia la clase CSS.
+        document.querySelectorAll('.chat-item').forEach(i => {
+            i.classList.remove('active');
+            // Si el texto del item contiene el ID, le ponemos active
+            if(i.innerText.includes(chatId)) i.classList.add('active');
+        });
 
     } catch (e) {
         console.error("Error al abrir chat:", e);
-        messagesContainer.innerHTML = "<div style='color:white; padding:20px;'>No se pudieron cargar los mensajes.</div>";
+        messagesContainer.innerHTML = "<div style='color:white; padding:20px;'>Error al cargar.</div>";
     }
+}
+/* ========================= CONEXIÓN TIEMPO REAL ========================= */
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const socket = new WebSocket(`${protocol}//${window.location.host}`);
+
+socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    if (data.type === "new_message") {
+        const msg = data.message;
+
+        // 1. Si el mensaje es para el chat que tengo abierto, lo pinto al instante
+        if (msg.chatId === currentChat || msg.id === currentChat) {
+            renderMessage(msg);
+            
+            // 2. ¡AQUÍ SE ACTIVA LA IA! Si el mensaje viene del cliente, la IA responde
+            if (msg.from !== "me" && msg.from !== "bot") {
+                procesarDudaConIA(msg.text);
+            }
+        }
+        
+        // 3. Actualizamos la lista de la izquierda discretamente
+        updateChatListPreview(msg);
+    }
+};
+
+function updateChatListPreview(msg) {
+    const id = msg.chatId || msg.id;
+    const items = document.querySelectorAll('.chat-item');
+    items.forEach(item => {
+        if (item.innerText.includes(id)) {
+            const lastMsgDiv = item.querySelector('.chat-last-msg');
+            if (lastMsgDiv) lastMsgDiv.innerText = msg.text;
+            // Movemos el chat arriba
+            chatList.prepend(item);
+        }
+    });
 }
