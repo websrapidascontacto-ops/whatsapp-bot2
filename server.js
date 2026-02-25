@@ -591,6 +591,23 @@ app.post("/webhook-yape", async (req, res) => {
 /* ========================= APIS DE FLUJOS Y CHAT ========================= */
 
 /* ========================= GET FLOW PRINCIPAL ========================= */
+
+/* ========================= GET TODOS LOS FLUJOS ========================= */
+app.get("/api/get-flows", async (req, res) => {
+    try {
+        const flows = await Flow.find().sort({ createdAt: -1 });
+
+        res.json(flows.map(f => ({
+            _id: f._id,
+            name: f.name,
+            isMain: f.isMain
+        })));
+
+    } catch (e) {
+        console.error("❌ Error obteniendo lista de flujos:", e.message);
+        res.status(500).json([]);
+    }
+});
 app.get("/api/get-flow", async (req, res) => {
     try {
         const flow = await Flow.findOne({ isMain: true });
