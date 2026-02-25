@@ -591,8 +591,16 @@ app.post("/webhook-yape", async (req, res) => {
 /* ========================= APIS DE FLUJOS Y CHAT ========================= */
 
 app.get("/api/get-flow", async (req, res) => {
-    const flow = await Flow.findOne({ isMain: true });
-    res.json(flow ? flow.data : null);
+    try {
+        const flow = await Flow.findOne({ isMain: true });
+        // Si no hay flujo, enviamos la estructura mínima de Drawflow
+        if (!flow) {
+            return res.json({ drawflow: { Home: { data: {} } } });
+        }
+        res.json(flow.data);
+    } catch (e) {
+        res.json({ drawflow: { Home: { data: {} } } });
+    }
 });
 
 app.get("/api/get-flow-by-id/:id", async (req, res) => {

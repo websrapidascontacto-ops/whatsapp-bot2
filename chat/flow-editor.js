@@ -370,51 +370,61 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        // Manejamos si la data viene envuelta o directa
-        const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
+        // 1. ESCUDO PROTECTOR: Validamos que exista una estructura mínima de Drawflow
+        // Si responseData está vacío o no tiene drawflow, creamos uno limpio
+        let flowToLoad;
+        if (responseData && (responseData.drawflow || responseData.data)) {
+            flowToLoad = responseData.drawflow ? responseData : responseData.data;
+        } else {
+            console.warn("⚠️ Flujo vacío o inválido, cargando lienzo limpio.");
+            flowToLoad = { drawflow: { Home: { data: {} } } };
+        }
         
-        // 1. Limpiamos e Importamos
+        // 2. Limpiamos e Importamos
         editor.clear();
         editor.import(flowToLoad);
 
-        // 2. RECONSTRUCCIÓN DE FILAS (Lo que arregla tu problema)
+        // 3. RECONSTRUCCIÓN DE FILAS (Solo si hay datos)
         setTimeout(() => {
-            const nodes = flowToLoad.drawflow.Home.data;
-            Object.keys(nodes).forEach(nodeId => {
-                const node = nodes[nodeId];
-                
-                // Si es un nodo de lista (como el de tus planes SMM)
-                if (node.name === "whatsapp_list") {
-                    const nodeElement = document.getElementById(`node-${nodeId}`);
-                    if (!nodeElement) return;
-
-                    const btnAdd = nodeElement.querySelector('.btn-success');
+            try {
+                const nodes = flowToLoad.drawflow.Home.data;
+                Object.keys(nodes).forEach(nodeId => {
+                    const node = nodes[nodeId];
                     
-                    // Buscamos cuántas filas extras tiene el JSON (row2, row3, etc.)
-                    let i = 2;
-                    while (node.data[`row${i}`] !== undefined) {
-                        // Llamamos a tu función global para crear el HTML de la fila
-                        if (typeof window.addRowDynamic === 'function') {
-                            window.addRowDynamic(btnAdd);
-                            
-                            // Le asignamos el valor guardado a los nuevos inputs
-                            const rowInput = nodeElement.querySelector(`[df-row${i}]`);
-                            const descInput = nodeElement.querySelector(`[df-desc${i}]`);
-                            if (rowInput) rowInput.value = node.data[`row${i}`];
-                            if (descInput) descInput.value = node.data[`desc${i}`] || "";
-                        }
-                        i++;
-                    }
-                }
-            });
-            editor.updateConnectionNodes('node-list');
-        }, 500); // Pequeño delay para que Drawflow renderice el HTML primero
+                    if (node.name === "whatsapp_list") {
+                        const nodeElement = document.getElementById(`node-${nodeId}`);
+                        if (!nodeElement) return;
 
-        closeFlowsModal();
-        alert("✅ Flujo cargado con todas sus filas");
+                        const btnAdd = nodeElement.querySelector('.btn-success');
+                        
+                        let i = 2;
+                        // Buscamos filas guardadas (row2, row3...)
+                        while (node.data && node.data[`row${i}`] !== undefined) {
+                            if (typeof window.addRowDynamic === 'function') {
+                                window.addRowDynamic(btnAdd);
+                                
+                                const rowInput = nodeElement.querySelector(`[df-row${i}]`);
+                                const descInput = nodeElement.querySelector(`[df-desc${i}]`);
+                                if (rowInput) rowInput.value = node.data[`row${i}`];
+                                if (descInput) descInput.value = node.data[`desc${i}`] || "";
+                            }
+                            i++;
+                        }
+                    }
+                });
+                editor.updateConnectionNodes('node-list');
+            } catch (innerError) {
+                console.error("Aviso: No hay nodos para reconstruir", innerError);
+            }
+        }, 500); 
+
+        if(typeof closeFlowsModal === 'function') closeFlowsModal();
+        
     } catch (e) {
-        console.error("Error al cargar:", e);
-        alert("❌ Error al cargar el flujo");
+        console.error("❌ Error crítico al cargar:", e);
+        // En caso de error total, forzamos un editor limpio para no bloquear al usuario
+        editor.import({ drawflow: { Home: { data: {} } } });
+        alert("❌ No se pudo cargar el flujo. Se ha abierto un lienzo limpio.");
     }
 };
 
