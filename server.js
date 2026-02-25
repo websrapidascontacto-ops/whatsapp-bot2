@@ -721,7 +721,8 @@ Si el usuario quiere TikTok o pregunta por planes de esa red, termina con: [ACTI
                 },
                 { role: "user", content: message }
             ],
-            temperature: 0.7
+            max_tokens: 100, // <--- AGREGA ESTO. 100 tokens son aprox. 75 palabras.
+            temperature: 0.5
         }, {
             headers: { 
                 'Authorization': `Bearer ${apiKey}`, 

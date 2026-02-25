@@ -699,3 +699,19 @@ function hideTypingIndicator() {
     const indicator = document.getElementById("ai-typing");
     if (indicator) indicator.remove();
 }
+function procesarRespuestaFlujo(accion) {
+    console.log("🚀 Ejecutando redirección para:", accion);
+
+    // Quitamos los corchetes y el texto ACTION: para quedarnos solo con la red
+    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
+
+    // Aquí mapeamos la acción al nombre exacto de tus Nodos en el sistema
+    // ASEGÚRATE de que los nombres coincidan con cómo los llamaste en tu panel
+    if (redSocial === 'tiktok') {
+        ejecutarNodoPorNombre("TikTok"); 
+    } else if (redSocial === 'instagram') {
+        ejecutarNodoPorNombre("Instagram");
+    } else if (redSocial === 'facebook') {
+        ejecutarNodoPorNombre("Facebook");
+    }
+}
