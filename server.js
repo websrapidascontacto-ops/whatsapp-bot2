@@ -96,7 +96,7 @@ async function downloadMedia(mediaId, fileName) {
 
 /* ========================= WEBHOOK PRINCIPAL (WHATSAPP) ========================= */
 app.post("/webhook", async (req, res) => {
-    res.sendStatus(200); // Respondemos a Meta de inmediato
+    res.sendStatus(200); // Respondemos a Meta de inmediato para evitar reenvíos
 
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
     if (!value?.messages) return;
@@ -161,7 +161,7 @@ app.post("/webhook", async (req, res) => {
                     } else {
                         await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, envía un link válido. 🔗" } }, {});
                     }
-                    continue; // Pasa al siguiente mensaje si lo hay
+                    continue; 
                 }
 
                 // PASO 2: Recibir el Código de 3 dígitos
@@ -206,19 +206,20 @@ app.post("/webhook", async (req, res) => {
                 }
             }
 
-            // --- Lógica de IA Automática (Si no hay flujo de pago activo) ---
-            // Aquí puedes llamar a ejecutarIAsola(sender, incomingText) si deseas que responda dudas
-            // O dejar que el flujo de triggers continúe abajo.
-            
-            // --- Lógica de Flujos (Triggers / Listas) ---
+            // --- LÓGICA DE FLUJOS Y IA (AUTÓNOMA) ---
             const flowDoc = await Flow.findOne({ isMain: true });
+            let flowProcessed = false;
+
             if (flowDoc && incomingText) {
                 const nodes = flowDoc.data.drawflow.Home.data;
+                
+                // Buscar si es un Trigger (Palabra clave)
                 let targetNode = Object.values(nodes).find(n =>
                     n.name === "trigger" &&
                     n.data.val?.toLowerCase() === incomingText.toLowerCase()
                 );
 
+                // Si no es trigger, buscar en Listas de WhatsApp
                 if (!targetNode) {
                     const listNode = Object.values(nodes).find(n => {
                         if (n.name === "whatsapp_list") {
@@ -243,18 +244,24 @@ app.post("/webhook", async (req, res) => {
                     }
                 }
 
+                // Ejecutar el nodo si se encontró
                 if (targetNode) {
+                    flowProcessed = true;
                     if (targetNode.name === "trigger") {
                         const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
                         if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
                     } else {
                         await processSequence(sender, targetNode, nodes);
                     }
-                } else {
-                    // Si no es un trigger ni un pago, lanzamos la IA para que trabaje sola
-                    if (typeof ejecutarIAsola === "function") {
-                        await ejecutarIAsola(sender, incomingText);
-                    }
+                }
+            }
+
+            // --- DISPARO DE IA SI NADA DE LO ANTERIOR SE EJECUTÓ ---
+            if (!flowProcessed) {
+                console.log(`🤖 Disparando IA autónoma para: ${sender}`);
+                if (typeof ejecutarIAsola === "function") {
+                    // No usamos await aquí para que el webhook termine rápido
+                    ejecutarIAsola(sender, incomingText).catch(e => console.error("Error IA:", e));
                 }
             }
         }
