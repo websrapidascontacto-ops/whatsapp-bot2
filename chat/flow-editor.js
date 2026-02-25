@@ -320,7 +320,9 @@ async function cargarFlujoPrincipal() {
 
         editor.clear();
         editor.import(data);
-
+        setTimeout(() => {
+        reconstruirWhatsappLists();
+        }, 400);
     } catch (error) {
         console.error("❌ Error cargando flujo:", error);
     }
@@ -392,4 +394,44 @@ function reconstruirFilas(flowData) {
     });
 
     console.log("✅ Filas reconstruidas correctamente");
+}
+function reconstruirWhatsappLists() {
+
+    const allNodes = editor.drawflow.drawflow.Home.data;
+
+    Object.values(allNodes).forEach(node => {
+
+        if (node.name !== "whatsapp_list") return;
+
+        if (!node.data || !node.data.rows) return;
+
+        const nodeId = node.id;
+
+        const container = document.querySelector(
+            `#node-${nodeId} .rows-container`
+        );
+
+        if (!container) return;
+
+        // 🔥 Limpiar lo que drawflow dejó
+        container.innerHTML = "";
+
+        node.data.rows.forEach((row, index) => {
+
+            const fila = document.createElement("div");
+            fila.classList.add("row-item");
+
+            fila.innerHTML = `
+                <input type="text"
+                       value="${row.title || ''}"
+                       class="form-control"
+                       onchange="actualizarFila(${nodeId}, ${index}, this.value)">
+            `;
+
+            container.appendChild(fila);
+        });
+
+    });
+
+    console.log("✅ Listas reconstruidas correctamente");
 }
