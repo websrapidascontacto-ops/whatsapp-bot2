@@ -610,11 +610,22 @@ app.get("/api/get-flow-by-id/:id", async (req, res) => {
     } catch (e) { res.status(500).json(null); }
 });
 
-app.get('/api/get-flows', async (req, res) => {
+app.get("/api/get-flow", async (req, res) => {
     try {
-        const flows = await Flow.find({});
-        res.json(flows.map(f => ({ id: f._id, name: f.name, active: f.isMain })));
-    } catch (e) { res.status(500).json([]); }
+        // Buscamos el flujo que está activo (Main)
+        const flow = await Flow.findOne({ isMain: true });
+        
+        if (!flow) {
+            // Si no hay ninguno, enviamos uno vacío pero con estructura válida
+            return res.json({ drawflow: { Home: { data: {} } } });
+        }
+
+        // IMPORTANTE: Enviamos flow.data que es lo que Drawflow entiende
+        res.json(flow.data);
+    } catch (e) {
+        console.error("Error al obtener flujo:", e);
+        res.status(500).json({ error: "Error en el servidor" });
+    }
 });
 
 app.post('/api/save-flow', async (req, res) => {

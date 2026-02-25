@@ -84,11 +84,19 @@ window.addListNode = function() {
 
 window.addRowDynamic = function(button, initialData = null) {
     const nodeElement = button.closest('.drawflow-node');
+    if (!nodeElement) return;
+
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
-    const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
-    // Contamos filas actuales para saber el índice (row2, row3...)
+    // USAMOS EL MÉTODO OFICIAL CON PROTECCIÓN
+    const nodeInfo = editor.getNodeFromId(nodeId);
+    if (!nodeInfo || !nodeInfo.data) {
+        console.warn("⚠️ Reintentando obtener data del nodo...");
+        return; 
+    }
+    const nodeData = nodeInfo.data;
+    
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
@@ -97,39 +105,32 @@ window.addRowDynamic = function(button, initialData = null) {
     group.className = "row-group mb-2";
     group.style.cssText = "border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;";
 
-    // Input de Título (Fila)
-    const inputRow = document.createElement("input");
-    inputRow.className = "form-control mb-1";
-    inputRow.style.fontFamily = "Montserrat, sans-serif";
-    inputRow.placeholder = `Fila ${count} (Título)`;
-    inputRow.setAttribute(`df-${keyRow}`, "");
-    // Si viene de una importación, le ponemos el valor
-    if(initialData && initialData.row) inputRow.value = initialData.row;
-    
-    // Input de Descripción
-    const inputDesc = document.createElement("input");
-    inputDesc.className = "form-control";
-    inputDesc.style.cssText = "font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;";
-    inputDesc.placeholder = "Comentario opcional";
-    inputDesc.setAttribute(`df-${keyDesc}`, "");
-    if(initialData && initialData.desc) inputDesc.value = initialData.desc;
+    group.innerHTML = `
+        <input type="text" class="form-control mb-1" style="font-family: Montserrat;" placeholder="Fila ${count}" df-${keyRow}>
+        <input type="text" class="form-control" style="font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;" placeholder="Comentario" df-${keyDesc}>
+    `;
 
-    // Listeners para guardar en tiempo real
+    const inputRow = group.querySelector(`[df-${keyRow}]`);
+    const inputDesc = group.querySelector(`[df-${keyDesc}]`);
+
+    if(initialData) {
+        if(initialData.row) inputRow.value = initialData.row;
+        if(initialData.desc) inputDesc.value = initialData.desc;
+    }
+
+    // Guardado en tiempo real
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
-    group.appendChild(inputRow);
-    group.appendChild(inputDesc);
     containerRows.appendChild(group);
-
-    // Actualizamos la data del editor
+    
+    // Sincronizar data inicial
     nodeData[keyRow] = inputRow.value;
     nodeData[keyDesc] = inputDesc.value;
 
-    // Añadimos el puntito de conexión (Output) a la derecha del nodo
     editor.addNodeOutput(nodeId);
 };
-
+let currentEditingFlowId = null; // Variable global para saber qué estamos editando
 /* === GUARDAR Y CARGAR (CORREGIDO) === */
 window.saveFlow = async function() {
     // 1. Obtener los datos actuales del editor
@@ -383,7 +384,7 @@ window.loadSpecificFlow = async function(id) {
         // 2. Limpiamos e Importamos
         editor.clear();
         editor.import(flowToLoad);
-
+        currentEditingFlowId = id; // Guardamos el ID del flujo que acabamos de cargar
         // 3. RECONSTRUCCIÓN DE FILAS (Solo si hay datos)
         setTimeout(() => {
             try {
@@ -416,7 +417,7 @@ window.loadSpecificFlow = async function(id) {
             } catch (innerError) {
                 console.error("Aviso: No hay nodos para reconstruir", innerError);
             }
-        }, 500); 
+        }, 800); 
 
         if(typeof closeFlowsModal === 'function') closeFlowsModal();
         
@@ -451,4 +452,47 @@ window.addEventListener('message', function(e) {
             editor.zoom_reset();
         }
     }
+});
+/* === CARGA AUTOMÁTICA AL INICIAR (SOLUCIÓN AL PANEL VACÍO) === */
+async function cargarFlujoPrincipal() {
+    try {
+        const res = await fetch('/api/get-flow'); // Esta ruta ya la tienes en server.js
+        const data = await res.json();
+
+        if (data && data.drawflow) {
+            editor.clear();
+            editor.import(data);
+            
+            // Reutilizamos tu lógica de filas dinámicas para que se vean los planes SMM
+            setTimeout(() => {
+                const nodes = data.drawflow.Home.data;
+                Object.keys(nodes).forEach(id => {
+                    const node = nodes[id];
+                    if (node.name === "whatsapp_list") {
+                        const nodeElement = document.getElementById(`node-${id}`);
+                        if (nodeElement) {
+                            const btnAdd = nodeElement.querySelector('.btn-success');
+                            let i = 2;
+                            while (node.data[`row${i}`] !== undefined) {
+                                window.addRowDynamic(btnAdd, {
+                                    row: node.data[`row${i}`],
+                                    desc: node.data[`desc${i}`] || ""
+                                });
+                                i++;
+                            }
+                        }
+                    }
+                });
+                editor.zoom_reset();
+            }, 800);
+            console.log("✅ Flujo principal cargado y renderizado.");
+        }
+    } catch (error) {
+        console.error("❌ Error en la carga inicial:", error);
+    }
+}
+
+// Ejecutar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(cargarFlujoPrincipal, 800); 
 });
