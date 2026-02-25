@@ -595,7 +595,7 @@ app.delete('/api/delete-flow/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// REGLA: Esta ruta debe llamarse "/chats" y enviar "id" para que el CRM los vea
+// 1. Esta ruta llena la lista de la izquierda
 app.get("/chats", async (req, res) => {
     try {
         const chats = await Message.aggregate([
@@ -603,20 +603,24 @@ app.get("/chats", async (req, res) => {
             { $group: { _id: "$chatId", lastMessage: { $last: "$text" }, lastTime: { $last: "$timestamp" } } }, 
             { $sort: { lastTime: -1 } }
         ]);
-        // Mapeamos _id a id para que el frontend no de "undefined"
-        res.json(chats.map(c => ({ id: c._id, lastMessage: { text: c.lastMessage }, timestamp: c.lastTime })));
+        // Importante: Enviamos "id" para que el frontend lo reconozca
+        res.json(chats.map(c => ({ 
+            id: c._id, 
+            lastMessage: { text: c.lastMessage || "Media" }, 
+            timestamp: c.lastTime 
+        })));
     } catch (e) { res.status(500).json([]); }
 });
 
-// REGLA: El frontend busca los mensajes en "/chats/ID", no en "/messages/ID"
+// 2. Esta ruta quita el "Cargando mensajes" y muestra la conversación
 app.get("/chats/:chatId", async (req, res) => {
     try {
         const messages = await Message.find({ chatId: req.params.chatId }).sort({ timestamp: 1 });
-        res.json(messages);
+        res.json(messages); 
     } catch (e) { res.status(500).json([]); }
 });
 
-// REGLA: Ruta necesaria para el efecto de "escribiendo" de la IA
+// 3. Esta ruta permite que la IA indique que está "escribiendo"
 app.post('/api/whatsapp-presence', async (req, res) => {
     const { chatId, status } = req.body;
     try {
@@ -629,7 +633,7 @@ app.post('/api/whatsapp-presence', async (req, res) => {
             headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
         });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(200).json({ error: e.message }); }
 });
 
 const storage = multer.diskStorage({
