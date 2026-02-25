@@ -88,13 +88,8 @@ window.addRowDynamic = function(button, initialData = null) {
 
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
-    
-    // USAMOS EL MÉTODO OFICIAL CON PROTECCIÓN
     const nodeInfo = editor.getNodeFromId(nodeId);
-    if (!nodeInfo || !nodeInfo.data) {
-        console.warn("⚠️ Reintentando obtener data del nodo...");
-        return; 
-    }
+    if (!nodeInfo) return;
     const nodeData = nodeInfo.data;
     
     const count = containerRows.querySelectorAll(".row-group").length + 1;
@@ -113,22 +108,26 @@ window.addRowDynamic = function(button, initialData = null) {
     const inputRow = group.querySelector(`[df-${keyRow}]`);
     const inputDesc = group.querySelector(`[df-${keyDesc}]`);
 
+    // 💡 ASIGNACIÓN DE DATOS (IMPORTANTE PARA CARGAR)
     if(initialData) {
-        if(initialData.row) inputRow.value = initialData.row;
-        if(initialData.desc) inputDesc.value = initialData.desc;
+        inputRow.value = initialData.row || "";
+        inputDesc.value = initialData.desc || "";
     }
 
-    // Guardado en tiempo real
+    // Guardado en tiempo real en el objeto del nodo
     inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
     inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
 
     containerRows.appendChild(group);
     
-    // Sincronizar data inicial
+    // Si es una carga inicial, sincronizamos el objeto data
     nodeData[keyRow] = inputRow.value;
     nodeData[keyDesc] = inputDesc.value;
 
-    editor.addNodeOutput(nodeId);
+    // Solo añadimos salida visual si no existía antes
+    if(count > 1) {
+        editor.addNodeOutput(nodeId);
+    }
 };
 let currentEditingFlowId = null; // Variable global para saber qué estamos editando
 /* === GUARDAR Y CARGAR (CORREGIDO) === */
@@ -371,61 +370,41 @@ window.loadSpecificFlow = async function(id) {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
         
-        // 1. ESCUDO PROTECTOR: Validamos que exista una estructura mínima de Drawflow
-        // Si responseData está vacío o no tiene drawflow, creamos uno limpio
-        let flowToLoad;
-        if (responseData && (responseData.drawflow || responseData.data)) {
-            flowToLoad = responseData.drawflow ? responseData : responseData.data;
-        } else {
-            console.warn("⚠️ Flujo vacío o inválido, cargando lienzo limpio.");
-            flowToLoad = { drawflow: { Home: { data: {} } } };
-        }
+        let flowToLoad = responseData.drawflow ? responseData : (responseData.data || { drawflow: { Home: { data: {} } } });
         
-        // 2. Limpiamos e Importamos
         editor.clear();
         editor.import(flowToLoad);
-        currentEditingFlowId = id; // Guardamos el ID del flujo que acabamos de cargar
-        // 3. RECONSTRUCCIÓN DE FILAS (Solo si hay datos)
-        setTimeout(() => {
-            try {
-                const nodes = flowToLoad.drawflow.Home.data;
-                Object.keys(nodes).forEach(nodeId => {
-                    const node = nodes[nodeId];
-                    
-                    if (node.name === "whatsapp_list") {
-                        const nodeElement = document.getElementById(`node-${nodeId}`);
-                        if (!nodeElement) return;
+        currentEditingFlowId = id; 
 
-                        const btnAdd = nodeElement.querySelector('.btn-success');
-                        
-                        let i = 2;
-                        // Buscamos filas guardadas (row2, row3...)
-                        while (node.data && node.data[`row${i}`] !== undefined) {
-                            if (typeof window.addRowDynamic === 'function') {
-                                window.addRowDynamic(btnAdd);
-                                
-                                const rowInput = nodeElement.querySelector(`[df-row${i}]`);
-                                const descInput = nodeElement.querySelector(`[df-desc${i}]`);
-                                if (rowInput) rowInput.value = node.data[`row${i}`];
-                                if (descInput) descInput.value = node.data[`desc${i}`] || "";
-                            }
+        // 🔄 RECONSTRUCCIÓN DINÁMICA
+        setTimeout(() => {
+            const nodes = flowToLoad.drawflow.Home.data;
+            Object.keys(nodes).forEach(nodeId => {
+                const node = nodes[nodeId];
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${nodeId}`);
+                    const btnAdd = nodeElement?.querySelector('.btn-success');
+                    
+                    if (btnAdd) {
+                        let i = 2; // La fila 1 ya viene en el HTML del nodo
+                        while (node.data[`row${i}`] !== undefined) {
+                            window.addRowDynamic(btnAdd, {
+                                row: node.data[`row${i}`],
+                                desc: node.data[`desc${i}`] || ""
+                            });
                             i++;
                         }
                     }
-                });
-                editor.updateConnectionNodes('node-list');
-            } catch (innerError) {
-                console.error("Aviso: No hay nodos para reconstruir", innerError);
-            }
-        }, 800); 
+                }
+            });
+            editor.zoom_reset();
+        }, 500); // Medio segundo para asegurar que el DOM cargó
 
         if(typeof closeFlowsModal === 'function') closeFlowsModal();
         
     } catch (e) {
-        console.error("❌ Error crítico al cargar:", e);
-        // En caso de error total, forzamos un editor limpio para no bloquear al usuario
-        editor.import({ drawflow: { Home: { data: {} } } });
-        alert("❌ No se pudo cargar el flujo. Se ha abierto un lienzo limpio.");
+        console.error("❌ Error al cargar:", e);
+        alert("No se pudo cargar el flujo.");
     }
 };
 
