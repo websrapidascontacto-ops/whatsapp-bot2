@@ -670,11 +670,32 @@ app.post("/api/save-flow", async (req, res) => {
             );
         } else {
             // 🔥 CREA NUEVO
-            flow = await Flow.create({
-                name,
-                data,
-                isMain: isMain || false
-            });
+            if (id) {
+
+    flow = await Flow.findByIdAndUpdate(
+        id,
+        { name, data, isMain },
+        { new: true, runValidators: false }
+    );
+
+} else {
+
+    const existing = await Flow.findOne({ name });
+
+    if (existing) {
+        flow = await Flow.findByIdAndUpdate(
+            existing._id,
+            { data, isMain },
+            { new: true }
+        );
+    } else {
+        flow = await Flow.create({
+            name: name || "Main Flow",
+            data,
+            isMain: isMain || false
+        });
+    }
+}
         }
 
         // 🔥 Si este flujo es principal, desactivar otros
