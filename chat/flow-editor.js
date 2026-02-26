@@ -344,6 +344,13 @@ try {
 
         editor.import(safeData);
 
+requestAnimationFrame(() => {
+    setTimeout(() => {
+        editor.zoom_reset();
+        editor.dispatchEvent(new Event('change'));
+    }, 250);
+});
+
         /* 🔥 Reconstrucción visual después del render */
         requestAnimationFrame(() => {
             setTimeout(() => {
