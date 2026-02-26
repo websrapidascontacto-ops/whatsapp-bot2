@@ -1,3 +1,4 @@
+let isImportingFlow = false;
 /* === INICIO Y CONFIGURACIÓN (WEBS RÁPIDAS - MONTSERRAT) === */
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
@@ -301,7 +302,6 @@ window.addEventListener('message', function(e) {
             editor.clear();
             return;
         }
-        editor.import(rawData);
         setTimeout(() => editor.zoom_reset(), 100);
     }
 });
@@ -312,7 +312,9 @@ window.addEventListener('message', function(e) {
 
 // Carga inicial automática al abrir el editor
 async function cargarFlujoPrincipal() {
-    try {
+    if (isImportingFlow) return;
+isImportingFlow = true;
+try {
 
         const res = await fetch('/api/get-flow');
         const data = await res.json();
@@ -354,6 +356,7 @@ async function cargarFlujoPrincipal() {
     } catch (error) {
         console.error("❌ Error cargando flujo:", error);
     }
+    isImportingFlow = false;
 }
 // Único punto de entrada
 document.addEventListener('DOMContentLoaded', () => {
