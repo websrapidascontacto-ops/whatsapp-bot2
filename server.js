@@ -337,10 +337,12 @@ app.post("/webhook", async (req, res) => {
                 }
 
                 const sender = msg.from;
-if (!checkRateLimit(sender)) {
-    console.log("Rate limit activado:", sender);
-    continue;
-}
+
+                if (!checkRateLimit(sender)) {
+                    console.log("Rate limit activado:", sender);
+                    continue;
+                }
+
                 let incomingText = (
                     msg.text?.body ||
                     msg.interactive?.list_reply?.title ||
@@ -366,207 +368,189 @@ if (!checkRateLimit(sender)) {
 
                 if (!incomingText && !mediaPath) continue;
 
-/*
-=========================
-PAYMENT WAITING
-=========================
-*/
+                /*
+                =========================
+                PAYMENT WAITING
+                =========================
+                */
 
-const waiting = await PaymentWaiting.findOne({
-    chatId: sender,
-    active: true
-});
+                const waiting = await PaymentWaiting.findOne({
+                    chatId: sender,
+                    active: true
+                });
 
-if (waiting) {
+                if (waiting) {
 
-    if (incomingText && incomingText.toLowerCase().includes("cancelar")) {
-        waiting.active = false;
-        await waiting.save();
-        await sendWhatsAppMessage(sender, "❌ Pago cancelado.");
-        continue;
-    }
+                    if (incomingText && incomingText.toLowerCase().includes("cancelar")) {
+                        waiting.active = false;
+                        await waiting.save();
+                        await sendWhatsAppMessage(sender, "❌ Pago cancelado.");
+                        continue;
+                    }
 
-    if (mediaPath) {
-waiting.paymentImage = mediaPath;
-waiting.waitingForProof = false;
-        await waiting.save();
+                    if (mediaPath) {
+                        waiting.paymentImage = mediaPath;
+                        waiting.waitingForProof = false;
+                        await waiting.save();
 
-        await sendWhatsAppMessage(sender, "📸 Comprobante recibido. En revisión.");
-        await notifyAdmin(waiting);
+                        await sendWhatsAppMessage(sender, "📸 Comprobante recibido. En revisión.");
+                        await notifyAdmin(waiting);
 
-        continue;
-    }
+                        continue;
+                    }
 
-    await sendWhatsAppMessage(sender, "📸 Envía tu comprobante o escribe CANCELAR.");
-    continue;
-}
-
-/*
-=========================
-ADMIN CONTROL
-=========================
-*/
-
-if (sender === ADMIN_NUMBER && incomingText) {
-    const adminText = incomingText.trim().toUpperCase();
-
-    // =========================
-    // APROBAR PAGO
-    // =========================
-    if (adminText.startsWith("APROBAR")) {
-
-        const parts = adminText.split(" ");
-        const pedidoId = parts[1];
-
-        if (!pedidoId) return;
-
-        const waiting = await PaymentWaiting.findById(pedidoId);
-
-        if (!waiting || !waiting.active) {
-            await enviarWhatsApp(sender, "❌ Pedido no encontrado o ya procesado.");
-            return;
-        }
-
-        // 🔥 AQUÍ VA TU ENVÍO AL SMM
-        await WooCommerce.post("orders", {
-            payment_method: "bacs",
-            payment_method_title: "Yape Manual ✅",
-            status: "processing",
-            billing: { phone: waiting.chatId },
-            line_items: [{
-                product_id: waiting.productId,
-                quantity: 1,
-                meta_data: [
-                    { key: "Link del perfil", value: waiting.profileLink }
-                ]
-            }]
-        });
-
-        waiting.active = false;
-        await waiting.save();
-
-        await enviarWhatsApp(waiting.chatId, "🚀 Pago confirmado. Tu pedido fue enviado correctamente.");
-        await enviarWhatsApp(sender, "✅ Pedido aprobado y enviado al SMM.");
-
-        return;
-    }
-
-    // =========================
-    // RECHAZAR PAGO
-    // =========================
-    if (adminText.startsWith("RECHAZAR")) {
-
-        const parts = adminText.split(" ");
-        const pedidoId = parts[1];
-
-        if (!pedidoId) return;
-
-        await PaymentWaiting.updateOne(
-            { _id: pedidoId },
-            { active: false }
-        );
-
-        await enviarWhatsApp(sender, "🚫 Pedido rechazado.");
-        return;
-    }
-
-
+                    await sendWhatsAppMessage(sender, "📸 Envía tu comprobante o escribe CANCELAR.");
                     continue;
                 }
 
-            } catch (msgErr) {
-                console.error("Webhook message error:", msgErr.message);
+                /*
+                =========================
+                ADMIN CONTROL
+                =========================
+                */
+
+                if (sender === ADMIN_NUMBER && incomingText) {
+
+                    const adminText = incomingText.trim().toUpperCase();
+
+                    // =========================
+                    // APROBAR PAGO
+                    // =========================
+                    if (adminText.startsWith("APROBAR")) {
+
+                        const parts = adminText.split(" ");
+                        const pedidoId = parts[1];
+                        if (!pedidoId) continue;
+
+                        const waiting = await PaymentWaiting.findById(pedidoId);
+
+                        if (!waiting || !waiting.active) {
+                            await enviarWhatsApp(sender, "❌ Pedido no encontrado o ya procesado.");
+                            continue;
+                        }
+
+                        await WooCommerce.post("orders", {
+                            payment_method: "bacs",
+                            payment_method_title: "Yape Manual ✅",
+                            status: "processing",
+                            billing: { phone: waiting.chatId },
+                            line_items: [{
+                                product_id: waiting.productId,
+                                quantity: 1,
+                                meta_data: [
+                                    { key: "Link del perfil", value: waiting.profileLink }
+                                ]
+                            }]
+                        });
+
+                        waiting.active = false;
+                        await waiting.save();
+
+                        await enviarWhatsApp(waiting.chatId, "🚀 Pago confirmado. Tu pedido fue enviado correctamente.");
+                        await enviarWhatsApp(sender, "✅ Pedido aprobado y enviado al SMM.");
+
+                        continue;
+                    }
+
+                    // =========================
+                    // RECHAZAR PAGO
+                    // =========================
+                    if (adminText.startsWith("RECHAZAR")) {
+
+                        const parts = adminText.split(" ");
+                        const pedidoId = parts[1];
+                        if (!pedidoId) continue;
+
+                        await PaymentWaiting.updateOne(
+                            { _id: pedidoId },
+                            { active: false }
+                        );
+
+                        await enviarWhatsApp(sender, "🚫 Pedido rechazado.");
+                        continue;
+                    }
+                }
+
+            } catch (err) {
+                console.error("Error procesando mensaje:", err);
             }
-// =============================
-            // Guardar mensaje
-            // =============================
-            const savedIncoming = await Message.create({
-                chatId: sender,
-                from: sender,
-                text: incomingText || "",
-                media: mediaPath
-            });
-
-            broadcast({
-                type: "new_message",
-                message: { ...savedIncoming._doc, id: savedIncoming.chatId }
-            });
-
-
 
         }
 
-    } catch (err) {
-        console.error("Webhook error:", err.message);
+    } catch (error) {
+        console.error("Error en webhook:", error);
     }
-});        
 
-            // =============================
-            // FLOW + IA ROUTING
-            // =============================
-            const flowDoc = await Flow.findOne({ isMain: true });
+});
+/*
+=============================
+FLOW + IA ROUTING
+=============================
+*/
 
-            if (flowDoc && incomingText) {
+const flowDoc = await Flow.findOne({ isMain: true });
 
-                const nodes = flowDoc.data.drawflow.Home.data;
+if (flowDoc && incomingText) {
 
-                let targetNode = Object.values(nodes).find(n =>
-                    n.name === "trigger" &&
-                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
+    const nodes = flowDoc.data.drawflow.Home.data;
+    let targetNode = null;
+
+    targetNode = Object.values(nodes).find(n =>
+        n.name === "trigger" &&
+        n.data.val?.toLowerCase() === incomingText.toLowerCase()
+    );
+
+    if (!targetNode) {
+
+        const listNode = Object.values(nodes).find(n => {
+
+            if (n.name === "whatsapp_list") {
+                return Object.keys(n.data).some(key =>
+                    key.startsWith("row") &&
+                    n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
                 );
+            }
 
-                if (!targetNode) {
+            return false;
+        });
 
-                    const listNode = Object.values(nodes).find(n => {
+        if (listNode) {
 
-                        if (n.name === "whatsapp_list") {
-                            return Object.keys(n.data).some(key =>
-                                key.startsWith("row") &&
-                                n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-                            );
-                        }
+            const rowKey = Object.keys(listNode.data).find(k =>
+                k.startsWith("row") &&
+                listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
+            );
 
-                        return false;
-                    });
+            if (rowKey) {
 
-                    if (listNode) {
+                const rowNum = rowKey.replace("row", "");
+                const connection = listNode.outputs?.[`output_${rowNum}`]?.connections?.[0];
 
-                        const rowKey = Object.keys(listNode.data).find(k =>
-                            k.startsWith("row") &&
-                            listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-                        );
-
-                        if (rowKey) {
-
-                            const rowNum = rowKey.replace("row", "");
-                            const connection = listNode.outputs?.[`output_${rowNum}`]?.connections?.[0];
-
-                            if (connection) {
-                                targetNode = nodes[connection.node];
-                            }
-                        }
-                    }
-                }
-
-                if (targetNode) {
-
-                    flowProcessed = true;
-
-                    if (targetNode.name === "trigger") {
-
-                        const nextNodeId =
-                            targetNode.outputs?.output_1?.connections?.[0]?.node;
-
-                        if (nextNodeId)
-                            await processSequence(sender, nodes[nextNodeId], nodes);
-
-                    } else {
-
-                        await processSequence(sender, targetNode, nodes);
-                    }
+                if (connection) {
+                    targetNode = nodes[connection.node];
                 }
             }
-        
+        }
+    }
+
+    if (targetNode) {
+
+        flowProcessed = true;
+
+        if (targetNode.name === "trigger") {
+
+            const nextNodeId =
+                targetNode.outputs?.output_1?.connections?.[0]?.node;
+
+            if (nextNodeId)
+                await processSequence(sender, nodes[nextNodeId], nodes);
+
+        } else {
+
+            await processSequence(sender, targetNode, nodes);
+        }
+    }
+}        
             // =============================
             /*
 =====================================================
@@ -757,7 +741,8 @@ app.post("/webhook-yape", async (req, res) => {
             error: "Error interno IA"
         });
     }
-});========================= */
+});
+*/
 
 /* ========================= GET TODOS LOS FLUJOS ========================= */
 app.get("/api/get-flows", async (req, res) => {
