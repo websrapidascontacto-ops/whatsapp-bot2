@@ -21,7 +21,7 @@ const WooCommerce = new WooCommerceRestApi({
     version: "wc/v3"
 });
 
-// Esquema para rastrear quién está esperando validación de pago y link
+// Esquema para rastrear quién está esperando validación de pago y linkk
 // Esquema actualizado
 const PaymentWaiting = mongoose.model("PaymentWaiting", new mongoose.Schema({
     chatId: String,
