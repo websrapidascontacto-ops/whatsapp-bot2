@@ -1,6 +1,48 @@
+if (!process.env.ACCESS_TOKEN) {
+    console.error("❌ ACCESS_TOKEN no definido");
+}
+
+if (!process.env.OPENAI_API_KEY) {
+    console.error("❌ OPENAI_API_KEY no definido");
+}
+
+if (!process.env.WC_KEY || !process.env.WC_SECRET) {
+    console.error("❌ WooCommerce keys no definidas");
+}
+const conversationMemory = new Map();
+
+function updateMemory(chatId, key, value) {
+    if (!conversationMemory.has(chatId)) {
+        conversationMemory.set(chatId, {});
+    }
+
+    conversationMemory.get(chatId)[key] = value;
+}
+const rateLimitMap = new Map();
+
+function checkRateLimit(chatId) {
+    const now = Date.now();
+    const last = rateLimitMap.get(chatId);
+
+    if (last && now - last < 2500) {
+        return false;
+    }
+
+    rateLimitMap.set(chatId, now);
+    return true;
+}
+const { ejecutarIAsola } = require("./ai/aiEngine");
+const mongoose = require("mongoose");
+const ReplaySchema = new mongoose.Schema({
+    messageId: { type: String, unique: true },
+    createdAt: { type: Date, default: Date.now, expires: 600 }
+});
+
+const ReplayCache = mongoose.models.ReplayCache ||
+mongoose.model("ReplayCache", ReplaySchema);
+const ADMIN_NUMBER = "51933425911";
 const express = require("express");
 const http = require("http");
-const mongoose = require("mongoose");
 const WebSocket = require("ws");
 const path = require("path");
 const multer = require("multer");
@@ -28,12 +70,25 @@ const PaymentWaiting = mongoose.model("PaymentWaiting", new mongoose.Schema({
     productId: String,
     amount: String,
     profileLink: String,
-    yapeCode: String, // <--- NUEVO: Para guardar el código que el cliente escriba
+    paymentImage: String,
+
     active: { type: Boolean, default: true },
     waitingForLink: { type: Boolean, default: false },
-    waitingForCode: { type: Boolean, default: false } // <--- NUEVO: Para saber que esperamos el código
+    waitingForProof: { type: Boolean, default: false }
 }));
+setInterval(() => {
 
+    const now = Date.now();
+
+    for (const [chatId, data] of conversationMemory.entries()) {
+
+        if (!data.lastTime || now - data.lastTime > 3600000) {
+            conversationMemory.delete(chatId);
+        }
+
+    }
+
+}, 3600000);
 /* ========================= CONFIGURACIÓN ========================= */
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -51,7 +106,10 @@ app.use(express.static(chatPath));
 app.use(express.static('public'));
 
 /* ========================= MONGODB ========================= */
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+})
     .then(() => console.log("✅ Mongo conectado - Punto Nemo Estable"))
     .catch(err => console.error("❌ Error Mongo:", err));
 
@@ -67,6 +125,11 @@ const Flow = mongoose.model("Flow", new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     data: { type: Object, required: true },
     isMain: { type: Boolean, default: false } 
+}));
+const UserStatus = mongoose.model("UserStatus", new mongoose.Schema({
+    chatId: String,
+    lastNodeId: String,
+    updatedAt: Date
 }));
 
 /* ========================= WEBSOCKET ========================= */
@@ -93,264 +156,6 @@ async function downloadMedia(mediaId, fileName) {
         return null; 
     }
 }
-
-/* ========================= WEBHOOK PRINCIPAL (WHATSAPP) ========================= */
-app.post("/webhook", async (req, res) => {
-    res.sendStatus(200); // Respondemos a Meta de inmediato para evitar reenvíos
-
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
-    if (!value?.messages) return;
-
-    for (const msg of value.messages) {
-        const sender = msg.from;
-        
-        // Detectamos si el mensaje viene de un botón o lista
-        const isInteractive = msg.type === "interactive";
-
-        let incomingText = (
-            msg.text?.body || 
-            msg.interactive?.list_reply?.title || 
-            msg.interactive?.button_reply?.title || 
-            ""
-        ).trim();
-
-        let mediaPath = null;
-
-        // Manejo de imágenes entrantes
-        if (msg.type === "image") {
-            try {
-                const mediaId = msg.image.id;
-                const fileName = `whatsapp_${Date.now()}.jpg`;
-                mediaPath = await downloadMedia(mediaId, fileName);
-                if (!incomingText) incomingText = msg.image.caption || "📷 Imagen recibida";
-            } catch (err) { console.error("❌ Error imagen:", err.message); }
-        }
-
-        if (incomingText || mediaPath) {
-            // 1. Guardar mensaje en BD
-            const savedIncoming = await Message.create({ 
-                chatId: sender, from: sender, text: incomingText, media: mediaPath 
-            });
-
-            // 2. Avisar al CRM (WebSocket)
-            broadcast({ 
-                type: "new_message", 
-                message: { ...savedIncoming._doc, id: savedIncoming.chatId } 
-            });
-
-            // 3. Lógica de Estado de Pago (Waiting)
-            const waiting = await PaymentWaiting.findOne({ chatId: sender, active: true });
-
-            if (waiting) {
-                // PASO 1: Recibir el Link
-                if (waiting.waitingForLink) {
-                    const isLink = incomingText.includes("http") || incomingText.includes(".com") || incomingText.includes("www.");
-                    
-                    if (isLink) {
-                        waiting.profileLink = incomingText;
-                        waiting.waitingForLink = false;
-                        waiting.waitingForCode = true; 
-                        await waiting.save();
-
-                        const mensajePago = `✅ *Link recibido correctamente.* ✨\n\n💰 *Datos para el pago* 💰\n\n📱 *Yape:* 981514479\n👉 *Nombre:* Lorena M\n💵 *Monto:* S/${waiting.amount}\n\n--- \n\n⚠️ *INSTRUCCIONES IMPORTANTES* ⚠️\n\n1️⃣ Realiza el pago en tu App Yape.\n2️⃣ Al terminar, busca en tu comprobante de yape el **"Código de Seguridad"** (son 3 dígitos).\n3️⃣ Escribe esos **3 números aquí abajo** para activar tu pedido.\n\n🚫 No envíes capturas, el sistema solo necesita los 3 dígitos. 🚀`;
-
-                        await processSequence(sender, { name: "message", data: { info: mensajePago } }, {});
-                        await processSequence(sender, { 
-                            name: "image", 
-                            data: { 
-                                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
-                                caption: "💡 Aquí te muestro dónde encontrar los 3 dígitos en tu comprobante de Yape 👇" 
-                            } 
-                        }, {});
-                    } else {
-                        await processSequence(sender, { name: "message", data: { info: "⚠️ Por favor, envía un link válido. 🔗" } }, {});
-                    }
-                    continue; 
-                }
-
-                // PASO 2: Recibir el Código de 3 dígitos
-                if (waiting.waitingForCode) {
-                    const cleanNumber = incomingText.replace(/\D/g, ''); 
-                    
-                    if (cleanNumber.length === 3) {
-                        await PaymentWaiting.updateOne({ _id: waiting._id }, { 
-                            yapeCode: cleanNumber, 
-                            waitingForCode: false 
-                        });
-                        
-                        await processSequence(sender, { name: "message", data: { info: `⏳ Código *${cleanNumber}* recibido. Iniciando validación...` } }, {});
-                        
-                        const sendProgress = (ms, text) => {
-                            setTimeout(async () => {
-                                const check = await PaymentWaiting.findById(waiting._id);
-                                if (check && check.active) {
-                                    await processSequence(sender, { name: "message", data: { info: text } }, {});
-                                }
-                            }, ms);
-                        };
-
-                        sendProgress(2500, "🔍 Verificando transacción con el banco... 30%");
-                        sendProgress(5500, "⚙️ Procesando datos del servicio... 75%");
-                        sendProgress(8500, "⏳ Casi listo, esperando la confirmación final de Yape... 📥");
-                    } else {
-                        await processSequence(sender, { 
-                            name: "message", 
-                            data: { info: "⚠️ Por favor, ingresa los *3 dígitos* del código de seguridad que esta en la constancia de tu yape. 📑" } 
-                        }, {});
-
-                        await processSequence(sender, { 
-                            name: "image", 
-                            data: { 
-                                url: "https://whatsapp-bot2-production.up.railway.app/assets/ayuda-yape.jpg",
-                                caption: "Aquí puedes ver dónde encontrar los 3 dígitos. 👇😊" 
-                            } 
-                        }, {});
-                    }
-                    continue;
-                }
-            }
-
-            // --- LÓGICA DE FLUJOS Y IA (AUTÓNOMA) ---
-            const flowDoc = await Flow.findOne({ isMain: true });
-            let flowProcessed = false;
-
-            if (flowDoc && incomingText) {
-                const nodes = flowDoc.data.drawflow.Home.data;
-                
-                // Buscar si es un Trigger (Palabra clave)
-                let targetNode = Object.values(nodes).find(n =>
-                    n.name === "trigger" &&
-                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
-                );
-
-                // Si no es trigger, buscar en Listas de WhatsApp
-                if (!targetNode) {
-                    const listNode = Object.values(nodes).find(n => {
-                        if (n.name === "whatsapp_list") {
-                            return Object.keys(n.data).some(key =>
-                                key.startsWith('row') &&
-                                n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-                            );
-                        }
-                        return false;
-                    });
-
-                    if (listNode) {
-                        const rowKey = Object.keys(listNode.data).find(k =>
-                            k.startsWith('row') &&
-                            listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-                        );
-                        if (rowKey) {
-                            const rowNum = rowKey.replace("row", "");
-                            const connection = listNode.outputs[`output_${rowNum}`]?.connections?.[0];
-                            if (connection) targetNode = nodes[connection.node];
-                        }
-                    }
-                }
-
-                // Ejecutar el nodo si se encontró
-                if (targetNode) {
-                    flowProcessed = true;
-                    if (targetNode.name === "trigger") {
-                        const nextNodeId = targetNode.outputs?.output_1?.connections?.[0]?.node;
-                        if (nextNodeId) await processSequence(sender, nodes[nextNodeId], nodes);
-                    } else {
-                        await processSequence(sender, targetNode, nodes);
-                    }
-                }
-            }
-
-            // --- DISPARO DE IA SI NADA DE LO ANTERIOR SE EJECUTÓ ---
-            // Solo entra si: NO se procesó un flujo Y NO es un mensaje interactivo (botón/lista)
-            if (!flowProcessed && !isInteractive) {
-                console.log(`🤖 Disparando IA autónoma para: ${sender}`);
-                if (typeof ejecutarIAsola === "function") {
-                    ejecutarIAsola(sender, incomingText).catch(e => console.error("Error IA:", e));
-                }
-            }
-        }
-    }
-});
-
-/* ========================= WEBHOOK YAPE (EXTERNO - RECIBE DE MACRODROID) ========================= */
-app.post("/webhook-yape", async (req, res) => {
-    const { texto } = req.body; 
-    console.log("📩 Notificación Yape Recibida:", texto);
-    if (!texto) return res.sendStatus(200);
-
-    const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
-    const codigoNotificacion = matchCod ? (matchCod[1] || matchCod[0]) : null;
-
-    if (codigoNotificacion) {
-        let waiting = null;
-        console.log(`🔎 Buscando código ${codigoNotificacion}...`);
-
-        // Aumentamos a 30 intentos (1 minuto de espera total)
-        for (let i = 0; i < 30; i++) {
-            // Buscamos cualquier registro que tenga ese código y esté activo
-            waiting = await PaymentWaiting.findOne({ 
-                yapeCode: codigoNotificacion, 
-                active: true 
-            }).sort({ _id: -1 });
-
-            if (waiting) break; 
-            
-            if (i % 5 === 0) console.log(`⏳ Esperando al cliente... (Intento ${i+1}/60)`);
-            await new Promise(r => setTimeout(r, 2000)); 
-        }
-
-        if (waiting) {
-            console.log("✅ ¡Match encontrado! Procesando pedido...");
-            // Desactivamos para evitar duplicados
-            await PaymentWaiting.updateOne({ _id: waiting._id }, { active: false });
-
-            try {
-                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                const product = productRes.data;
-                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
-
-                const wpResponse = await WooCommerce.post("orders", {
-                    payment_method: "bacs",
-                    payment_method_title: "Yape Automático ✅",
-                    status: "processing", 
-                    billing: { phone: waiting.chatId },
-                    line_items: [{
-                        product_id: parseInt(waiting.productId),
-                        quantity: 1,
-                        meta_data: [
-                            { key: "_ltb_id", value: serviceId },
-                            { key: "_ltb_qty", value: bulkQty },
-                            { key: "Link del perfil", value: waiting.profileLink },
-                            { key: "Código Yape", value: codigoNotificacion }
-                        ]
-                    }]
-                });
-
-                await processSequence(waiting.chatId, { 
-                    name: "message", 
-                    data: { info: `✅ *¡PAGO VERIFICADO!* 🚀\n\nTu pedido #${wpResponse.data.id} ha sido activado con éxito. ¡Gracias por confiar en Aumentar Seguidores! ✨` } 
-                }, {});
-// --- ESTO ES LO QUE AGREGAMOS (AL FINAL DEL BLOQUE DE ÉXITO) ---
-                axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-                    messaging_product: "whatsapp",
-                    to: "51933425911",
-                    type: "text",
-                    text: { body: `🔔 *VENTA EXITOSA* 💰\n\nOrden: #${wpResponse.data.id}\nCliente: ${waiting.chatId}\nMonto: S/${waiting.amount}\nLink: ${waiting.profileLink}` }
-                }, { headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` } }).catch(e => {});
-                // --- FIN DEL AGREGADO ---
-                
-            } catch (err) { 
-                console.error("❌ Error WordPress:", err.response?.data || err.message); 
-            }
-        } else {
-            console.log(`❌ Tiempo agotado para el código ${codigoNotificacion}.`);
-        }
-    }
-    res.sendStatus(200);
-});
-                          
-
 /* ========================= PROCESADOR DE SECUENCIA ========================= */
 async function processSequence(to, node, allNodes) {
     if (!node) return;
@@ -472,8 +277,6 @@ else if (node.name === "media" || node.name === "image") {
                 amount: node.data.amount, 
                 active: true, 
                 waitingForLink: true,
-                waitingForCode: false,
-                yapeCode: null 
             },
             { upsert: true }
         );
@@ -506,91 +309,455 @@ else if (node.name === "media" || node.name === "image") {
         console.error("❌ Error final processSequence:", err.response?.data || err.message); 
     }
 }
+app.post("/webhook", async (req, res) => {
 
-/* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) ========================= */
+    res.sendStatus(200);
+
+    try {
+
+        const value = req.body.entry?.[0]?.changes?.[0]?.value;
+        if (!value?.messages) return;
+
+        for (const msg of value.messages) {
+
+            try {
+
+                const messageId = msg.id;
+
+                if (messageId) {
+                    const exists = await ReplayCache.findOne({ messageId });
+
+                    if (exists) continue;
+
+                    await ReplayCache.findOneAndUpdate(
+                        { messageId },
+                        { messageId },
+                        { upsert: true }
+                    );
+                }
+
+                const sender = msg.from;
+if (!checkRateLimit(sender)) {
+    console.log("Rate limit activado:", sender);
+    continue;
+}
+                let incomingText = (
+                    msg.text?.body ||
+                    msg.interactive?.list_reply?.title ||
+                    msg.interactive?.button_reply?.title ||
+                    ""
+                ).trim();
+
+                let mediaPath = null;
+
+                if (msg.type === "image") {
+
+                    const mediaId = msg.image?.id;
+                    const fileName = `whatsapp_${Date.now()}.jpg`;
+
+                    if (mediaId) {
+                        mediaPath = await downloadMedia(mediaId, fileName);
+                    }
+
+                    if (!incomingText) {
+                        incomingText = msg.image?.caption || "📷 Imagen recibida";
+                    }
+                }
+
+                if (!incomingText && !mediaPath) continue;
+
+/*
+=========================
+PAYMENT WAITING
+=========================
+*/
+
+const waiting = await PaymentWaiting.findOne({
+    chatId: sender,
+    active: true
+});
+
+if (waiting) {
+
+    if (incomingText && incomingText.toLowerCase().includes("cancelar")) {
+        waiting.active = false;
+        await waiting.save();
+        await sendWhatsAppMessage(sender, "❌ Pago cancelado.");
+        continue;
+    }
+
+    if (mediaPath) {
+waiting.paymentImage = mediaPath;
+waiting.waitingForProof = false;
+        await waiting.save();
+
+        await sendWhatsAppMessage(sender, "📸 Comprobante recibido. En revisión.");
+        await notifyAdmin(waiting);
+
+        continue;
+    }
+
+    await sendWhatsAppMessage(sender, "📸 Envía tu comprobante o escribe CANCELAR.");
+    continue;
+}
+
+/*
+=========================
+ADMIN CONTROL
+=========================
+*/
+
+if (sender === ADMIN_NUMBER && incomingText) {
+    const adminText = incomingText.trim().toUpperCase();
+
+    // =========================
+    // APROBAR PAGO
+    // =========================
+    if (adminText.startsWith("APROBAR")) {
+
+        const parts = adminText.split(" ");
+        const pedidoId = parts[1];
+
+        if (!pedidoId) return;
+
+        const waiting = await PaymentWaiting.findById(pedidoId);
+
+        if (!waiting || !waiting.active) {
+            await enviarWhatsApp(sender, "❌ Pedido no encontrado o ya procesado.");
+            return;
+        }
+
+        // 🔥 AQUÍ VA TU ENVÍO AL SMM
+        await WooCommerce.post("orders", {
+            payment_method: "bacs",
+            payment_method_title: "Yape Manual ✅",
+            status: "processing",
+            billing: { phone: waiting.chatId },
+            line_items: [{
+                product_id: waiting.productId,
+                quantity: 1,
+                meta_data: [
+                    { key: "Link del perfil", value: waiting.profileLink }
+                ]
+            }]
+        });
+
+        waiting.active = false;
+        await waiting.save();
+
+        await enviarWhatsApp(waiting.chatId, "🚀 Pago confirmado. Tu pedido fue enviado correctamente.");
+        await enviarWhatsApp(sender, "✅ Pedido aprobado y enviado al SMM.");
+
+        return;
+    }
+
+    // =========================
+    // RECHAZAR PAGO
+    // =========================
+    if (adminText.startsWith("RECHAZAR")) {
+
+        const parts = adminText.split(" ");
+        const pedidoId = parts[1];
+
+        if (!pedidoId) return;
+
+        await PaymentWaiting.updateOne(
+            { _id: pedidoId },
+            { active: false }
+        );
+
+        await enviarWhatsApp(sender, "🚫 Pedido rechazado.");
+        return;
+    }
+
+
+                    continue;
+                }
+
+            } catch (msgErr) {
+                console.error("Webhook message error:", msgErr.message);
+            }
+// =============================
+            // Guardar mensaje
+            // =============================
+            const savedIncoming = await Message.create({
+                chatId: sender,
+                from: sender,
+                text: incomingText || "",
+                media: mediaPath
+            });
+
+            broadcast({
+                type: "new_message",
+                message: { ...savedIncoming._doc, id: savedIncoming.chatId }
+            });
+
+
+
+        }
+
+    } catch (err) {
+        console.error("Webhook error:", err.message);
+    }
+});        
+
+            // =============================
+            // FLOW + IA ROUTING
+            // =============================
+            const flowDoc = await Flow.findOne({ isMain: true });
+
+            if (flowDoc && incomingText) {
+
+                const nodes = flowDoc.data.drawflow.Home.data;
+
+                let targetNode = Object.values(nodes).find(n =>
+                    n.name === "trigger" &&
+                    n.data.val?.toLowerCase() === incomingText.toLowerCase()
+                );
+
+                if (!targetNode) {
+
+                    const listNode = Object.values(nodes).find(n => {
+
+                        if (n.name === "whatsapp_list") {
+                            return Object.keys(n.data).some(key =>
+                                key.startsWith("row") &&
+                                n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
+                            );
+                        }
+
+                        return false;
+                    });
+
+                    if (listNode) {
+
+                        const rowKey = Object.keys(listNode.data).find(k =>
+                            k.startsWith("row") &&
+                            listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
+                        );
+
+                        if (rowKey) {
+
+                            const rowNum = rowKey.replace("row", "");
+                            const connection = listNode.outputs?.[`output_${rowNum}`]?.connections?.[0];
+
+                            if (connection) {
+                                targetNode = nodes[connection.node];
+                            }
+                        }
+                    }
+                }
+
+                if (targetNode) {
+
+                    flowProcessed = true;
+
+                    if (targetNode.name === "trigger") {
+
+                        const nextNodeId =
+                            targetNode.outputs?.output_1?.connections?.[0]?.node;
+
+                        if (nextNodeId)
+                            await processSequence(sender, nodes[nextNodeId], nodes);
+
+                    } else {
+
+                        await processSequence(sender, targetNode, nodes);
+                    }
+                }
+            }
+        
+            // =============================
+            /*
+=====================================================
+MOTOR DE PRIORIDAD CONVERSACIONAL (ANTI-ERROR HUMANO)
+=====================================================
+*/
+
+if (!flowProcessed && !isInteractive && incomingText.length > 0) {
+
+    const paymentWaiting = await PaymentWaiting.findOne({
+        chatId: sender,
+        active: true
+    });
+
+    if (paymentWaiting) return;
+
+    /*
+    ===============================
+    DETECTOR INTENCIÓN COMPRA AVANZADO
+    ===============================
+    */
+
+    const buySignals = [
+        "comprar",
+        "precio",
+        "plan",
+        "como pago",
+        "servicio",
+        "quiero"
+    ];
+
+    const isBuyingIntent = buySignals.some(word =>
+        incomingText.toLowerCase().includes(word)
+    );
+
+    /*
+    ===============================
+    SI QUIERE COMPRAR → PRIORIDAD FLUJO
+    ===============================
+    */
+
+    if (isBuyingIntent) {
+        console.log("🧠 Buyer detected → Menu routing");
+
+        await enviarWhatsApp(
+            sender,
+            "✨ Ve al menú de servicios y elige un plan.\n\n👇 Escribe MENU"
+        );
+
+        return;
+    }
+
+    /*
+    ===============================
+    SOLO SI ESTÁ PERDIDO → IA
+    ===============================
+    */
+
+    const memoryKey = `${sender}`;
+
+    let lastState = conversationMemory.get(memoryKey) || {};
+
+    if (!lastState.greeted) {
+
+updateMemory(sender, "greeted", true);
+updateMemory(sender, "lastTime", Date.now());
+
+    }
+
+    await ejecutarIAsola(sender, incomingText, {
+        Message,
+        enviarWhatsApp,
+        Flow,
+        processSequence,
+        UserStatus
+    });
+}
+
+/* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) 
 app.post("/webhook-yape", async (req, res) => {
-    const { texto } = req.body; 
+
+    const { texto } = req.body;
     console.log("📩 Notificación Yape:", texto);
 
     if (!texto) return res.sendStatus(200);
 
     try {
-        const matchCod = texto.match(/seguridad es:\s?(\d{3})/i) || texto.match(/\b\d{3}\b/);
-        const codigoNotificacion = matchCod ? matchCod[1] || matchCod[0] : null;
 
-        // Buscamos el monto (S/ 5, S/ 10.00, etc)
+        const matchCod =
+            texto.match(/seguridad es:\s?(\d{3})/i) ||
+            texto.match(/\b\d{3}\b/);
+
+        const codigoNotificacion = matchCod ? (matchCod[1] || matchCod[0]) : null;
+
         const matchMonto = texto.match(/S\/\s?(\d+(\.\d{1,2})?)/i);
         const montoNotificacion = matchMonto ? matchMonto[1] : null;
 
-        if (codigoNotificacion) {
-            // Buscamos al cliente que coincida con el código
-            const waiting = await PaymentWaiting.findOne({ 
-                yapeCode: codigoNotificacion, 
-                active: true 
-            });
+        if (!codigoNotificacion) return res.sendStatus(200);
 
-            if (waiting) {
-                // 1. Desactivamos inmediatamente para evitar que el bot repita mensajes
-                await PaymentWaiting.updateOne({ _id: waiting._id }, { 
-                    active: false,
-                    waitingForCode: false 
-                });
+        const waiting = await PaymentWaiting.findOne({
+            yapeCode: codigoNotificacion,
+            active: true
+        });
 
-                console.log("✅ Match encontrado. Procesando Pedido SMM...");
-
-                // 2. Obtener data del producto para sacar los IDs del SMM
-                const productRes = await WooCommerce.get(`products/${waiting.productId}`);
-                const product = productRes.data;
-                
-                // Buscamos los metadatos que el plugin LTB (SMM) necesita
-                const serviceId = product.meta_data.find(m => m.key === "bulk_service_id")?.value;
-                const bulkQty = product.meta_data.find(m => m.key === "bulk_quantity")?.value;
-
-                // 3. Crear pedido en WooCommerce (Estado: processing dispara el SMM)
-                await WooCommerce.post("orders", {
-                    payment_method: "bacs",
-                    payment_method_title: "Yape Automático ✅",
-                    status: "processing", 
-                    billing: { phone: waiting.chatId },
-                    line_items: [{
-                        product_id: waiting.productId,
-                        quantity: 1,
-                        meta_data: [
-                            { key: "_ltb_id", value: serviceId },
-                            { key: "_ltb_qty", value: bulkQty },
-                            { key: "Link del perfil", value: waiting.profileLink },
-                            { key: "Código Yape", value: codigoNotificacion }
-                        ]
-                    }]
-                });
-
-                // 4. Notificar en Rila (Panel)
-                const msgBot = await Message.create({ 
-                    chatId: waiting.chatId, 
-                    from: "bot", 
-                    text: `✅ ¡Pago validado! S/${montoNotificacion || waiting.amount}. Pedido enviado al SMM.` 
-                });
-                broadcast({ type: "new_message", message: msgBot });
-
-                // 5. Mensaje de éxito final al WhatsApp del cliente
-                await processSequence(waiting.chatId, { 
-                    name: "message", 
-                    data: { info: `✅ *¡Pago verificado con éxito!* ✨\n\nHemos recibido tu Yape. Tu pedido ya está siendo procesado por el sistema. ¡Gracias por tu compra! 🚀` } 
-                }, {});
-
-            } else {
-                console.log("⚠️ Código recibido pero no hay cliente activo esperando este código.");
-            }
+        if (!waiting) {
+            console.log("⚠️ Código recibido pero no hay cliente activo esperando.");
+            return res.sendStatus(200);
         }
-    } catch (err) {
-        console.error("❌ Error Webhook Yape:", err.message);
+
+        // 🔥 Desactivar inmediatamente para evitar duplicados
+        await PaymentWaiting.updateOne(
+            { _id: waiting._id },
+            {
+                active: false,
+                waitingForCode: false
+            }
+        );
+
+        console.log("✅ Match encontrado. Procesando Pedido SMM...");
+
+        // Obtener producto WooCommerce
+        const productRes = await WooCommerce.get(
+            `products/${waiting.productId}`
+        );
+
+        const product = productRes.data || {};
+
+        const serviceId = product.meta_data?.find(
+            m => m.key === "bulk_service_id"
+        )?.value;
+
+        const bulkQty = product.meta_data?.find(
+            m => m.key === "bulk_quantity"
+        )?.value;
+
+        // Crear pedido WooCommerce
+        await WooCommerce.post("orders", {
+            payment_method: "bacs",
+            payment_method_title: "Yape Automático ✅",
+            status: "processing",
+
+            billing: {
+                phone: waiting.chatId
+            },
+
+            line_items: [{
+                product_id: waiting.productId,
+                quantity: 1,
+                meta_data: [
+                    { key: "_ltb_id", value: serviceId },
+                    { key: "_ltb_qty", value: bulkQty },
+                    { key: "Link del perfil", value: waiting.profileLink },
+                    { key: "Código Yape", value: codigoNotificacion }
+                ]
+            }]
+        });
+
+        // Guardar mensaje CRM
+        const msgBot = await Message.create({
+            chatId: waiting.chatId,
+            from: "bot",
+            text: `✅ ¡Pago validado! S/${montoNotificacion || waiting.amount}. Pedido enviado al SMM.`
+        });
+
+        broadcast({
+            type: "new_message",
+            message: msgBot
+        });
+
+        // Mensaje final al cliente
+        await processSequence(
+            waiting.chatId,
+            {
+                name: "message",
+                data: {
+                    info: `✅ *¡Pago verificado con éxito!* ✨\n\nHemos recibido tu Yape. Tu pedido ya está siendo procesado por el sistema. ¡Gracias por tu compra! 🚀`
+                }
+            },
+            {}
+        );
+
+        res.sendStatus(200);
+
+    } catch (error) {
+
+        console.error("❌ Error webhook Yape:", error.message);
+        res.status(500).json({
+            error: "Error interno IA"
+        });
     }
-    res.sendStatus(200);
-});
-
-/* ========================= APIS DE FLUJOS Y CHAT ========================= */
-
-/* ========================= GET FLOW PRINCIPAL ========================= */
+});========================= */
 
 /* ========================= GET TODOS LOS FLUJOS ========================= */
 app.get("/api/get-flows", async (req, res) => {
@@ -819,20 +986,14 @@ app.get("/api/download-flow", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/import-flow", express.json({limit: '50mb'}), async (req, res) => {
-    try {
-        const flowData = req.body;
-        await Flow.findOneAndUpdate({ name: "Main Flow" }, { data: flowData }, { upsert: true });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 /* ========================= ENDPOINT DE IA (OPENAI) ========================= */
 app.post('/api/ai-chat', async (req, res) => {
-    const { message, chatId, contexto } = req.body;
-    //const apiKey = process.env.OPENAI_API_KEY;
 
-    // Diccionario para que la IA entienda en qué parte del flujo está el usuario
+    const { message, chatId, contexto } = req.body;
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    const catalogoServicios = global.catalogoServicios || `...`;
+
     const nombresNodos = {
         "23": "Menú Principal de Redes (Instagram, TikTok, Facebook)",
         "12": "Sección de Planes de TikTok",
@@ -844,151 +1005,108 @@ app.post('/api/ai-chat', async (req, res) => {
 
     const ubicacionActual = nombresNodos[contexto] || "Inicio de la conversación";
 
+    const intentCompraKeywords = [
+        "quiero comprar",
+        "como pago",
+        "dame el plan",
+        "cuesta",
+        "precio",
+        "servicio",
+        "seguir seguidores",
+        "comprar seguidores",
+        "comprar likes"
+    ];
+
+    let detectCompra = false;
+
     try {
-        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content: `Eres el asistente virtual experto de 'aumentar-seguidores.com'. Tu misión es resolver dudas sobre el servicio y dirigir al cliente hacia la compra usando los botones del chat.
+        detectCompra = intentCompraKeywords.some(word =>
+            message.toLowerCase().includes(word)
+        );
+    } catch (e) {
+        console.error("Detector compra error:", e.message);
+    }
 
-UBICACIÓN ACTUAL DEL CLIENTE: El usuario se encuentra en: ${ubicacionActual}. Usa esta información para guiarlo si tiene dudas.
+    let hintSistema = "";
 
-INFORMACIÓN LEGAL Y REGLAS DE ORO (Estrictas - No omitir ninguna):
+    if (detectCompra) {
+        hintSistema = `
+El usuario muestra intención de compra.
 
-1. NATURALEZA DEL SERVICIO:
-- Solo aumentamos la "Apariencia" visual del perfil.
-- NO garantizamos interacción (likes o comentarios) de los nuevos seguidores.
-- Garantizamos la entrega de la cantidad comprada, pero no su actividad.
+Si está perdido:
+→ Muestra [ACTION:MENU_REDES]
 
-2. REQUISITOS TÉCNICOS:
-- La cuenta DEBE ser PÚBLICA.
-- Si el cliente tiene la cuenta en "Privada", el pedido no se cargará y NO hay derecho a reembolso ni reposición.
-- Nunca pedimos contraseñas, solo el enlace (URL) o nombre de usuario.
+Nunca des precios directos.
 
-3. POLÍTICA DE PAGOS Y REEMBOLSOS:
-- NO hay reembolsos de dinero bajo ninguna circunstancia una vez realizado el depósito.
-- Pedidos con enlaces incorrectos o URLs mal escritas por el cliente no tienen derecho a reposición.
+Guíalo hacia seleccionar un plan del catálogo.`;
+    }
 
-4. GARANTÍA DE REPOSICIÓN (REFILL):
-- Solo aplica si el servicio lo especifica.
-- Reponemos si la caída supera el 10% del total comprado dentro del periodo de garantía.
-- La garantía se anula si el usuario cambia su nombre de usuario o pone la cuenta en privado.
+    try {
 
-5. RESPONSABILIDAD:
-- El cliente asume el riesgo de posibles suspensiones por parte de las redes sociales. No somos responsables por sanciones de Instagram, Facebook, TikTok, etc.
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: `Eres el asistente virtual experto de 'aumentar-seguidores.com'.
 
-6. REFERENCIAS Y CONFIANZA:
-- Si piden pruebas o referencias, envíalos amablemente aquí: https://www.instagram.com/aumentar.seguidores2026/
+UBICACIÓN ACTUAL DEL CLIENTE: ${ubicacionActual}
 
-7. TIEMPOS DE ENTREGA:
-- El tiempo estimado de entrega es de MENOS DE 1 HORA después de la validación del pago. 
-- Aclara que siempre procuramos entregar lo más pronto posible, pero que pueden haber retrasos si hay un alto volumen de pedidos. 🚀
+CATALOGO OFICIAL DE SERVICIOS:
 
-8. Si el usuario tiene una duda puntual mientras está en un proceso, responde la duda y NO uses ningún código [ACTION]. Solo usa [ACTION:MENU_REDES] si el usuario te pide ver los servicios, está perdido o quiere comprar algo nuevo.
+${catalogoServicios}
+
+${hintSistema}
+
+REGLAS OBLIGATORIAS DE VENTA:
+1. Nunca inventes precios.
+2. Nunca generes valores fuera del catálogo.
+3. Si el cliente pregunta por precios → muéstralo guiándolo al menú.
+4. Si el cliente quiere comprar → usa el código [ACTION:MENU_REDES].
+5. Si el cliente pregunta algo que no está en el catálogo → responde que solo vendes los servicios listados.
+6. No negocies precios.
+7. No generes ofertas nuevas.
+8. Siempre invita a seleccionar una opción del catálogo para continuar.
 
 ESTILO DE RESPUESTA:
-- Usa siempre fuente Montserrat (estilo limpio y profesional).
-- Responde de forma CORTA, amigable y usa iconos (🚀, ✨, 🛡️).
-- NO des precios (el cliente debe verlos en el menú de opciones).
-- REGLA DE CIERRE: Al final de CADA mensaje, invita al cliente a elegir una opción del menú de servicios que aparece abajo para continuar con su pedido usando el código [ACTION:MENU_REDES]. 👇
+- Montserrat style
+- Responde corto y amigable
+- No des precios
+- Cierre: invita al menú [ACTION:MENU_REDES]
 
-GATILLOS DE ACCIÓN:
-- Si el usuario quiere comprar o ver servicios: [ACTION:MENU_REDES]
-- Si pregunta específicamente por una red:
-  TikTok: [ACTION:TIKTOK]
-  Instagram: [ACTION:INSTAGRAM]
-  Facebook: [ACTION:FACEBOOK]
-No menciones los códigos en tu texto, solo ponlos al final.`
-                },
-                { role: "user", content: message }
-            ],
-            max_tokens: 300,
-            temperature: 0.5
-        }, {
-            headers: { 
-                'Authorization': `Bearer ${apiKey}`, 
-                'Content-Type': 'application/json' 
+GATILLOS:
+TikTok → [ACTION:TIKTOK]
+Instagram → [ACTION:INSTAGRAM]
+Facebook → [ACTION:FACEBOOK]
+
+No menciones códigos dentro del texto.
+`
+                    },
+                    { role: "user", content: message }
+                ],
+                max_tokens: 300,
+                temperature: 0.5
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                }
             }
-        });
+        );
 
-        const aiText = response.data.choices[0].message.content;
+        const aiText = response.data?.choices?.[0]?.message?.content;
+
         res.json({ text: aiText });
 
     } catch (error) {
-        console.error("❌ Error con OpenAI:", error.response ? error.response.data : error.message);
+        console.error("❌ Error con OpenAI:", error.message);
         res.status(500).json({ error: "Error al conectar con la IA" });
     }
+
 });
-
-/* ========================= FUNCIÓN AUTÓNOMA (24/7) ========================= */
-// Importante: Esta función debe llamarse igual que en tu webhook (ejecutarIAsola)
-async function ejecutarIAsola(chatId, textoUsuario) {
-    try {
-        const status = await UserStatus.findOne({ chatId });
-        const contextoNodo = status ? status.lastNodeId : null;
-
-        const response = await axios.post(`http://127.0.0.1:${process.env.PORT || 3000}/api/ai-chat`, {
-            message: textoUsuario,
-            chatId: chatId,
-            contexto: contextoNodo 
-        });
-
-        const data = response.data;
-        if (data.text) {
-            let textoIA = data.text;
-
-            // 1. Solo disparamos un nodo si la IA detecta una intención CLARA de navegación
-            if (textoIA.includes("[ACTION:MENU_REDES]") || 
-                textoIA.includes("[ACTION:TIKTOK]") || 
-                textoIA.includes("[ACTION:INSTAGRAM]") || 
-                textoIA.includes("[ACTION:FACEBOOK]")) {
-                
-                const flowDoc = await Flow.findOne({ isMain: true });
-                if (flowDoc) {
-                    const nodes = flowDoc.data.drawflow.Home.data;
-                    
-                    let targetNodeId = null;
-                    if (textoIA.includes("[ACTION:TIKTOK]")) targetNodeId = "12";
-                    else if (textoIA.includes("[ACTION:INSTAGRAM]")) targetNodeId = "46";
-                    else if (textoIA.includes("[ACTION:FACEBOOK]")) targetNodeId = "13";
-                    else if (textoIA.includes("[ACTION:MENU_REDES]")) targetNodeId = "23";
-
-                    if (targetNodeId) {
-                        const targetNode = nodes[targetNodeId];
-                        const textoLimpio = textoIA
-                            .replace("[ACTION:MENU_REDES]", "")
-                            .replace("[ACTION:TIKTOK]", "")
-                            .replace("[ACTION:INSTAGRAM]", "")
-                            .replace("[ACTION:FACEBOOK]", "")
-                            .trim();
-                        
-                        if (textoLimpio) await enviarWhatsApp(chatId, textoLimpio);
-                        await processSequence(chatId, targetNode, nodes);
-                        return; 
-                    }
-                }
-            }
-
-            // 2. SI NO HAY ACCIÓN (Duda puntual): Solo responde el texto.
-            // Esto evita que el flujo se reinicie al nodo 1 o 23.
-            const textoFinal = textoIA
-                .replace("[ACTION:MENU_REDES]", "")
-                .replace("[ACTION:TIKTOK]", "")
-                .replace("[ACTION:INSTAGRAM]", "")
-                .replace("[ACTION:FACEBOOK]", "")
-                .trim();
-
-            await enviarWhatsApp(chatId, textoFinal);
-
-            const savedBot = await Message.create({ chatId, from: "bot", text: textoFinal });
-            broadcast({ type: "new_message", message: { ...savedBot._doc, id: chatId } });
-        }
-    } catch (e) {
-        console.error("❌ Error IA Autónoma:", e.message);
-    }
-}
-
 /**
  * Función auxiliar para enviar mensajes de texto plano vía WhatsApp API
  */
@@ -1006,25 +1124,8 @@ async function enviarWhatsApp(to, text) {
         console.error("❌ Error al enviarWhatsApp:", err.response?.data || err.message);
     }
 }
-
-// Función auxiliar para no repetir código de envío
-async function enviarWhatsApp(to, text) {
-    await axios.post(`https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`, {
-        messaging_product: "whatsapp",
-        to: to,
-        type: "text",
-        text: { body: text }
-    }, {
-        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` }
-    });
-}
-const userStatusSchema = new mongoose.Schema({
-    chatId: { type: String, required: true, unique: true },
-    lastNodeId: { type: String, default: null },
-    updatedAt: { type: Date, default: Date.now }
-});
-const UserStatus = mongoose.model('UserStatus', userStatusSchema);
-/* ========================= INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ========================= */
-server.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-    console.log("🚀 Servidor en línea y IA configurada");
-});
+module.exports = {
+    processSequence,
+    ejecutarIAsola,
+    enviarWhatsApp
+};
