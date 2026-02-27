@@ -326,7 +326,6 @@ app.post("/webhook", async (req, res) => {
 
                 if (messageId) {
                     const exists = await ReplayCache.findOne({ messageId });
-
                     if (exists) continue;
 
                     await ReplayCache.findOneAndUpdate(
@@ -350,10 +349,14 @@ app.post("/webhook", async (req, res) => {
                     ""
                 ).trim();
 
+                const isInteractive = !!(
+                    msg.interactive?.list_reply ||
+                    msg.interactive?.button_reply
+                );
+
                 let mediaPath = null;
 
                 if (msg.type === "image") {
-
                     const mediaId = msg.image?.id;
                     const fileName = `whatsapp_${Date.now()}.jpg`;
 
@@ -374,32 +377,31 @@ app.post("/webhook", async (req, res) => {
                 =========================
                 */
 
-                const waiting = await PaymentWaiting.findOne({
+                const paymentWaiting = await PaymentWaiting.findOne({
                     chatId: sender,
                     active: true
                 });
 
-                if (waiting) {
+                if (paymentWaiting) {
 
-                    if (incomingText && incomingText.toLowerCase().includes("cancelar")) {
-                        waiting.active = false;
-                        await waiting.save();
-                        await sendWhatsAppMessage(sender, "❌ Pago cancelado.");
+                    if (incomingText.toLowerCase().includes("cancelar")) {
+                        paymentWaiting.active = false;
+                        await paymentWaiting.save();
+                        await enviarWhatsApp(sender, "❌ Pago cancelado.");
                         continue;
                     }
 
                     if (mediaPath) {
-                        waiting.paymentImage = mediaPath;
-                        waiting.waitingForProof = false;
-                        await waiting.save();
+                        paymentWaiting.paymentImage = mediaPath;
+                        paymentWaiting.waitingForProof = false;
+                        await paymentWaiting.save();
 
-                        await sendWhatsAppMessage(sender, "📸 Comprobante recibido. En revisión.");
-                        await notifyAdmin(waiting);
-
+                        await enviarWhatsApp(sender, "📸 Comprobante recibido. En revisión.");
+                        await notifyAdmin(paymentWaiting);
                         continue;
                     }
 
-                    await sendWhatsAppMessage(sender, "📸 Envía tu comprobante o escribe CANCELAR.");
+                    await enviarWhatsApp(sender, "📸 Envía tu comprobante o escribe CANCELAR.");
                     continue;
                 }
 
@@ -413,13 +415,9 @@ app.post("/webhook", async (req, res) => {
 
                     const adminText = incomingText.trim().toUpperCase();
 
-                    // =========================
-                    // APROBAR PAGO
-                    // =========================
                     if (adminText.startsWith("APROBAR")) {
 
-                        const parts = adminText.split(" ");
-                        const pedidoId = parts[1];
+                        const pedidoId = adminText.split(" ")[1];
                         if (!pedidoId) continue;
 
                         const waiting = await PaymentWaiting.findById(pedidoId);
@@ -446,19 +444,15 @@ app.post("/webhook", async (req, res) => {
                         waiting.active = false;
                         await waiting.save();
 
-                        await enviarWhatsApp(waiting.chatId, "🚀 Pago confirmado. Tu pedido fue enviado correctamente.");
-                        await enviarWhatsApp(sender, "✅ Pedido aprobado y enviado al SMM.");
+                        await enviarWhatsApp(waiting.chatId, "🚀 Pago confirmado. Pedido enviado.");
+                        await enviarWhatsApp(sender, "✅ Pedido aprobado.");
 
                         continue;
                     }
 
-                    // =========================
-                    // RECHAZAR PAGO
-                    // =========================
                     if (adminText.startsWith("RECHAZAR")) {
 
-                        const parts = adminText.split(" ");
-                        const pedidoId = parts[1];
+                        const pedidoId = adminText.split(" ")[1];
                         if (!pedidoId) continue;
 
                         await PaymentWaiting.updateOne(
@@ -471,94 +465,55 @@ app.post("/webhook", async (req, res) => {
                     }
                 }
 
+                /*
+                =====================================================
+                MOTOR DE PRIORIDAD CONVERSACIONAL (CORRECTO)
+                =====================================================
+                */
+
+                const flowProcessed = false; // ajusta según tu lógica real
+
+                if (!flowProcessed && !isInteractive && incomingText.length > 0) {
+
+                    const buySignals = [
+                        "comprar",
+                        "precio",
+                        "plan",
+                        "como pago",
+                        "servicio",
+                        "quiero"
+                    ];
+
+                    const isBuyingIntent = buySignals.some(word =>
+                        incomingText.toLowerCase().includes(word)
+                    );
+
+                    if (isBuyingIntent) {
+                        await enviarWhatsApp(
+                            sender,
+                            "✨ Ve al menú de servicios y elige un plan.\n\n👇 Escribe MENU"
+                        );
+                        continue;
+                    }
+
+                    await ejecutarIAsola(sender, incomingText, {
+                        Message,
+                        enviarWhatsApp,
+                        Flow,
+                        processSequence,
+                        UserStatus
+                    });
+                }
+
             } catch (err) {
                 console.error("Error procesando mensaje:", err);
             }
-
         }
 
     } catch (error) {
         console.error("Error en webhook:", error);
     }
-    const paymentWaiting = await PaymentWaiting.findOne({
-        chatId: sender,
-        active: true
-    });
-
-
-            // =============================
-            /*
-=====================================================
-MOTOR DE PRIORIDAD CONVERSACIONAL (ANTI-ERROR HUMANO)
-=====================================================
-*/
-
-if (!flowProcessed && !isInteractive && incomingText.length > 0) {
-
-    if (paymentWaiting) return;
-
-    /*
-    ===============================
-    DETECTOR INTENCIÓN COMPRA AVANZADO
-    ===============================
-    */
-
-    const buySignals = [
-        "comprar",
-        "precio",
-        "plan",
-        "como pago",
-        "servicio",
-        "quiero"
-    ];
-
-    const isBuyingIntent = buySignals.some(word =>
-        incomingText.toLowerCase().includes(word)
-    );
-
-    /*
-    ===============================
-    SI QUIERE COMPRAR → PRIORIDAD FLUJO
-    ===============================
-    */
-
-    if (isBuyingIntent) {
-        console.log("🧠 Buyer detected → Menu routing");
-
-        await enviarWhatsApp(
-            sender,
-            "✨ Ve al menú de servicios y elige un plan.\n\n👇 Escribe MENU"
-        );
-
-        return;
-    }
-
-    /*
-    ===============================
-    SOLO SI ESTÁ PERDIDO → IA
-    ===============================
-    */
-
-    const memoryKey = `${sender}`;
-
-    let lastState = conversationMemory.get(memoryKey) || {};
-
-    if (!lastState.greeted) {
-
-updateMemory(sender, "greeted", true);
-updateMemory(sender, "lastTime", Date.now());
-
-    }
-
-    await ejecutarIAsola(sender, incomingText, {
-        Message,
-        enviarWhatsApp,
-        Flow,
-        processSequence,
-        UserStatus
-    });
-}
-
+});
 /* ========================= WEBHOOK YAPE (VALIDACIÓN POR CÓDIGO) 
 app.post("/webhook-yape", async (req, res) => {
 
@@ -673,7 +628,6 @@ app.post("/webhook-yape", async (req, res) => {
     }
 });
 */
-});
 /* ========================= GET TODOS LOS FLUJOS ========================= */
 app.get("/api/get-flows", async (req, res) => {
     try {
