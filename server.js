@@ -480,7 +480,10 @@ app.post("/webhook", async (req, res) => {
     } catch (error) {
         console.error("Error en webhook:", error);
     }
-
+    const paymentWaiting = await PaymentWaiting.findOne({
+        chatId: sender,
+        active: true
+    });
 });
 
             // =============================
@@ -491,11 +494,6 @@ MOTOR DE PRIORIDAD CONVERSACIONAL (ANTI-ERROR HUMANO)
 */
 
 if (!flowProcessed && !isInteractive && incomingText.length > 0) {
-
-    const paymentWaiting = await PaymentWaiting.findOne({
-        chatId: sender,
-        active: true
-    });
 
     if (paymentWaiting) return;
 
