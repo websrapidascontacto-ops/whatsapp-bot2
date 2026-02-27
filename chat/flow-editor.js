@@ -1,4 +1,3 @@
-let isImportingFlow = false;
 /* === INICIO Y CONFIGURACIÓN (WEBS RÁPIDAS - MONTSERRAT) === */
 const container = document.getElementById("drawflow");
 const editor = new Drawflow(container);
@@ -87,8 +86,9 @@ window.addRowDynamic = function(button, initialData = null) {
     const nodeElement = button.closest('.drawflow-node');
     const nodeId = nodeElement.id.replace('node-', '');
     const containerRows = nodeElement.querySelector('.items-container');
-    const nodeData = editor.getNodeFromId(nodeId).data;
+    const nodeData = editor.drawflow.drawflow.Home.data[nodeId].data;
     
+    // Contamos filas actuales para saber el índice (row2, row3...)
     const count = containerRows.querySelectorAll(".row-group").length + 1;
     const keyRow = `row${count}`;
     const keyDesc = `desc${count}`;
@@ -97,79 +97,157 @@ window.addRowDynamic = function(button, initialData = null) {
     group.className = "row-group mb-2";
     group.style.cssText = "border-bottom: 1px solid #444; padding-bottom: 8px; margin-top: 10px;";
 
-    group.innerHTML = `
-        <input type="text" class="form-control mb-1" style="font-family: Montserrat;" placeholder="Fila ${count}" df-${keyRow}>
-        <input type="text" class="form-control" style="font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;" placeholder="Comentario" df-${keyDesc}>
-    `;
+    // Input de Título (Fila)
+    const inputRow = document.createElement("input");
+    inputRow.className = "form-control mb-1";
+    inputRow.style.fontFamily = "Montserrat, sans-serif";
+    inputRow.placeholder = `Fila ${count} (Título)`;
+    inputRow.setAttribute(`df-${keyRow}`, "");
+    // Si viene de una importación, le ponemos el valor
+    if(initialData && initialData.row) inputRow.value = initialData.row;
+    
+    // Input de Descripción
+    const inputDesc = document.createElement("input");
+    inputDesc.className = "form-control";
+    inputDesc.style.cssText = "font-family: Montserrat; font-size: 11px; height: 28px; background: #f0f0f0; color: #333;";
+    inputDesc.placeholder = "Comentario opcional";
+    inputDesc.setAttribute(`df-${keyDesc}`, "");
+    if(initialData && initialData.desc) inputDesc.value = initialData.desc;
 
+    // Listeners para guardar en tiempo real
+    inputRow.addEventListener('input', (e) => { nodeData[keyRow] = e.target.value; });
+    inputDesc.addEventListener('input', (e) => { nodeData[keyDesc] = e.target.value; });
+
+    group.appendChild(inputRow);
+    group.appendChild(inputDesc);
     containerRows.appendChild(group);
 
-    // SI HAY DATOS INICIALES (Carga de flujo)
-    if(initialData) {
-        const inputRow = group.querySelector(`[df-${keyRow}]`);
-        const inputDesc = group.querySelector(`[df-${keyDesc}]`);
-        inputRow.value = initialData.row;
-        inputDesc.value = initialData.desc;
-        
-        // Sincronizamos con el motor de Drawflow
-        nodeData[keyRow] = initialData.row;
-        nodeData[keyDesc] = initialData.desc;
-    } else {
-        // SI ES UNA FILA NUEVA (Click del usuario)
-        editor.addNodeOutput(nodeId);
+    // Actualizamos la data del editor
+    nodeData[keyRow] = inputRow.value;
+    nodeData[keyDesc] = inputDesc.value;
+
+    // Añadimos el puntito de conexión (Output) a la derecha del nodo
+    editor.addNodeOutput(nodeId);
+};
+
+/* === GUARDAR Y CARGAR (CORREGIDO) === */
+window.saveFlow = async function() {
+    // 1. Obtener los datos actuales del editor
+    const exportData = editor.export();
+    
+    // 2. Obtener el nombre del flujo
+    const flowNameInput = document.getElementById('flow_name');
+    const flowName = flowNameInput ? flowNameInput.value : "Flujo sin nombre";
+
+    // 3. Obtener el ID del flujo actual (si existe)
+    // Nota: Asegúrate de tener esta variable definida globalmente
+    const payload = {
+        id: typeof currentEditingFlowId !== 'undefined' ? currentEditingFlowId : null,
+        name: flowName,
+        data: exportData // Esto ya lleva la estructura drawflow.Home.data
+    };
+
+    console.log("Enviando flujo al servidor...", payload);
+
+    try {
+        const response = await fetch('/api/save-flow', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            alert("✅ ¡Guardado con éxito! El bot ya tiene las rutas actualizadas.");
+        } else {
+            const errorText = await response.text();
+            console.error("Error del servidor:", errorText);
+            alert("❌ Error 500: El servidor rechazó el flujo. Revisa que el nombre no tenga caracteres raros.");
+        }
+    } catch (error) {
+        console.error("Error en la petición:", error);
+        alert("❌ Error de conexión al guardar.");
     }
 };
-let currentEditingFlowId = null; // Variable global para saber qué estamos editando
 
-/* === MEDIA NODE (CORREGIDO) === */
+/* --- LISTENER PARA IMPORTACIÓN CON FILAS (CORREGIDO) --- */
+window.addEventListener('message', function(e) {
+    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        const flowData = e.data.data;
+        
+        // 1. Limpiar e importar lo básico
+        editor.clear();
+        editor.import(flowData);
+
+        // 2. RECONSTRUCCIÓN DE FILAS DINÁMICAS
+        setTimeout(() => {
+            const nodes = flowData.drawflow.Home.data;
+            Object.keys(nodes).forEach(id => {
+                const node = nodes[id];
+                
+                // Si el nodo es una lista (donde están tus planes SMM)
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${id}`);
+                    if (!nodeElement) return;
+
+                    const btnAdd = nodeElement.querySelector('.btn-success');
+                    
+                    // Empezamos desde la fila 2 (porque la 1 ya existe en el HTML base)
+                    let i = 2;
+                    while (node.data[`row${i}`] !== undefined) {
+                        // Llamamos a tu función arreglada pasando la data inicial
+                        window.addRowDynamic(btnAdd, {
+                            row: node.data[`row${i}`],
+                            desc: node.data[`desc${i}`] || ""
+                        });
+                        i++;
+                    }
+                }
+            });
+            
+            editor.updateConnectionNodes('node-list');
+            editor.zoom_reset();
+            console.log("✅ Flujo Nemo reconstruido con filas dinámicas");
+        }, 300); // 300ms es suficiente para que el DOM esté listo
+    }
+});
+
+/* === MEDIA NODE === */
 window.addMediaNode = () => {
-    // Primero creamos el nodo (Drawflow nos da el ID real)
-    const nodeId = createNode("media", 1, 1, `
+    const nodeId = editor.node_id + 1;
+    createNode("media", 1, 1, `
         <div class="node-wrapper">
             <div class="node-header" style="background: #e67e22; color: white;">🖼️ Imagen Adjunta</div>
             <div class="node-body">
-                <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, this)">
-                <input type="hidden" df-media_url id="path-temp">
-                <div class="status-msg" style="font-size:11px; color:gray;">Esperando archivo...</div>
+                <input type="file" class="form-control mb-2" onchange="uploadNodeFile(event, ${nodeId})">
+                <input type="hidden" df-media_url id="path-${nodeId}">
+                <div id="status-${nodeId}" style="font-size:11px; color:gray;">Esperando archivo...</div>
                 <input type="text" class="form-control" df-caption placeholder="Pie de foto">
             </div>
         </div>`, { media_url: '', caption: '' });
 };
 
-// Actualiza uploadNodeFile para recibir 'this' (el input)
-window.uploadNodeFile = async (event, inputElement) => {
+window.uploadNodeFile = async (event, nodeId) => {
     const file = event.target.files[0];
     if (!file) return;
-
-    // Obtenemos el ID real del nodo padre
-    const nodeElement = inputElement.closest('.drawflow-node');
-    const nodeId = nodeElement.id.replace('node-', '');
-    const status = nodeElement.querySelector('.status-msg');
-    
+    const status = document.getElementById(`status-${nodeId}`);
+    const pathInput = document.getElementById(`path-${nodeId}`);
     status.innerText = "⏳ Subiendo...";
-    status.style.color = "#e67e22";
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
         const res = await fetch('/api/upload-node-media', { method: 'POST', body: formData });
         const data = await res.json();
-
         if (data.url) {
-            // Guardamos directamente en la data del motor
-            editor.updateNodeDataFromId(nodeId, { 
-                ...editor.getNodeFromId(nodeId).data, 
-                media_url: data.url 
-            });
-
-            status.innerText = "✅ Imagen vinculada";
-            status.style.color = "#2ecc71";
+            pathInput.value = data.url;
+            status.innerText = "✅ Subido";
+            if(editor.drawflow.drawflow.Home.data[nodeId]) {
+                editor.drawflow.drawflow.Home.data[nodeId].data.media_url = data.url;
+            }
         }
-    } catch (e) { 
-        status.innerText = "❌ Error";
-        status.style.color = "#ff4b2b";
-    }
+    } catch (e) { status.innerText = "❌ Error"; }
 };
 
 /* === NOTIFY NODE === */
@@ -223,6 +301,40 @@ window.addPaymentValidationNode = () => {
     createNode('payment_validation', 1, 1, html, { product_id: '', amount: '' });
 };
 
+/* === GESTIÓN DE MIS FLUJOS (MODAL) === */
+window.openFlowsModal = async function() {
+    const modal = document.getElementById('flowsModal');
+    const list = document.getElementById('flowsList');
+    if(modal) modal.style.display = 'flex';
+    if(list) list.innerHTML = "<p style='color:gray; font-family:Montserrat;'>Cargando flujos...</p>";
+    
+    try {
+        const res = await fetch('/api/get-flows');
+        const flows = await res.json();
+        if(list) {
+            list.innerHTML = ""; 
+            flows.forEach(flow => {
+                const card = document.createElement('div');
+                card.className = "flow-card"; // Asegúrate de tener este CSS
+                card.style = "background:#1a1b26; padding:15px; border-radius:10px; border:1px solid #444; margin-bottom:10px; display:flex; flex-direction:column; gap:10px;";
+                
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-family:'Montserrat'; color:white; font-weight:600;">${flow.name}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="loadSpecificFlow('${flow.id}')" style="background:#2563eb; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:11px; cursor:pointer;">EDITAR ✏️</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="activateFlow('${flow.id}')" style="flex:1; background:#10b981; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ACTIVAR ✅</button>
+                        <button onclick="deleteFlow('${flow.id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:8px; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; font-family:'Montserrat';">ELIMINAR 🗑️</button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+    } catch (err) { if(list) list.innerHTML = "Error al conectar"; }
+};
 
 /* --- FUNCIONES DE GESTIÓN DE FLUJOS --- */
 
@@ -252,31 +364,57 @@ window.openFlowsModal = async function() {
     } catch (e) { list.innerHTML = '<p style="color:red;">Error al cargar flujos</p>'; }
 }
 
-// 2. Cargar un flujo específico (VERSIÓN CORREGIDA)
+// 2. Cargar un flujo específico (Arregla el ReferenceError)
 window.loadSpecificFlow = async function(id) {
     try {
         const res = await fetch(`/api/get-flow-by-id/${id}`);
         const responseData = await res.json();
-
-        if (!responseData || !responseData.data) {
-            console.warn("⚠ Flujo inválido");
-            editor.import({ drawflow: { Home: { data: {} } } });
-            return;
-        }
-
+        
+        // Manejamos si la data viene envuelta o directa
+        const flowToLoad = responseData.drawflow ? responseData : (responseData.data || responseData);
+        
+        // 1. Limpiamos e Importamos
         editor.clear();
+        editor.import(flowToLoad);
 
-        // 🔥 IMPORTAMOS SOLO data
-        editor.import(responseData.data);
-
-        currentEditingFlowId = responseData._id;
-
+        // 2. RECONSTRUCCIÓN DE FILAS (Lo que arregla tu problema)
         setTimeout(() => {
-            reconstruirFilas(responseData.data);
-        }, 500);
+            const nodes = flowToLoad.drawflow.Home.data;
+            Object.keys(nodes).forEach(nodeId => {
+                const node = nodes[nodeId];
+                
+                // Si es un nodo de lista (como el de tus planes SMM)
+                if (node.name === "whatsapp_list") {
+                    const nodeElement = document.getElementById(`node-${nodeId}`);
+                    if (!nodeElement) return;
 
+                    const btnAdd = nodeElement.querySelector('.btn-success');
+                    
+                    // Buscamos cuántas filas extras tiene el JSON (row2, row3, etc.)
+                    let i = 2;
+                    while (node.data[`row${i}`] !== undefined) {
+                        // Llamamos a tu función global para crear el HTML de la fila
+                        if (typeof window.addRowDynamic === 'function') {
+                            window.addRowDynamic(btnAdd);
+                            
+                            // Le asignamos el valor guardado a los nuevos inputs
+                            const rowInput = nodeElement.querySelector(`[df-row${i}]`);
+                            const descInput = nodeElement.querySelector(`[df-desc${i}]`);
+                            if (rowInput) rowInput.value = node.data[`row${i}`];
+                            if (descInput) descInput.value = node.data[`desc${i}`] || "";
+                        }
+                        i++;
+                    }
+                }
+            });
+            editor.updateConnectionNodes('node-list');
+        }, 500); // Pequeño delay para que Drawflow renderice el HTML primero
+
+        closeFlowsModal();
+        alert("✅ Flujo cargado con todas sus filas");
     } catch (e) {
-        console.error("❌ Error crítico al cargar:", e);
+        console.error("Error al cargar:", e);
+        alert("❌ Error al cargar el flujo");
     }
 };
 
@@ -293,143 +431,14 @@ window.deleteFlow = async function(id) {
     } catch (e) { alert("❌ Error al eliminar"); }
 }
 
-/* --- LISTENER PARA IMPORTACIÓN LIMPIA --- */
+/* --- LISTENER PARA IMPORTACIÓN LIMPIA (TU ARCHIVO DE 51 NODOS) --- */
 window.addEventListener('message', function(e) {
-    if (e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
-        const rawData = e.data.data;
-        // Si no hay datos válidos, evitamos llamar a editor.import
-        if (!rawData || !rawData.drawflow) {
+    if(e.data.type === 'IMPORT_CLEAN' || e.data.type === 'LOAD_FLOW') {
+        if (typeof editor !== 'undefined') {
             editor.clear();
-            return;
+            const flowData = e.data.data.drawflow ? e.data.data : (e.data.data.data || e.data.data);
+            editor.import(flowData);
+            editor.zoom_reset();
         }
-        setTimeout(() => editor.zoom_reset(), 100);
     }
 });
-/* === CARGA Y SINCRONIZACIÓN DEFINITIVA (WEBS RÁPIDAS) === */
-
-
-
-
-// Carga inicial automática al abrir el editor
-async function cargarFlujoPrincipal() {
-    if (isImportingFlow) return;
-isImportingFlow = true;
-try {
-
-        const res = await fetch('/api/get-flow');
-        const data = await res.json();
-
-        console.log("🔥 DATA RECIBIDA DEL BACKEND:", data);
-
-        if (!data || !data.drawflow) {
-            console.warn("⚠ Flujo vacío o inválido");
-            return;
-        }
-
-        editor.clear();
-
-        /* 🔥 CLONACIÓN SEGURA */
-        const safeData = JSON.parse(JSON.stringify(data));
-
-        /* 🔥 SANITIZAR NODOS */
-        Object.values(safeData.drawflow.Home.data).forEach(node => {
-
-            if (!node.inputs || node.inputs === null)
-                node.inputs = {};
-
-            if (!node.outputs || node.outputs === null)
-                node.outputs = {};
-
-        });
-
-        editor.import(safeData);
-
-requestAnimationFrame(() => {
-    setTimeout(() => {
-        editor.zoom_reset();
-        editor.dispatchEvent(new Event('change'));
-    }, 250);
-});
-
-        /* 🔥 Reconstrucción visual después del render */
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                reconstruirFilas(safeData);
-            }, 200);
-        });
-
-        console.log("✅ Flujo cargado correctamente");
-
-    } catch (error) {
-        console.error("❌ Error cargando flujo:", error);
-    }
-    isImportingFlow = false;
-}
-// Único punto de entrada
-document.addEventListener('DOMContentLoaded', () => {
-    // 800ms es el tiempo perfecto para que Montserrat y Drawflow carguen
-    setTimeout(cargarFlujoPrincipal, 800); 
-});
-// ================= GUARDAR FLUJO =================
-window.saveFlow = async function() {
-    try {
-        const exportedData = editor.export();
-        const flowName = document.getElementById("flow_name")?.value || "Sin nombre";
-
-        const res = await fetch("/api/save-flow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                id: currentEditingFlowId || null,
-                name: flowName,
-                data: exportedData,
-                isMain: true
-            })
-        });
-
-        const result = await res.json();
-
-        if (result.success) {
-            currentEditingFlowId = result.flowId;
-            alert("✅ Flujo guardado correctamente");
-        } else {
-            alert("❌ No se pudo guardar");
-        }
-
-    } catch (e) {
-        console.error("Error guardando flujo:", e);
-        alert("Error al guardar flujo");
-    }
-};
-function reconstruirFilas(flowData) {
-    if (!flowData?.drawflow?.Home?.data) return;
-
-    const nodes = flowData.drawflow.Home.data;
-
-    Object.keys(nodes).forEach(nodeId => {
-        const node = nodes[nodeId];
-
-        if (node.name === "whatsapp_list") {
-
-            const nodeElement = document.getElementById(`node-${nodeId}`);
-            if (!nodeElement) return;
-
-            const btnAdd = nodeElement.querySelector('.btn-success');
-            if (!btnAdd) return;
-
-            let i = 2;
-
-            while (node.data[`row${i}`] !== undefined) {
-
-                window.addRowDynamic(btnAdd, {
-                    row: node.data[`row${i}`],
-                    desc: node.data[`desc${i}`] || ""
-                });
-
-                i++;
-            }
-        }
-    });
-
-    console.log("✅ Filas reconstruidas correctamente");
-}

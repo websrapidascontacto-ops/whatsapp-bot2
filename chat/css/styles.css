@@ -470,30 +470,3 @@ body {
     background: var(--blue);
     color: white;
 }
-/* Animación de Escribiendo... */
-.typing-bubble {
-    display: flex;
-    gap: 4px;
-    padding: 12px 18px;
-    background: #1e293b;
-    border-radius: 15px 15px 15px 5px;
-    width: fit-content;
-    margin: 10px 0;
-    align-self: flex-start;
-}
-
-.dot {
-    width: 8px;
-    height: 8px;
-    background: #94a3b8;
-    border-radius: 50%;
-    animation: typing 1.4s infinite ease-in-out;
-}
-
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typing {
-    0%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-6px); }
-}

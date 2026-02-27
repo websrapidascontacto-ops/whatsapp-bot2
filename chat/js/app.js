@@ -1,136 +1,193 @@
-/* --- VARIABLES GLOBALES --- */
-let currentChat = null;
-let unreadCounts = {}; 
-let typingTimeout; // Control para el teclado manual
+let currentChat=null;
+let unreadCounts = {}; // CONTADOR DE NO LEIDOS
 
-const chatList = document.getElementById("chat-list");
-const messagesContainer = document.getElementById("messages");
-const chatContent = document.getElementById("chatContent");
-const chatListContainer = document.getElementById("chatListContainer");
+const chatList=document.getElementById("chat-list");
+const messagesContainer=document.getElementById("messages");
+const chatContent=document.getElementById("chatContent");
+const chatListContainer=document.getElementById("chatListContainer");
 
-// --- 1. DATA DEL FLUJO NEMO ---
-const DATA_FLUJO_NEMO = { /* ... tu data se mantiene intacta ... */ };
-
-/* --- INICIALIZACIÓN --- */
-loadChats();
-
-/* --- EVENTOS DE INTERFAZ --- */
-const messageInput = document.getElementById("message-input");
-
-messageInput.addEventListener("keypress", e => {
-    if (e.key === "Enter") { e.preventDefault(); sendMessage(); }
-});
-
-// Evento para detectar cuando TÚ escribes (Presencia Real)
-messageInput.addEventListener("input", () => {
-    setWhatsAppPresence('composing');
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        setWhatsAppPresence('paused');
-    }, 2000);
-});
-
-// Emojis y Clics (Mantenido igual)
-const picker = new EmojiMart.Picker({
-    onEmojiSelect: e => { messageInput.value += e.native; }
-});
-document.getElementById("emoji-picker-container").appendChild(picker);
-document.getElementById("emoji-trigger").onclick = (e) => {
-    e.stopPropagation();
-    const c = document.getElementById("emoji-picker-container");
-    c.style.display = c.style.display === "none" ? "block" : "none";
+// --- 1. DATA DEL FLUJO NEMO (PRE-CARGADA) ---
+const DATA_FLUJO_NEMO = {
+    "drawflow": {
+        "Home": {
+            "data": {
+                "1": { "id": 1, "name": "trigger", "data": { "val": "¡Hola! 🔝 Quiero aumentar mis redes sociales 😊" }, "class": "trigger", "outputs": { "output_1": { "connections": [{ "node": "23" }] } }, "pos_x": -1566, "pos_y": 50 },
+                "12": { "id": 12, "name": "message", "data": { "info": "🔥 ¡Excelente! TikTok es ideal para crecer rápido y volverte viral 🚀\n\nPara continuar elija el servicio que desea para su cuenta , una vez seleccione su plan le pediremos el link o usuario de su perfil" }, "class": "message", "outputs": { "output_1": { "connections": [{ "node": "33" }] } }, "pos_x": -313, "pos_y": -547 },
+                "23": { "id": 23, "name": "whatsapp_list", "data": { "title": "Servicios Disponibles", "body": "Elija la red social que desea potenciar para su cuenta personal o de empresa:\n\n*Recuerde que no pedimos contraseñas de ningún tipo*", "footer": "Webs Rápidas", "btn": "Ver Servicios", "row1": "Instagram", "row2": "Tik Tok", "row3": "Facebook", "row4": "Youtube", "row5": "Quiero ver referencias", "desc1": "Seguidores / Likes / Vistas", "desc2": "Seguidores / Vistas / Likes", "desc3": "Seguidores / Likes", "desc4": "Suscriptores / Vistas", "desc5": "Mira los resultados de nuestros clientes" }, "outputs": { "output_1": { "connections": [{ "node": "31" }] }, "output_2": { "connections": [{ "node": "12" }] }, "output_3": { "connections": [{ "node": "36" }] }, "output_4": { "connections": [{ "node": "48" }] }, "output_5": { "connections": [{ "node": "49" }] } }, "pos_x": -680, "pos_y": -248 }
+            }
+        }
+    }
 };
 
-/* --- FUNCIONES DE PRESENCIA (CONEXIÓN BACKEND) --- */
-async function setWhatsAppPresence(status) {
-    if (!currentChat) return;
-    try {
-        await fetch('/api/whatsapp-presence', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId: currentChat, status: status })
-        });
-    } catch (e) { console.error("Error de presencia:", e); }
-}
+/* --- LAS RUTAS APP.GET SE MOVIERON AL SERVER.JS PARA NO ROMPER EL NAVEGADOR --- */
 
-/* --- UI HELPERS (TYPING INDICATOR) --- */
-function showTypingIndicator() {
-    if (document.getElementById("ai-typing")) return;
-    
-    // Avisar a WhatsApp que el bot está escribiendo
-    setWhatsAppPresence('composing');
+// Ejecutar al cargar la página (Asegúrate de tener esta función definida o cámbiala por loadChats)
+loadChats();
 
-    const div = document.createElement("div");
-    div.className = "typing-bubble";
-    div.id = "ai-typing"; 
-    div.style.fontFamily = "'Montserrat', sans-serif";
-    div.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
-    messagesContainer.appendChild(div);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
+/* ENTER ENVÍA */
+document.getElementById("message-input").addEventListener("keypress",e=>{
+if(e.key==="Enter"){e.preventDefault();sendMessage();}
+});
 
-function hideTypingIndicator() {
-    const indicator = document.getElementById("ai-typing");
-    if (indicator) {
-        indicator.remove();
-        setWhatsAppPresence('paused'); // Quitar el "escribiendo" en WhatsApp
+/* EMOJI */
+const picker=new EmojiMart.Picker({onEmojiSelect:e=>{
+document.getElementById("message-input").value+=e.native;
+}});
+document.getElementById("emoji-picker-container").appendChild(picker);
+
+document.getElementById("emoji-trigger").onclick=(e)=>{
+e.stopPropagation();
+const c=document.getElementById("emoji-picker-container");
+c.style.display=c.style.display==="none"?"block":"none";
+};
+
+/* CERRAR EMOJI Y MENÚS AL DAR CLICK AFUERA */
+document.addEventListener("click", (e) => {
+    const pickerContainer = document.getElementById("emoji-picker-container");
+    const emojiTrigger = document.getElementById("emoji-trigger");
+    const flowMenu = document.getElementById('flow-menu');
+
+    if (pickerContainer && pickerContainer.style.display === "block") {
+        if (!pickerContainer.contains(e.target) && e.target !== emojiTrigger) {
+            pickerContainer.style.display = "none";
+        }
+    }
+    if (flowMenu && !e.target.closest('.flow-selector-container')) {
+        flowMenu.style.display = 'none';
+    }
+});
+
+/* FUNCIONES LIGHTBOX (POP-UP IMÁGENES) */
+function openLightbox(src) {
+    const lightbox = document.getElementById("lightbox");
+    const img = document.getElementById("lightbox-img");
+    const downloadLink = document.getElementById("download-link");
+    if(lightbox && img && downloadLink) {
+        img.src = src;
+        downloadLink.href = src;
+        lightbox.style.display = "flex";
     }
 }
 
-/* --- RENDERIZADO Y OTROS --- */
-function renderMessage(msg) {
-    const div = document.createElement("div");
-    div.className = `msg-bubble ${msg.from === "me" ? "msg-sent" : "msg-received"}`;
-    div.style.fontFamily = "'Montserrat', sans-serif";
+function closeLightbox() {
+    const lightbox = document.getElementById("lightbox");
+    if(lightbox) lightbox.style.display = "none";
+}
 
-    if (msg.media) {
-        const img = document.createElement("img");
-        img.src = msg.media;
-        img.className = "msg-image";
+/* WEBSOCKET */
+const ws=new WebSocket(location.protocol==="https:"?"wss://"+location.host:"ws://"+location.host);
+
+ws.onmessage=(event)=>{
+    const data=JSON.parse(event.data);
+    if(data.type==="new_message"){
+        const chatId = data.message.chatId;
+        if(chatId===currentChat){ renderMessage(data.message); } 
+        else { unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1; }
+        loadChats();
+    }
+};
+
+/* CARGAR CHATS */
+async function loadChats(){
+try {
+    const res=await fetch("/chats");
+    const chats=await res.json();
+    chatList.innerHTML="";
+
+    chats.forEach(chat=>{
+        const div=document.createElement("div");
+        div.className="chat-item";
+        if(unreadCounts[chat._id]){ div.classList.add("unread"); }
+
+        div.innerHTML=`
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:40px; height:40px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; font-size:18px;">👤</div>
+            <div>
+                <div style="font-weight:600; font-family:'Montserrat';">${chat._id}</div>
+                <small>${chat.lastMessage||""}</small>
+            </div>
+        </div>
+        ${unreadCounts[chat._id] ? `<span class="badge">${unreadCounts[chat._id]}</span>` : ""}
+        `;
+        div.onclick=()=>openChat(chat._id);
+        chatList.appendChild(div);
+    });
+} catch(e) { console.error("Error al cargar chats:", e); }
+}
+
+/* ABRIR CHAT */
+async function openChat(chatId){
+currentChat=chatId;
+delete unreadCounts[chatId];
+
+const headerInfo = document.querySelector(".chat-header-info");
+if(headerInfo) {
+    headerInfo.style.display = "flex";
+    headerInfo.style.alignItems = "center";
+    headerInfo.style.justifyContent = "space-between";
+    headerInfo.style.width = "100%";
+    headerInfo.innerHTML = `
+        <div style="display:flex; align-items:center;">
+            <div style="width:40px; height:40px; border-radius:50%; background:#007bff; color:white; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">👤</div>
+            <div>
+                <div id="header-name" style="font-weight:700; font-family:'Montserrat'; font-size:16px; color:white;">${chatId}</div>
+                <div style="font-size:11px; color:#25D366; font-family:'Montserrat';">● En línea</div>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <div class="flow-selector-container" style="position:relative;">
+                <div onclick="toggleFlowMenu()" style="cursor:pointer; font-size:22px;" title="Lanzar flujo">🤖</div>
+                <div id="flow-menu" class="flow-menu" style="display:none; position:absolute; right:0; top:40px; background:#2d3748; border:1px solid #4a5568; border-radius:8px; z-index:1000; min-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
+            </div>
+            <div onclick="deleteCurrentChat()" style="cursor:pointer; font-size:18px;" title="Borrar chat">🗑️</div>
+        </div>
+    `;
+}
+
+if(messagesContainer) messagesContainer.innerHTML="";
+
+if(window.innerWidth<=768 && chatListContainer && chatContent){
+    chatListContainer.style.display="none";
+    chatContent.classList.add("active-mobile");
+}
+
+try {
+    const res=await fetch("/messages/"+chatId);
+    const msgs=await res.json();
+    msgs.forEach(renderMessage);
+} catch(e) { console.error("Error al obtener mensajes:", e); }
+loadChats();
+}
+
+function goBackMobile(){
+    chatContent.classList.remove("active-mobile");
+    chatListContainer.style.display="flex";
+}
+
+function renderMessage(msg){
+    const div=document.createElement("div");
+    div.className="msg-bubble "+(msg.from==="me"?"msg-sent":"msg-received");
+    if(msg.media){
+        const img=document.createElement("img");
+        img.src=msg.media;
+        img.className="msg-image";
+        img.style.cursor="pointer";
         img.onclick = () => openLightbox(msg.media);
         div.appendChild(img);
     }
-    if (msg.text) {
-        const textDiv = document.createElement("div");
-        textDiv.innerText = msg.text;
-        div.appendChild(textDiv);
+    if(msg.text){
+        const text=document.createElement("div");
+        text.innerText=msg.text;
+        div.appendChild(text);
     }
-    
-    const time = document.createElement("div");
-    time.className = "msg-time";
-    time.innerText = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const time=document.createElement("div");
+    time.className="msg-time";
+    time.innerText=new Date(msg.timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     div.appendChild(time);
-
-    messagesContainer.appendChild(div);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-// ... Mantén tus funciones de loadChats, confirmSendImages, etc. sin cambios ...
-
-/* --- RESTO DE FUNCIONES (loadChats, openChat, etc.) --- */
-// (Copia tus funciones de loadChats, openChat y gestión de archivos aquí abajo una sola vez)
-function showTypingIndicator() {
-    const messagesArea = document.getElementById("messages");
-    if (!messagesArea) return;
-    
-    // Evitar duplicados si ya está el indicador
-    if (document.getElementById("ai-typing")) return;
-
-    const typingDiv = document.createElement("div");
-    typingDiv.className = "typing-bubble";
-    typingDiv.id = "ai-typing"; 
-    typingDiv.innerHTML = `
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-    `;
-    messagesArea.appendChild(typingDiv);
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-}
-
-function hideTypingIndicator() {
-    const indicator = document.getElementById("ai-typing");
-    if (indicator) indicator.remove();
+    if(messagesContainer) {
+        messagesContainer.appendChild(div);
+        messagesContainer.scrollTop=messagesContainer.scrollHeight;
+    }
 }
 
 async function sendMessage(){
@@ -264,6 +321,29 @@ async function loadFlowDataIntoEditor(flowId) {
     } catch (e) { console.error("Error al cargar datos en editor:", e); }
 }
 
+window.addEventListener('message', async function(event) {
+    if (event.data.type === 'SAVE_FLOW') {
+        let flowJson = event.data.data;
+        let flowName = "Flujo Actualizado";
+        if (!currentEditingFlowId) {
+            flowName = prompt("Asigna un nombre a este nuevo flujo:", "Nuevo Flujo");
+            if (!flowName) return;
+        }
+        const payload = { id: currentEditingFlowId, name: flowName, data: flowJson };
+        try {
+            const res = await fetch('/api/save-flow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) {
+                const result = await res.json();
+                alert("✅ Flujo guardado correctamente");
+                if (result.id) currentEditingFlowId = result.id;
+            } else { alert("❌ Error al guardar el flujo"); }
+        } catch (err) { console.error("Error fetch save-flow:", err); }
+    }
+});
 
 window.openFlowsModal = async function() {
     const modal = document.getElementById('flows-modal');
@@ -416,200 +496,3 @@ window.importFlow = async (event) => {
     };
     reader.readAsText(file);
 };
-// Agrega esto al final de tu script actual para que la flecha de "Volver" funcione
-document.addEventListener('DOMContentLoaded', () => {
-    // Buscamos la barra de arriba del chat
-    const header = document.querySelector(".chat-header-info"); 
-    
-    if (header) {
-        // Si no existe el botón ya, lo creamos
-        if (!document.querySelector('.mobile-back-btn')) {
-            const backBtn = document.createElement('button');
-            backBtn.className = 'mobile-back-btn';
-            backBtn.innerHTML = '<i class="fa-solid fa-arrow-left"></i>'; // Solo flecha para que se vea limpio
-            backBtn.onclick = () => {
-                document.body.classList.remove('show-chat'); // Quita el modo enfoque
-            };
-            // Lo ponemos al principio del header
-            header.prepend(backBtn);
-        }
-    }
-});
-/* --- BLOQUE FINAL UNIFICADO (IA + FLUJOS) --- */
-
-/* ========================= LÓGICA DE IA Y FLUJOS (UNIFICADO) ========================= */
-
-async function procesarDudaConIA(textoDelUsuario) {
-    if (!currentChat) return;
-    showTypingIndicator(); 
-
-    try {
-        // 1. Pedir respuesta a OpenAI
-        const response = await fetch('/api/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: textoDelUsuario, chatId: currentChat })
-        });
-
-        const data = await response.json();
-        hideTypingIndicator(); 
-
-        if (data.text) {
-            let textoParaMostrar = data.text;
-
-            // 2. Detectar y ejecutar acciones ([ACTION:XXX])
-            const regexAction = /\[ACTION:(\w+)\]/i;
-            const match = textoParaMostrar.match(regexAction);
-            
-            if (match) {
-                const accionCompleta = match[0];
-                textoParaMostrar = textoParaMostrar.replace(accionCompleta, "").trim();
-                procesarRespuestaFlujo(accionCompleta);
-            }
-
-            const mensajeFinal = textoParaMostrar.trim();
-
-            // 3. ENVIAR A WHATSAPP (Esto hace que llegue al celular) 📱
-            await fetch("/send-message", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ to: currentChat, text: mensajeFinal })
-            });
-
-            // 4. Renderizar en el CRM (Montserrat)
-            renderMessage({ 
-                from: "bot", 
-                text: mensajeFinal, 
-                timestamp: Date.now() 
-            });
-        }
-    } catch (error) {
-        hideTypingIndicator();
-        console.error("❌ Error en el puente de IA:", error);
-    }
-}
-
-function procesarRespuestaFlujo(accion) {
-    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
-    // Mapeo exacto a tus botones del Flow
-    const mapeo = { 
-        "tiktok": "Tik Tok ", 
-        "instagram": "Instagram ", 
-        "facebook": "Facebook " 
-    };
-    
-    if (mapeo[redSocial]) {
-        console.log("🚀 Disparando flujo para:", redSocial);
-        ejecutarNodoPorNombre(mapeo[redSocial]);
-    }
-}
-
-async function ejecutarNodoPorNombre(nombreBoton) {
-    try {
-        await fetch("/api/execute-flow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ to: currentChat, trigger: nombreBoton })
-        });
-    } catch (e) { 
-        console.error("❌ Error disparando flujo:", e); 
-    }
-}
-
-// 2. Mapeo de acciones a nombres de nodos
-function procesarRespuestaFlujo(accion) {
-    console.log("🚀 Redirigiendo flujo:", accion);
-    const redSocial = accion.replace("[ACTION:", "").replace("]", "").toLowerCase();
-
-    // Mapeo exacto a tus botones del Flow
-    if (redSocial === 'tiktok') {
-        ejecutarNodoPorNombre("Tik Tok "); 
-    } else if (redSocial === 'instagram') {
-        ejecutarNodoPorNombre("Instagram ");
-    } else if (redSocial === 'facebook') {
-        ejecutarNodoPorNombre("Facebook ");
-    }
-}
-/* --- CARGA DE CHATS Y APERTURA (Lógica faltante) --- */
-
-async function loadChats() {
-    try {
-        const res = await fetch("/chats");
-        // Si el servidor falla, lanzamos error para no romper el código
-        if (!res.ok) throw new Error("Servidor no responde");
-
-        const chats = await res.json();
-        chatList.innerHTML = "";
-
-        if (!chats || chats.length === 0) {
-            chatList.innerHTML = "<div style='color:gray; padding:20px; font-family:Montserrat;'>No hay chats disponibles</div>";
-            return;
-        }
-
-        chats.forEach(chat => {
-            // Buscamos el ID en cualquier formato posible (id o chatId)
-            const id = chat.id || chat.chatId || (chat._id ? chat._id.toString() : null);
-            
-            if (!id) return; // Saltamos si no hay rastro de ID
-
-            const div = document.createElement("div");
-            div.className = `chat-item ${id === currentChat ? "active" : ""}`;
-            div.style.fontFamily = "'Montserrat', sans-serif";
-            
-            // Si no hay nombre, usamos el número o ID
-            const name = chat.name || id || "Usuario Desconocido";
-            const lastMsg = (chat.lastMessage && chat.lastMessage.text) ? chat.lastMessage.text : "Sin mensajes";
-            
-            div.innerHTML = `
-                <div class="chat-info" style="pointer-events: none;">
-                    <div class="chat-name" style="font-weight:700;">${name}</div>
-                    <div class="chat-last-msg" style="font-size:12px; opacity:0.8;">${lastMsg}</div>
-                </div>
-            `;
-            
-            div.onclick = () => openChat(id);
-            chatList.appendChild(div);
-        });
-    } catch (e) {
-        console.error("Error en loadChats:", e);
-        chatList.innerHTML = "<div style='color:red; padding:20px;'>⚠️ Error al conectar con los chats</div>";
-    }
-}
-
-async function openChat(chatId) {
-    if (!chatId || chatId === "undefined") return;
-
-    currentChat = chatId;
-    
-    // UI: Enfoque en móvil
-    document.body.classList.add('show-chat');
-
-    // Optimizamos: Solo ponemos el "Cargando" si el contenedor está vacío
-    if(messagesContainer.innerHTML === "") {
-        messagesContainer.innerHTML = "<div id='temp-loading' style='color:white; padding:20px; font-family:Montserrat;'>Cargando mensajes...</div>";
-    }
-
-    try {
-        const res = await fetch(`/chats/${chatId}`);
-        const messages = await res.json();
-        
-        messagesContainer.innerHTML = ""; // Limpiamos
-
-        if (Array.isArray(messages)) {
-            messages.forEach(msg => renderMessage(msg));
-        }
-        
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        // CORRECCIÓN: No llames a loadChats() aquí. Solo cambia la clase CSS.
-        document.querySelectorAll('.chat-item').forEach(i => {
-            i.classList.remove('active');
-            // Si el texto del item contiene el ID, le ponemos active
-            if(i.innerText.includes(chatId)) i.classList.add('active');
-        });
-
-    } catch (e) {
-        console.error("Error al abrir chat:", e);
-        messagesContainer.innerHTML = "<div style='color:white; padding:20px;'>Error al cargar.</div>";
-    }
-}

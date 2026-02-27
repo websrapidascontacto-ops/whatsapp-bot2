@@ -38,11 +38,19 @@
 </div>
 
 <div class="chat-content" id="chatContent">
-    <div class="top-bar chat-header-info">
-        <div style="color: #666; padding: 20px; font-family: 'Montserrat';">
-            Selecciona un chat para comenzar...
+    <div class="top-bar">
+    <div class="flow-selector-container" style="position: relative;">
+        <i class="fa-solid fa-robot icon-btn" onclick="toggleFlowMenu()" title="Activar Flujo"></i>
+        
+        <div id="flow-menu" class="flow-dropdown" style="display:none;">
+            <div class="flow-item" onclick="lanzarFlujo('hola')">👋 Bienvenida</div>
+            <div class="flow-item" onclick="lanzarFlujo('precios')">💰 Precios</div>
+            <div class="flow-item" onclick="lanzarFlujo('servicios')">🛠️ Servicios</div>
         </div>
     </div>
+
+    <i class="fa-regular fa-trash-can icon-btn delete-chat" onclick="deleteCurrentChat()"></i>
+</div>
 
     <div class="messages-area" id="messages"></div>
 
