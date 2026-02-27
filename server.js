@@ -482,75 +482,7 @@ app.post("/webhook", async (req, res) => {
     }
 
 });
-/*
-=============================
-FLOW + IA ROUTING
-=============================
-*/
 
-const flowDoc = await Flow.findOne({ isMain: true });
-
-if (flowDoc && incomingText) {
-
-    const nodes = flowDoc.data.drawflow.Home.data;
-    let targetNode = null;
-
-    targetNode = Object.values(nodes).find(n =>
-        n.name === "trigger" &&
-        n.data.val?.toLowerCase() === incomingText.toLowerCase()
-    );
-
-    if (!targetNode) {
-
-        const listNode = Object.values(nodes).find(n => {
-
-            if (n.name === "whatsapp_list") {
-                return Object.keys(n.data).some(key =>
-                    key.startsWith("row") &&
-                    n.data[key]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-                );
-            }
-
-            return false;
-        });
-
-        if (listNode) {
-
-            const rowKey = Object.keys(listNode.data).find(k =>
-                k.startsWith("row") &&
-                listNode.data[k]?.toString().trim().toLowerCase() === incomingText.toLowerCase()
-            );
-
-            if (rowKey) {
-
-                const rowNum = rowKey.replace("row", "");
-                const connection = listNode.outputs?.[`output_${rowNum}`]?.connections?.[0];
-
-                if (connection) {
-                    targetNode = nodes[connection.node];
-                }
-            }
-        }
-    }
-
-    if (targetNode) {
-
-        flowProcessed = true;
-
-        if (targetNode.name === "trigger") {
-
-            const nextNodeId =
-                targetNode.outputs?.output_1?.connections?.[0]?.node;
-
-            if (nextNodeId)
-                await processSequence(sender, nodes[nextNodeId], nodes);
-
-        } else {
-
-            await processSequence(sender, targetNode, nodes);
-        }
-    }
-}        
             // =============================
             /*
 =====================================================
